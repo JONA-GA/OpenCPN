@@ -1476,8 +1476,10 @@ bool AddLocaleCatalog( wxString catalog )
 void PushNMEABuffer( wxString buf )
 {
     OCPN_DataStreamEvent event( wxEVT_OCPN_DATASTREAM, 0 );
-    event.SetNMEAString( buf );
-
+    std::string s = std::string( buf.mb_str() );
+    event.SetNMEAString( s );
+    event.SetDataStream( NULL );        // PlugIns have virtual DataStream
+    
     g_pMUX->AddPendingEvent( event );
 }
 
@@ -1531,7 +1533,7 @@ void SendPluginMessage( wxString message_id, wxString message_body )
     OCPN_MsgEvent Nevent(wxEVT_OCPN_MSG, 0);
     Nevent.SetID(message_id);
     Nevent.SetJSONText(message_body);
-    gFrame->AddPendingEvent(Nevent);
+    gFrame->GetEventHandler()->AddPendingEvent( Nevent );
     
 }
 
