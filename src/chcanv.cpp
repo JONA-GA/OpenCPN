@@ -150,6 +150,7 @@ extern ocpnFloatingToolbarDialog *g_FloatingToolbarDialog;
 extern RouteManagerDialog *pRouteManagerDialog;
 extern GoToPositionDialog *pGoToPositionDialog;
 extern wxString GetLayerName(int id);
+extern wxString         g_uploadConnection;
 
 extern bool             bDrawCurrentValues;
 
@@ -269,6 +270,8 @@ extern S57QueryDialog   *g_pObjectQueryDialog;
 extern ocpnStyle::StyleManager* g_StyleManager;
 extern Multiplexer      *g_pMUX;
 extern wxArrayOfConnPrm *g_pConnectionParams;
+
+extern OCPN_Sound        g_anchorwatch_sound;
 
 //  TODO why are these static?
 static int mouse_x;
@@ -1527,10 +1530,10 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
     EmptyCandidateArray();
     m_extended_stack_array.Clear();
 
-    int reference_scale;
+    int reference_scale = 1.;
     int reference_type = -1;
     int reference_family;
-    int quilt_proj;
+    int quilt_proj = PROJECTION_UNKNOWN;
 
     if( ref_db_index >= 0 ) {
         const ChartTableEntry &cte_ref = ChartData->GetChartTableEntry( ref_db_index );
@@ -1779,6 +1782,10 @@ bool Quilt::Compose( const ViewPort &vp_in )
     //    Set up the vieport projection type
     vp_local.SetProjectionType( m_quilt_proj );
 
+    //    As ChartdB data is always in rectilinear space, region calculations need to be done with no VP rotation
+    double saved_vp_rotation = vp_local.rotation;                      // save a copy
+    vp_local.SetRotationAngle( 0. );
+    
     bool bfull = vp_in.b_FullScreenQuilt;
     BuildExtendedChartStackAndCandidateArray(bfull, m_refchart_dbIndex, vp_local);
 
@@ -1812,10 +1819,6 @@ bool Quilt::Compose( const ViewPort &vp_in )
     //    Add only those charts whose scale is smaller than the "reference scale"
     wxRegion vp_region( vp_local.rv_rect );
     unsigned int ir;
-
-    //    As ChartdB data is always in rectilinear space, region calculations need to be done with no VP rotation
-    double saved_vp_rotation = vp_local.rotation;                      // save a copy
-    vp_local.SetRotationAngle( 0. );
 
     //    "Draw" the reference chart first, since it is special in that it controls the fine vpscale setting
     QuiltCandidate *pqc_ref = NULL;
@@ -3239,15 +3242,15 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
     wxImage ICursorPencil = style->GetIcon( _T("pencil") ).ConvertToImage();
     wxImage ICursorCross = style->GetIcon( _T("cross") ).ConvertToImage();
 
-#if wxCHECK_VERSION(2, 8, 12)
-#else
+//#if wxCHECK_VERSION(2, 8, 12)
+//#else
     ICursorLeft.ConvertAlphaToMask(128);
     ICursorRight.ConvertAlphaToMask(128);
     ICursorUp.ConvertAlphaToMask(128);
     ICursorDown.ConvertAlphaToMask(128);
     ICursorPencil.ConvertAlphaToMask(10);
     ICursorCross.ConvertAlphaToMask(10);
-#endif
+//#endif
 
     if ( ICursorLeft.Ok() )
     {
@@ -4166,7 +4169,9 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
     if( !pPanKeyTimer->IsRunning() && ( m_panx || m_pany ) ) pPanKeyTimer->Start( 1,
                 wxTIMER_ONE_SHOT );
 
+#ifndef __WXMAC__    
     event.Skip();
+#endif    
 }
 
 void ChartCanvas::OnKeyUp( wxKeyEvent &event )
@@ -4322,7 +4327,11 @@ void ChartCanvas::OnRouteLegPopupTimerEvent( wxTimerEvent& event )
                     DistanceBearingMercator( segShow_point_b->m_lat, segShow_point_b->m_lon,
                                              segShow_point_a->m_lat, segShow_point_a->m_lon, &brg, &dist );
 
-                    s.Append( _("Route: ") );
+                    if( !pr->m_bIsInLayer )
+                        s.Append( _("Route: ") );
+                    else
+                        s.Append( _("Layer Route: ") );
+                    
                     if( pr->m_RouteNameString.IsEmpty() ) s.Append( _("(unnamed)") );
                     else
                         s.Append( pr->m_RouteNameString );
@@ -5804,11 +5813,11 @@ void ChartCanvas::AISDrawAreaNotices( ocpnDC& dc )
     wxColour yellow;
     wxColour green;
     wxPen pen;
-    wxBrush *yellow_brush;
-    wxBrush *green_brush;
+    wxBrush *yellow_brush = wxTheBrushList->FindOrCreateBrush( wxColour(0,0,0), wxTRANSPARENT );
+    wxBrush *green_brush  = wxTheBrushList->FindOrCreateBrush( wxColour(0,0,0), wxTRANSPARENT );;
     wxBrush *brush;
 
-    AIS_Target_Hash *current_targets = g_pAIS->GetTargetList();
+    AIS_Target_Hash *current_targets = g_pAIS->GetAreaNoticeSourcesList();
 
     float vp_scale = GetVPScale();
 
@@ -6043,7 +6052,7 @@ void ChartCanvas::AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
         ais_quad_icon[3].y = -6;
 
         wxPoint ais_real_size[4];
-        bool bcan_draw_size;
+        bool bcan_draw_size = true;
         if (g_bDrawAISSize)
         {
             if (td->DimA + td->DimB == 0 || td->DimC + td->DimD == 0)
@@ -6679,17 +6688,18 @@ void ChartCanvas::AlertDraw( ocpnDC& dc )
     } else
         AnchorAlertOn2 = false;
 
+    
     if( play_sound ) {
-        if( !m_anchorwatch_sound.IsOk() ) m_anchorwatch_sound.Create( g_sAIS_Alert_Sound_File );
+        if( !g_anchorwatch_sound.IsOk() ) g_anchorwatch_sound.Create( g_sAIS_Alert_Sound_File );
 
 #ifndef __WXMSW__
-        if(m_anchorwatch_sound.IsOk() && !m_anchorwatch_sound.IsPlaying())
-            m_anchorwatch_sound.Play();
+        if(g_anchorwatch_sound.IsOk() && !g_anchorwatch_sound.IsPlaying())
+            g_anchorwatch_sound.Play();
 #else
-        if( m_anchorwatch_sound.IsOk() ) m_anchorwatch_sound.Play();
+            if( g_anchorwatch_sound.IsOk() ) g_anchorwatch_sound.Play();
 #endif
     } else {
-        if( m_anchorwatch_sound.IsOk() ) m_anchorwatch_sound.Stop();
+        if( g_anchorwatch_sound.IsOk() ) g_anchorwatch_sound.Stop();
     }
 
 }
@@ -8183,6 +8193,56 @@ void ChartCanvas::CanvasPopupMenu( int x, int y, int seltype )
         contextMenu->Prepend( ID_REDO, _menuText( redoItem, _T("Ctrl-Y") ) );
     }
 
+    bool ais_areanotice = false;
+    if( g_pAIS && g_bShowAIS && g_bShowAreaNotices ) {
+
+        AIS_Target_Hash* an_sources = g_pAIS->GetAreaNoticeSourcesList();
+
+        float vp_scale = GetVPScale();
+
+        for( AIS_Target_Hash::iterator target = an_sources->begin(); target != an_sources->end(); ++target ) {
+            AIS_Target_Data* target_data = target->second;
+            if( !target_data->area_notices.empty() ) {
+                for( AIS_Area_Notice_Hash::iterator ani = target_data->area_notices.begin(); ani != target_data->area_notices.end(); ++ani ) {
+                    Ais8_001_22& area_notice = ani->second;
+
+                    wxBoundingBox bbox;
+                    double lat, lon;
+
+                    for( Ais8_001_22_SubAreaList::iterator sa = area_notice.sub_areas.begin(); sa != area_notice.sub_areas.end(); ++sa ) {
+                        switch( sa->shape ) {
+                            case AIS8_001_22_SHAPE_CIRCLE: {
+                                lat = sa->latitude;
+                                lon = sa->longitude;
+
+                                wxPoint target_point;
+                                GetCanvasPointPix( sa->latitude, sa->longitude, &target_point );
+                                bbox.Expand( target_point );
+                                if( sa->radius_m > 0.0 )
+                                    bbox.EnLarge( sa->radius_m * vp_scale );
+                                break;
+                            }
+                            case AIS8_001_22_SHAPE_POLYGON:
+                            case AIS8_001_22_SHAPE_POLYLINE: {
+                                for( int i = 0; i < 4; ++i ) {
+                                    ll_gc_ll( lat, lon, sa->angles[i], sa->dists_m[i] / 1852.0,
+                                              &lat, &lon );
+                                    wxPoint target_point;
+                                    GetCanvasPointPix( lat, lon, &target_point );
+                                    bbox.Expand( target_point );
+                                }
+                            }
+                        }
+                    }
+
+                    if( bbox.PointInBox( x, y ) ) {
+                        ais_areanotice = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }  
     if( !VPoint.b_quilt ) {
         if( parent_frame->GetnChartStack() > 1 ) {
             contextMenu->Append( ID_DEF_MENU_MAX_DETAIL, _( "Max Detail Here" ) );
@@ -8190,13 +8250,13 @@ void ChartCanvas::CanvasPopupMenu( int x, int y, int seltype )
             contextMenu->Append( ID_DEF_MENU_SCALE_OUT, _menuText( _( "Scale Out" ), _T("F8") ) );
         }
 
-        if( Current_Ch && ( Current_Ch->GetChartFamily() == CHART_FAMILY_VECTOR ) ) {
+        if( ( Current_Ch && ( Current_Ch->GetChartFamily() == CHART_FAMILY_VECTOR ) ) || ais_areanotice ) {
             contextMenu->Append( ID_DEF_MENU_QUERY, _( "Object Query..." ) );
         }
 
     } else {
         ChartBase *pChartTest = m_pQuilt->GetChartAtPix( wxPoint( x, y ) );
-        if( pChartTest && ( pChartTest->GetChartFamily() == CHART_FAMILY_VECTOR ) ) {
+        if( ( pChartTest && ( pChartTest->GetChartFamily() == CHART_FAMILY_VECTOR ) ) || ais_areanotice ) {
             contextMenu->Append( ID_DEF_MENU_QUERY, _( "Object Query..." ) );
         } else {
             if( parent_frame->GetnChartStack() > 1 ) {
@@ -8319,84 +8379,128 @@ void ChartCanvas::CanvasPopupMenu( int x, int y, int seltype )
     }
 
     if( seltype & SELTYPE_ROUTESEGMENT ) {
-        menuRoute->Append( ID_RT_MENU_PROPERTIES, _( "Properties..." ) );
-        if( m_pSelectedRoute ) {
-
-            if( m_pSelectedRoute->IsActive() ) {
-                int indexActive = m_pSelectedRoute->GetIndexOf( m_pSelectedRoute->m_pRouteActivePoint );
-                if( ( indexActive + 1 ) <= m_pSelectedRoute->GetnPoints() ) {
-                    menuRoute->Append( ID_RT_MENU_ACTNXTPOINT, _( "Activate Next Waypoint" ) );
-                }
-
-                menuRoute->Append( ID_RT_MENU_DEACTIVATE, _( "Deactivate" ) );
-            }
-            else {
-                menuRoute->Append( ID_RT_MENU_ACTIVATE, _( "Activate" ) );
-            }
+        bool blay = false;
+        if( m_pSelectedRoute && m_pSelectedRoute->m_bIsInLayer ) 
+            blay = true;
+        
+        if( blay ){
+            delete menuRoute;
+            menuRoute = new wxMenu( _("Layer Route") );
+            menuRoute->Append( ID_RT_MENU_PROPERTIES, _( "Properties..." ) );
         }
-        menuRoute->Append( ID_RT_MENU_INSERT, _( "Insert Waypoint" ) );
-        menuRoute->Append( ID_RT_MENU_APPEND, _( "Append Waypoint" ) );
-        menuRoute->Append( ID_RT_MENU_COPY, _( "Copy..." ) );
-        menuRoute->Append( ID_RT_MENU_DELETE, _( "Delete..." ) );
-        menuRoute->Append( ID_RT_MENU_REVERSE, _( "Reverse..." ) );
+        else {
+            menuRoute->Append( ID_RT_MENU_PROPERTIES, _( "Properties..." ) );
+            if( m_pSelectedRoute ) {
 
+                if( m_pSelectedRoute->IsActive() ) {
+                    int indexActive = m_pSelectedRoute->GetIndexOf( m_pSelectedRoute->m_pRouteActivePoint );
+                    if( ( indexActive + 1 ) <= m_pSelectedRoute->GetnPoints() ) {
+                        menuRoute->Append( ID_RT_MENU_ACTNXTPOINT, _( "Activate Next Waypoint" ) );
+                    }
+
+                    menuRoute->Append( ID_RT_MENU_DEACTIVATE, _( "Deactivate" ) );
+                }
+                else {
+                    menuRoute->Append( ID_RT_MENU_ACTIVATE, _( "Activate" ) );
+                }
+            }
+            menuRoute->Append( ID_RT_MENU_INSERT, _( "Insert Waypoint" ) );
+            menuRoute->Append( ID_RT_MENU_APPEND, _( "Append Waypoint" ) );
+            menuRoute->Append( ID_RT_MENU_COPY, _( "Copy as KML..." ) );
+            menuRoute->Append( ID_RT_MENU_DELETE, _( "Delete..." ) );
+            menuRoute->Append( ID_RT_MENU_REVERSE, _( "Reverse..." ) );
+        }
         //      Set this menu as the "focused context menu"
         menuFocus = menuRoute;
     }
 
     if( seltype & SELTYPE_TRACKSEGMENT ) {
-        menuTrack->Append( ID_TK_MENU_PROPERTIES, _( "Properties..." ) );
-        menuTrack->Append( ID_TK_MENU_COPY, _( "Copy" ) );
-        menuTrack->Append( ID_TK_MENU_DELETE, _( "Delete..." ) );
-
+        bool blay = false;
+        if( m_pSelectedTrack && m_pSelectedTrack->m_bIsInLayer ) 
+            blay = true;
+        
+        if( blay ) {
+            delete menuTrack;
+            menuTrack = new wxMenu( _("Layer Track") );
+            menuTrack->Append( ID_TK_MENU_PROPERTIES, _( "Properties..." ) );
+        }
+        else {
+            menuTrack->Append( ID_TK_MENU_PROPERTIES, _( "Properties..." ) );
+            menuTrack->Append( ID_TK_MENU_COPY, _( "Copy As KML" ) );
+            menuTrack->Append( ID_TK_MENU_DELETE, _( "Delete..." ) );
+        }
+        
         //      Set this menu as the "focused context menu"
         menuFocus = menuTrack;
     }
 
     if( seltype & SELTYPE_ROUTEPOINT ) {
-        menuWaypoint->Append( ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
-        if( m_pSelectedRoute && m_pSelectedRoute->IsActive() ) {
-            menuWaypoint->Append( ID_RT_MENU_ACTPOINT, _( "Activate" ) );
+        bool blay = false;
+        if( m_pFoundRoutePoint && m_pFoundRoutePoint->m_bIsInLayer ) 
+            blay = true;
+        
+        if( blay ){
+            delete menuWaypoint;
+            menuWaypoint = new wxMenu( _("Layer Routepoint") );
+            menuWaypoint->Append( ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
         }
-        if( m_pSelectedRoute->GetnPoints() > 2 )
-            menuWaypoint->Append( ID_RT_MENU_REMPOINT, _( "Remove from Route" ) );
+        else {
+            menuWaypoint->Append( ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+            if( m_pSelectedRoute && m_pSelectedRoute->IsActive() ) {
+                menuWaypoint->Append( ID_RT_MENU_ACTPOINT, _( "Activate" ) );
+            }
+            if( m_pSelectedRoute->GetnPoints() > 2 )
+                menuWaypoint->Append( ID_RT_MENU_REMPOINT, _( "Remove from Route" ) );
 
-        menuWaypoint->Append( ID_WPT_MENU_COPY, _( "Copy" ) );
+            menuWaypoint->Append( ID_WPT_MENU_COPY, _( "Copy as KML" ) );
 
-        if( m_pFoundRoutePoint->m_IconName != _T("mob") )
-            menuWaypoint->Append( ID_RT_MENU_DELPOINT,  _( "Delete" ) );
+            if( m_pFoundRoutePoint->m_IconName != _T("mob") )
+                menuWaypoint->Append( ID_RT_MENU_DELPOINT,  _( "Delete" ) );
 
-        if( bGPSValid ) menuWaypoint->Append( ID_WPT_MENU_SENDTOGPS, _( "Send to GPS" ) );
+            if( bGPSValid ) menuWaypoint->Append( ID_WPT_MENU_SENDTOGPS, _( "Send to GPS" ) );
+        }
+        //      Set this menu as the "focused context menu"
+        menuFocus = menuWaypoint;
     }
 
     if( seltype & SELTYPE_MARKPOINT ) {
-        menuWaypoint->Append( ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+        bool blay = false;
+        if( m_pFoundRoutePoint && m_pFoundRoutePoint->m_bIsInLayer ) 
+            blay = true;
+        
+        if( blay ){
+            delete menuWaypoint;
+            menuWaypoint = new wxMenu( _("Layer Waypoint") );
+            menuWaypoint->Append( ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+        }
+        else {
+            menuWaypoint->Append( ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
 
-        if( !g_pRouteMan->GetpActiveRoute() )
-            menuWaypoint->Append( ID_WP_MENU_GOTO, _( "Navigate To This" ) );
+            if( !g_pRouteMan->GetpActiveRoute() )
+                menuWaypoint->Append( ID_WP_MENU_GOTO, _( "Navigate To This" ) );
 
-        menuWaypoint->Append( ID_WPT_MENU_COPY, _( "Copy" ) );
+            menuWaypoint->Append( ID_WPT_MENU_COPY, _( "Copy as KML" ) );
 
-        if( m_pFoundRoutePoint->m_IconName != _T("mob") )
-            menuWaypoint->Append( ID_WP_MENU_DELPOINT, _( "Delete" ) );
+            if( m_pFoundRoutePoint->m_IconName != _T("mob") )
+                menuWaypoint->Append( ID_WP_MENU_DELPOINT, _( "Delete" ) );
 
-        if( bGPSValid ) menuWaypoint->Append( ID_WPT_MENU_SENDTOGPS, _( "Send to GPS" ) );
+            if( bGPSValid ) menuWaypoint->Append( ID_WPT_MENU_SENDTOGPS, _( "Send to GPS" ) );
 
-        if( ( m_pFoundRoutePoint == pAnchorWatchPoint1 )
-                || ( m_pFoundRoutePoint == pAnchorWatchPoint2 ) )
-            menuWaypoint->Append( ID_WP_MENU_CLEAR_ANCHORWATCH, _( "Clear Anchor Watch" ) );
-        else
-
-            if( !( m_pFoundRoutePoint->m_bIsInLayer )
+            if( ( m_pFoundRoutePoint == pAnchorWatchPoint1 ) || ( m_pFoundRoutePoint == pAnchorWatchPoint2 ) )
+                menuWaypoint->Append( ID_WP_MENU_CLEAR_ANCHORWATCH, _( "Clear Anchor Watch" ) );
+            else {
+                if( !( m_pFoundRoutePoint->m_bIsInLayer )
                     && ( ( NULL == pAnchorWatchPoint1 ) || ( NULL == pAnchorWatchPoint2 ) ) ) {
 
-                double dist;
-                double brg;
-                DistanceBearingMercator( m_pFoundRoutePoint->m_lat, m_pFoundRoutePoint->m_lon, gLat,
+                    double dist;
+                    double brg;
+                    DistanceBearingMercator( m_pFoundRoutePoint->m_lat, m_pFoundRoutePoint->m_lon, gLat,
                                          gLon, &brg, &dist );
-                if( dist * 1852. <= g_nAWMax )
-                    menuWaypoint->Append( ID_WP_MENU_SET_ANCHORWATCH,  _( "Set Anchor Watch" ) );
+                    if( dist * 1852. <= g_nAWMax )
+                        menuWaypoint->Append( ID_WP_MENU_SET_ANCHORWATCH,  _( "Set Anchor Watch" ) );
+                }
             }
+        }
 
         //      Set this menu as the "focused context menu"
         menuFocus = menuWaypoint;
@@ -8447,8 +8551,58 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
 {
     ChartBase *target_chart = GetChartAtCursor();
     s57chart *Chs57 = dynamic_cast<s57chart*>( target_chart );
+    std::vector<Ais8_001_22*> area_notices;
 
-    if( Chs57 ) {
+    if( g_pAIS && g_bShowAIS && g_bShowAreaNotices ) {
+        AIS_Target_Hash* an_sources = g_pAIS->GetAreaNoticeSourcesList();
+
+        float vp_scale = GetVPScale();
+
+        for( AIS_Target_Hash::iterator target = an_sources->begin(); target != an_sources->end(); ++target ) {
+            AIS_Target_Data* target_data = target->second;
+            if( !target_data->area_notices.empty() ) {
+                for( AIS_Area_Notice_Hash::iterator ani = target_data->area_notices.begin(); ani != target_data->area_notices.end(); ++ani ) {
+                    Ais8_001_22& area_notice = ani->second;
+
+                    wxBoundingBox bbox;
+                    double lat, lon;
+
+                    for( Ais8_001_22_SubAreaList::iterator sa = area_notice.sub_areas.begin(); sa != area_notice.sub_areas.end(); ++sa ) {
+                        switch( sa->shape ) {
+                            case AIS8_001_22_SHAPE_CIRCLE: {
+                                lat = sa->latitude;
+                                lon = sa->longitude;
+
+                                wxPoint target_point;
+                                GetCanvasPointPix( sa->latitude, sa->longitude, &target_point );
+                                bbox.Expand( target_point );
+                                if( sa->radius_m > 0.0 )
+                                    bbox.EnLarge( sa->radius_m * vp_scale );
+                                break;
+                            }
+                            case AIS8_001_22_SHAPE_POLYGON:
+                            case AIS8_001_22_SHAPE_POLYLINE: {
+                                for( int i = 0; i < 4; ++i ) {
+                                    ll_gc_ll( lat, lon, sa->angles[i], sa->dists_m[i] / 1852.0,
+                                              &lat, &lon );
+                                    wxPoint target_point;
+                                    GetCanvasPointPix( lat, lon, &target_point );
+                                    bbox.Expand( target_point );
+                                }
+                            }
+                        }
+                    }
+
+                    if( bbox.PointInBox( x, y ) ) {
+                        area_notices.push_back( &area_notice );
+                    }
+                }
+            }
+        }
+    }
+    
+
+    if( Chs57 || !area_notices.empty() ) {
         // Go get the array of all objects at the cursor lat/lon
         int sel_rad_pix = 5;
         float SelectRadius = sel_rad_pix / ( GetVP().view_scale_ppm * 1852 * 60 );
@@ -8459,8 +8613,9 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
         SetCursor( wxCURSOR_WAIT );
         bool lightsVis = gFrame->ToggleLights( false );
         if( !lightsVis ) gFrame->ToggleLights( true, true );
-        ListOfObjRazRules* rule_list =
-                Chs57->GetObjRuleListAtLatLon( zlat, zlon, SelectRadius, &GetVP() );
+        ListOfObjRazRules* rule_list = NULL;
+        if( Chs57 )
+            rule_list = Chs57->GetObjRuleListAtLatLon( zlat, zlon, SelectRadius, &GetVP() );
 
         ListOfObjRazRules* overlay_rule_list = NULL;
         ChartBase *overlay_chart = GetOverlayChartAtCursor();
@@ -8497,8 +8652,19 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
             objText << CHs57_Overlay->CreateObjDescriptions( overlay_rule_list );
             objText << _T("<hr noshade>");
         }
+        
+        for( std::vector< Ais8_001_22* >::iterator an = area_notices.begin(); an != area_notices.end(); ++an ) {
+            objText << _T( "<b>AIS Area Notice:</b> " );
+            objText << ais8_001_22_notice_names[( *an )->notice_type];
+            for( std::vector< Ais8_001_22_SubArea >::iterator sa = ( *an )->sub_areas.begin(); sa != ( *an )->sub_areas.end(); ++sa )
+                if( !sa->text.empty() )
+                    objText << sa->text;
+            objText << _T( "<br>expires: " ) << ( *an )->expiry_time.Format();
+            objText << _T( "<hr noshade>" );
+        }
 
-        objText << Chs57->CreateObjDescriptions( rule_list );
+        if( Chs57 )
+            objText << Chs57->CreateObjDescriptions( rule_list );
 
         objText << _T("</font></body></html>");
 
@@ -8506,7 +8672,8 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
 
         g_pObjectQueryDialog->Show();
 
-        rule_list->Clear();
+        if( rule_list )
+            rule_list->Clear();
         delete rule_list;
 
         if( overlay_rule_list )
@@ -8675,7 +8842,7 @@ void pupHandler_PasteRoute() {
         }
     }
 
-    Route* newRoute;
+    Route* newRoute = NULL;
     RoutePoint* newPoint;
 
     if( createNewRoute ) {
@@ -9213,21 +9380,26 @@ void ChartCanvas::PopupMenuHandler( wxCommandEvent& event )
     case ID_WPT_MENU_SENDTOGPS:
         if( m_pFoundRoutePoint ) {
             wxString port;
-            if( g_pConnectionParams ) {
-                // With the new multiplexer code we take a bit of a chance here,
-                // and use the first available serial connection which has output.
-                // This could potentially fail in complex installations...
+            //  Try to use the saved persistent upload port first
+            if( g_uploadConnection.Len() ) {
+                if( g_uploadConnection.StartsWith(_T("Serial")) ) {
+                    port = g_uploadConnection;
+                }
+            }
+            else if( g_pConnectionParams ) {
+                // If there is no persistent upload port recorded (yet)
+                // then use the first available serial connection which has output defined.
                 for( size_t i = 0; i < g_pConnectionParams->Count(); i++ ) {
                     ConnectionParams *cp = g_pConnectionParams->Item( i );
-                    if( cp->Output && cp->Type == Serial ) {
+                    if( cp->Output && cp->Type == SERIAL )
                         port << _T("Serial:") << cp->Port;
-                    }
                 }
-                if( port.Length() )
-                    m_pFoundRoutePoint->SendToGPS( port, NULL );
-                else
-                    OCPNMessageBox( NULL, _("Can't send waypoint. Found no serial data port with output defined."), _("OpenCPN Info"), wxOK | wxICON_WARNING );
             }
+             
+             if( port.Length() )
+                m_pFoundRoutePoint->SendToGPS( port, NULL );
+             else
+                OCPNMessageBox( NULL, _("Can't send waypoint. Found no serial data port with output defined."), _("OpenCPN Info"), wxOK | wxICON_WARNING );
         }
         break;
 
@@ -9796,7 +9968,12 @@ void ChartCanvas::RenderRouteLegs( ocpnDC &dc )
         dc.SetPen( wxPen( GetGlobalColor( _T ( "UBLCK" ) ) ) );
         dc.DrawText( routeInfo, xp, yp );
 
-        wxString s0( _("Route: ") );
+        wxString s0;
+        if( !route->m_bIsInLayer )
+            s0.Append( _("Route: ") );
+        else
+            s0.Append( _("Layer Route: ") );
+        
         s0 += FormatDistanceAdaptive( route->m_route_length + dist );
         RenderExtraRouteLegInfo( dc, r_rband, s0 );
     }

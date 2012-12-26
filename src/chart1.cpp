@@ -111,6 +111,10 @@
 
 #include <wx/jsonreader.h>
 
+#ifdef OCPN_USE_PORTAUDIO
+#include "portaudio.h"
+#endif
+
 WX_DECLARE_OBJARRAY(wxDialog *, MyDialogPtrArray);
 
 #include <wx/arrimpl.cpp>
@@ -202,6 +206,8 @@ extern wxString           str_version_major;
 extern wxString           str_version_minor;
 extern wxString           str_version_patch;
 
+wxString                  g_uploadConnection;
+
 int                       user_user_id;
 int                       file_user_id;
 
@@ -220,7 +226,9 @@ wxArrayOfConnPrm          *g_pConnectionParams;
 
 wxDateTime                g_start_time;
 wxDateTime                g_loglast_time;
-wxSound                   bells_sound[8];
+OCPN_Sound                bells_sound[8];
+
+OCPN_Sound                g_anchorwatch_sound;
 
 RoutePoint                *pAnchorWatchPoint1;
 RoutePoint                *pAnchorWatchPoint2;
@@ -470,6 +478,7 @@ bool                      g_bShowAreaNotices;
 bool                      g_bDrawAISSize;
 
 wxToolBarToolBase         *m_pAISTool;
+
 int                       g_nAIS_activity_timer;
 
 DummyTextCtrl             *g_pDummyTextCtrl;
@@ -578,6 +587,8 @@ char bells_sound_file_name[8][12] =    // pjotrc 2010.02.09
                 "7bells.wav", "8bells.wav"   // pjotrc 2010.02.09
 
         };
+
+int                       portaudio_initialized;
 
 static char nmea_tick_chars[] = { '|', '/', '-', '\\', '|', '/', '-', '\\' };
 static int tick_idx;
@@ -758,6 +769,9 @@ bool MyApp::OnInit()
 {
     if( !wxApp::OnInit() ) return false;
 
+//    bells_sound[0].Create(_T("/home/dsr/2bells.wav"));
+//    bells_sound[0].Play();
+    
     g_pPlatform = new wxPlatformInfo;
 
     //    On MSW, force the entire process to run on one CPU core only
@@ -1991,7 +2005,11 @@ int MyApp::OnExit()
 #endif
 #endif
 
-//        _CrtDumpMemoryLeaks( );
+#ifdef OCPN_USE_PORTAUDIO
+    if(portaudio_initialized)
+        Pa_Terminate();
+#endif
+        
 
     //      Restore any changed system colors
 #ifdef __WXMSW__
@@ -2093,26 +2111,29 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
     for ( size_t i = 0; i < g_pConnectionParams->Count(); i++ )
     {
         ConnectionParams *cp = g_pConnectionParams->Item(i);
-        dsPortType port_type;
-        if (cp->Output)
-            port_type = DS_TYPE_INPUT_OUTPUT;
-        else
-            port_type = DS_TYPE_INPUT;
-        DataStream *dstr = new DataStream( g_pMUX,
+        if( cp->bEnabled ) {
+            dsPortType port_type;
+            if (cp->Output)
+                port_type = DS_TYPE_INPUT_OUTPUT;
+            else
+                port_type = DS_TYPE_INPUT;
+            DataStream *dstr = new DataStream( g_pMUX,
                                            cp->GetDSPort(),
                                            wxString::Format(wxT("%i"),cp->Baudrate),
                                            port_type,
                                            cp->Priority,
                                            cp->Garmin
                                          );
-        dstr->SetInputFilter(cp->InputSentenceList);
-        dstr->SetInputFilterType(cp->InputSentenceListType);
-        dstr->SetOutputFilter(cp->OutputSentenceList);
-        dstr->SetOutputFilterType(cp->OutputSentenceListType);
-        dstr->SetChecksumCheck(cp->ChecksumCheck);
-        dstr->SetGarminUploadMode(cp->GarminUpload);
-        g_pMUX->AddStream(dstr);
+            dstr->SetInputFilter(cp->InputSentenceList);
+            dstr->SetInputFilterType(cp->InputSentenceListType);
+            dstr->SetOutputFilter(cp->OutputSentenceList);
+            dstr->SetOutputFilterType(cp->OutputSentenceListType);
+            dstr->SetChecksumCheck(cp->ChecksumCheck);
+            dstr->SetGarminUploadMode(cp->GarminUpload);
+            g_pMUX->AddStream(dstr);
+        }
     }
+    
     g_pMUX->SetAISHandler(g_pAIS);
     g_pMUX->SetGPSHandler(this);
     //  Create/connect a dynamic event handler slot
@@ -2433,7 +2454,9 @@ ocpnToolBarSimple *MyFrame::CreateAToolbar()
     CheckAndAddPlugInTool( tb );
     tipString = _("Hide AIS Targets");          // inital state is on
     if( _toolbarConfigMenuUtil( ID_AIS, tipString ) )
-        m_pAISTool = tb->AddTool( ID_AIS, _T("AIS"), style->GetToolIcon( _T("AIS"), TOOLICON_NORMAL ), style->GetToolIcon( _T("AIS"), TOOLICON_DISABLED ), wxITEM_CHECK, tipString );
+        m_pAISTool = tb->AddTool( ID_AIS, _T("AIS"), style->GetToolIcon( _T("AIS"), TOOLICON_NORMAL ),
+                                  style->GetToolIcon( _T("AIS"), TOOLICON_DISABLED ),
+                                  wxITEM_NORMAL, tipString );
 
     CheckAndAddPlugInTool( tb );
     tipString = _("Show Currents");
@@ -2506,10 +2529,20 @@ ocpnToolBarSimple *MyFrame::CreateAToolbar()
     if( ( pConfig ) && ( ps52plib ) ) if( ps52plib->m_bOK ) tb->ToggleTool( ID_TEXT,
             ps52plib->GetShowS57Text() );
 #endif
-    tb->ToggleTool( ID_AIS, g_bShowAIS );
+    
+    wxString initiconName;
+    if( g_bShowAIS ) {
+        tb->SetToolShortHelp( ID_AIS, _("Hide AIS Targets") );
+        initiconName = _T("AIS");
+    }
+    else {
+        tb->SetToolShortHelp( ID_AIS, _("Show AIS Targets") );
+        initiconName = _T("AIS_Disabled");
+    }
+    tb->SetToolNormalBitmapEx( m_pAISTool, initiconName );
+    m_lastAISiconName = initiconName;
+    
     tb->ToggleTool( ID_TRACK, g_bTrackActive );
-
-    m_lastAISiconName = _T("");
 
     SetStatusBarPane( -1 );                   // don't show help on status bar
 
@@ -3175,8 +3208,6 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
 
         case ID_AIS: {
             g_bShowAIS = !g_bShowAIS;
-            if( g_toolbar ) g_toolbar->ToggleTool( ID_AIS, g_bShowAIS );
-            cc1->ReloadVP();
             
             if( g_toolbar ) {
                 if( g_bShowAIS )
@@ -3184,7 +3215,21 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
                 else
                     g_toolbar->SetToolShortHelp( ID_AIS, _("Show AIS Targets") );
             }
+
+            wxString iconName;
+            if( g_bShowAIS )
+                iconName = _T("AIS");
+            else
+                iconName = _T("AIS_Disabled");
             
+            if( m_pAISTool && g_toolbar) {
+                g_toolbar->SetToolNormalBitmapEx( m_pAISTool, iconName );
+                g_toolbar->Refresh();
+                m_lastAISiconName = iconName;
+            }
+                
+            cc1->ReloadVP();
+                
             break;
         }
 
@@ -3477,8 +3522,10 @@ void MyFrame::ToggleCourseUp( void )
         double stuff = 0.;
         if( !wxIsNaN(gCog) ) stuff = gCog;
 
-        for( int i = 0; i < g_COGAvgSec; i++ )
-            COGTable[i] = stuff;
+        if( g_COGAvgSec > 0) { 
+            for( int i = 0; i < g_COGAvgSec; i++ )
+                COGTable[i] = stuff;
+        }
         g_COGAvg = stuff;
     }
 
@@ -3879,8 +3926,10 @@ int MyFrame::ProcessOptionsDialog( int rr, options* dialog )
         //    Stuff the COGAvg table in case COGUp is selected
         double stuff = 0.;
         if( !wxIsNaN(gCog) ) stuff = gCog;
-        for( int i = 0; i < g_COGAvgSec; i++ )
-            COGTable[i] = stuff;
+        if( g_COGAvgSec > 0 ) {
+            for( int i = 0; i < g_COGAvgSec; i++ )
+                COGTable[i] = stuff;
+        }
 
         g_COGAvg = stuff;
 
@@ -4808,13 +4857,14 @@ void MyFrame::TouchAISActive( void )
             wxString iconName = _T("AIS_Normal_Active");
             if( g_pAIS->IsAISAlertGeneral() ) iconName = _T("AIS_AlertGeneral_Active");
             if( g_pAIS->IsAISSuppressed() ) iconName = _T("AIS_Suppressed_Active");
-
+            if( !g_bShowAIS ) iconName = _T("AIS_Disabled");
+            
             if( m_lastAISiconName != iconName ) {
-                int flag = TOOLICON_NORMAL;
-                if( m_pAISTool->IsToggled() ) flag = TOOLICON_TOGGLED;
-                m_pAISTool->SetNormalBitmap( style->GetToolIcon( iconName, flag ) );
-                g_toolbar->Refresh();
-                m_lastAISiconName = iconName;
+                if( g_toolbar) {
+                    g_toolbar->SetToolNormalBitmapEx( m_pAISTool, iconName );
+                    g_toolbar->Refresh();
+                    m_lastAISiconName = iconName;
+                }
             }
         }
     }
@@ -4833,9 +4883,13 @@ void MyFrame::UpdateAISTool( void )
         bool b_update = false;
 
         iconName = _T("AIS");
-        if( g_pAIS->IsAISSuppressed() ) iconName = _T("AIS_Suppressed");
-        if( g_pAIS->IsAISAlertGeneral() ) iconName = _T("AIS_AlertGeneral");
-
+        if( g_pAIS->IsAISSuppressed() )
+            iconName = _T("AIS_Suppressed");
+        if( g_pAIS->IsAISAlertGeneral() )
+            iconName = _T("AIS_AlertGeneral");
+        if( !g_bShowAIS )
+            iconName = _T("AIS_Disabled");
+        
         //  Manage timeout for AIS activity indicator
         if( g_nAIS_activity_timer ) {
             g_nAIS_activity_timer--;
@@ -4843,28 +4897,23 @@ void MyFrame::UpdateAISTool( void )
             if( 0 == g_nAIS_activity_timer ) b_update = true;
             else {
                 iconName = _T("AIS_Normal_Active");
-                if( g_pAIS->IsAISSuppressed() ) iconName = _T("AIS_Suppressed_Active");
-                if( g_pAIS->IsAISAlertGeneral() ) iconName = _T("AIS_AlertGeneral_Active");
-
-                if( ( m_lastAISiconName != iconName ) ) b_update = true;
+                if( g_pAIS->IsAISSuppressed() )
+                    iconName = _T("AIS_Suppressed_Active");
+                if( g_pAIS->IsAISAlertGeneral() )
+                    iconName = _T("AIS_AlertGeneral_Active");
+                if( !g_bShowAIS )
+                    iconName = _T("AIS_Disabled");
             }
-
-        } else {
-            if( ( m_lastAISiconName != iconName ) ) b_update = true;
         }
 
-        if( b_update ) {
-            int flag = TOOLICON_NORMAL;
-            if( m_pAISTool->IsToggled() ) flag = TOOLICON_TOGGLED;
-            m_pAISTool->SetNormalBitmap( style->GetToolIcon( iconName, flag ) );
-            b_need_refresh = true;
+        if( ( m_lastAISiconName != iconName ) ) b_update = true;
+        
+        if( b_update && g_toolbar) {
+            g_toolbar->SetToolNormalBitmapEx( m_pAISTool, iconName );
+            g_toolbar->Refresh();
+            m_lastAISiconName = iconName;
         }
-
-    }
-
-    if( b_need_refresh ) {
-        g_toolbar->Refresh();
-        m_lastAISiconName = iconName;
+        
     }
 }
 
@@ -4885,8 +4934,12 @@ void MyFrame::OnFrameCOGTimer( wxTimerEvent& event )
 
     DoCOGSet();
 
-    //    Restart the timer
-    FrameCOGTimer.Start( g_COGAvgSec * 1000, wxTIMER_CONTINUOUS );
+    //    Restart the timer, max frequency is 10 hz.
+    if( g_COGAvgSec > 0 )
+        FrameCOGTimer.Start( g_COGAvgSec * 1000, wxTIMER_CONTINUOUS );
+    else
+        FrameCOGTimer.Start( 100, wxTIMER_CONTINUOUS );
+    
 }
 
 void MyFrame::DoCOGSet( void )
@@ -6363,6 +6416,10 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
         wxLogMessage( msg );
     }
     
+    //  The message must be at least reasonably formed...
+    if( (str_buf[0] != '$')  &&  (str_buf[0] != '!') )
+        return;
+    
     //    Send NMEA sentences to PlugIns
     if( g_pi_manager ) g_pi_manager->SendNMEASentenceToAllPlugIns( str_buf );
 
@@ -6623,15 +6680,17 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
             GenericPosDatEx gpd;
             AIS_Error nerr = AIS_GENERIC_ERROR;
             if(g_pAIS) 
-                nerr = g_pAIS->DecodeSingleVDO(str_buf, &gpd);
+                nerr = g_pAIS->DecodeSingleVDO(str_buf, &gpd, &m_VDO_accumulator);
             if(nerr == AIS_NoError){
                 if( !wxIsNaN(gpd.kLat) )
                     gLat = gpd.kLat;
                 if( !wxIsNaN(gpd.kLon) ) 
                     gLon = gpd.kLon;
                 
-                gCog = gpd.kCog;
-                gSog = gpd.kSog;
+                if( !wxIsNaN(gpd.kCog) ) 
+                    gCog = gpd.kCog;
+                if( !wxIsNaN(gpd.kSog) ) 
+                    gSog = gpd.kSog;
                 
                 if( !wxIsNaN(gpd.kVar) ) {
                     gVar = gpd.kVar;
@@ -6774,31 +6833,34 @@ void MyFrame::PostProcessNNEA( bool brx_rmc, wxString &sfixtime )
 //    Maintain average COG for Course Up Mode
 
     if( !wxIsNaN(gCog) ) {
-        //    Make a hole
-        for( int i = g_COGAvgSec - 1; i > 0; i-- )
-            COGTable[i] = COGTable[i - 1];
-        COGTable[0] = gCog;
+        if( g_COGAvgSec > 0 ) {
+            //    Make a hole
+            for( int i = g_COGAvgSec - 1; i > 0; i-- )
+                COGTable[i] = COGTable[i - 1];
+            COGTable[0] = gCog;
 
-        //
-        double sum = 0.;
-        for( int i = 0; i < g_COGAvgSec; i++ ) {
-            double adder = COGTable[i];
+            double sum = 0.;
+            for( int i = 0; i < g_COGAvgSec; i++ ) {
+                double adder = COGTable[i];
 
-            if( fabs( adder - g_COGAvg ) > 180. ) {
-                if( ( adder - g_COGAvg ) > 0. ) adder -= 360.;
-                else
-                    adder += 360.;
+                if( fabs( adder - g_COGAvg ) > 180. ) {
+                    if( ( adder - g_COGAvg ) > 0. ) adder -= 360.;
+                    else
+                        adder += 360.;
+                }
+
+                sum += adder;
             }
+            sum /= g_COGAvgSec;
 
-            sum += adder;
+            if( sum < 0. ) sum += 360.;
+            else
+                if( sum >= 360. ) sum -= 360.;
+
+            g_COGAvg = sum;
         }
-        sum /= g_COGAvgSec;
-
-        if( sum < 0. ) sum += 360.;
         else
-            if( sum >= 360. ) sum -= 360.;
-
-        g_COGAvg = sum;
+            g_COGAvg = gCog;
     }
 
 #ifdef ocpnUPDATE_SYSTEM_TIME

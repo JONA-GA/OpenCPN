@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: opencpn\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2012-12-02 08:16-0500\n"
+"POT-Creation-Date: 2012-12-25 11:42-0500\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Gilletarom <contact@gilletarom.fr>\n"
 "Language-Team: \n"
@@ -124,14 +124,12 @@ msgid "   Trying again with internally calculated georef solution "
 msgstr ""
 "   Nouvel essai avec la solution, calculée en interne, de géoréférencement. "
 #
-#
 msgid ""
 "   VP Final Check with internal georef: Georeference Chart_Error_Factor on "
 "chart "
 msgstr ""
 "   VP Contrôle final avec le géoréférencement interne :  Géoréfence "
 "Chart_Error_Factor sur la carte "
-#
 #
 msgid "   VP Final Check: Georeference Chart_Error_Factor on chart "
 msgstr "   VP Contrôle final : Géoréfence Chart_Error_Factor sur la carte "
@@ -340,12 +338,15 @@ msgstr "(Trace sans nom)"
 msgid "(Unnamed Waypoint)"
 msgstr "(Waypoint sans nom)"
 #
+msgid "(reserved for future use)"
+msgstr "(Réservé pour un futur usgae)"
+#
 # Couche
 msgid "(unnamed)"
 msgstr "(Sans nom)"
 #
 msgid ", Out: None"
-msgstr ", Sortie : aucun"
+msgstr ", Sortie : Aucun filtrage"
 #
 msgid "-"
 msgstr "-"
@@ -361,7 +362,6 @@ msgid "---<<< Warning:  Chart georef accuracy is poor. >>>---"
 msgstr ""
 "---<<< Alerte :  La qualité du géoréférencement de la carte est insuffisante. "
 ">>>---"
-#
 #
 msgid "---<<< Warning:  Chart georef accuracy may be poor. >>>---"
 msgstr ""
@@ -499,7 +499,6 @@ msgstr "A"
 msgid "AIS"
 msgstr "AIS :"
 #
-#
 msgid "AIS Alert"
 msgstr "Alarme AIS"
 #
@@ -508,7 +507,7 @@ msgid "AIS Target List..."
 msgstr "AIS : Liste des cibles ..."
 #
 msgid "AIS Target Query"
-msgstr "Informations émises par la cible"
+msgstr "Informations émises par cette cible"
 #
 msgid "AIS Targets"
 msgstr "Cibles AIS"
@@ -534,6 +533,9 @@ msgstr "A propos de "
 #
 msgid "About OpenCPN"
 msgstr "A propos d'OpenCPN"
+#
+msgid "Accept"
+msgstr "Accepté"
 #
 msgid "Accept Sentences"
 msgstr "Phrases acceptées"
@@ -561,7 +563,7 @@ msgid "Add Connection"
 msgstr "Ajouter une connexion"
 #
 msgid "Add Dataset..."
-msgstr "Ajout de données"
+msgstr "Ajout de données ..."
 #
 msgid "Add Directory..."
 msgstr "Ajout de dossier ..."
@@ -573,7 +575,7 @@ msgid "Add new"
 msgstr "Ajouter un nouveau"
 #
 msgid "Address"
-msgstr "Adresse"
+msgstr "Adresse IP"
 #
 # AIS
 msgid "Aground"
@@ -587,13 +589,10 @@ msgid "All Active Charts"
 msgstr "Toutes les cartes"
 #
 msgid "All Available Charts"
-msgstr "Dossiers activés de cartes"
+msgstr "Tous les dossiers activés de cartes"
 #
 msgid "All Charts"
 msgstr "Toutes les cartes"
-#
-msgid "All but"
-msgstr "Tout mais "
 #
 msgid ""
 "An NMEA sentence is generally 3 characters long (like RMC, GGA etc.) It can "
@@ -602,16 +601,29 @@ msgid ""
 "out all the sentences with certain TALKER prefix (like GP, AI etc.). The "
 "filter accepts just these three formats."
 msgstr ""
-"Le nom d'une phase NMEA comporte généralement 3 caractères (par exemple RMC, "
-"GCA, etc ...). Il peut aussi avoir 2 lettres en préfixe pour identifier la "
-"source, ou parlant du message (Le nom entier ressemble à GPGCA ou AITXT).\n"
+"Le nom d'une phase NMEA comporte généralement 3 caractères (exemple RMC, GCA, "
+"etc ...). Il peut aussi avoir 2 lettres en préfixe pour identifier la source, "
+"ou la nature du message (Le nom entier ressemble à GPGCA ou AITXT).\n"
 "Vous pouvez filtrer toutes les phrases ayant certains préfixes (comme GP, AI, "
-"Etc ...). Le filtre accepte seulement ces trois formats.\n"
-"\n"
-" It can also have a two letter prefix identifying the source, or TALKER, of "
-"the message (The whole sentences then looks like GPGGA or AITXT). You may "
-"filter out all the sentences with certain TALKER prefix (like GP, AI etc.). "
-"The filter accepts just these three formats."
+"Etc ...). Le filtre accepte seulement ces formats."
+#
+msgid "Anchorage Area: Anchorage closed"
+msgstr "Zone de mouillage : Mouillage fermé"
+#
+msgid "Anchorage Area: Anchorage open"
+msgstr "Zone de mouillage : Mouillage possible"
+#
+msgid "Anchorage Area: Anchoring prohibited"
+msgstr "Zone de mouillage : Mouillage interdit"
+#
+msgid "Anchorage Area: Deep draft anchorage"
+msgstr "Zone de mouillage : Projet d'ancrage profond"
+#
+msgid "Anchorage Area: Shallow draft anchorage"
+msgstr "Zone de mouillage : Ancrage pour faible tirant d'eau"
+#
+msgid "Anchorage Area: Vessel transfer operations"
+msgstr "Zone de mouillage : Pour transfert entre navires"
 #
 msgid "Anchorage created "
 msgstr "Mouillage créé"
@@ -630,18 +642,17 @@ msgstr "Prolonger"
 msgid "Apply"
 msgstr "Appliquer"
 #
-#
 msgid "Are you sure you want to delete <ALL> routes?"
-msgstr "Êtes vous sûr de vouloir effacer <TOUTES> les routes ?"
+msgstr "Êtes vous certain de vouloir effacer <TOUTES> les routes ?"
 #
 msgid "Are you sure you want to delete <ALL> tracks?"
 msgstr "Êtes vous certain de vouloir effacer <TOUTES> les traces ?"
 #
 msgid "Are you sure you want to delete <ALL> waypoints?"
-msgstr "Êtes vous sûr de vouloir effacer <TOUTES> les marques ?"
+msgstr "Êtes vous certain de vouloir effacer <TOUTES> les marques ?"
 #
 msgid "Are you sure you want to delete this route?"
-msgstr "Êtes vous certain de vouloir effacer cette trace ?"
+msgstr "Êtes vous certain de vouloir effacer cette route ?"
 #
 #
 msgid "Are you sure you want to delete this track?"
@@ -691,7 +702,7 @@ msgid "Basic"
 msgstr "Base"
 #
 msgid "Baudrate"
-msgstr "NMEA : Vitesse en baud "
+msgstr "NMEA : Vitesse en baud"
 #
 msgid "Beacon, Isolated Danger"
 msgstr "Balise, danger isolé"
@@ -774,9 +785,15 @@ msgstr "Alarmes CPA/TCPA ( TCPA = Temps pour le CPA)."
 msgid "Call"
 msgstr "Indicatif"
 #
+msgid "Can't send waypoint. Found no serial data port with output defined."
+msgstr "Impossible d'envoyer le waypoint. Aucun port de sortie n'a été défini."
+#
 #
 msgid "Cancel"
 msgstr "Annuler"
+#
+msgid "Cancellation - cancel area as identified by Message Linkage ID"
+msgstr "Annulation : Annulation de la délimitation de zone en suivant ce lien "
 #
 msgid "Card. E"
 msgstr "Card. E"
@@ -818,6 +835,78 @@ msgstr "Balise cardinale O"
 msgid "Cargo Ship"
 msgstr "Cargo"
 #
+msgid "Caution Area: Cluster of fishing vessels"
+msgstr "Prudence dans cette zone : Flotille de pêche"
+#
+msgid "Caution Area: Derelicts (drifting objects)"
+msgstr "Prudence dans cette zone : Epave (Objets flottants)"
+#
+msgid "Caution Area: Divers down"
+msgstr "Prudence dans cette zone : Présence de plongeurs "
+#
+msgid "Caution Area: Dredge operations"
+msgstr "Prudence dans cette zone : Dragage en cours"
+#
+msgid "Caution Area: Fairway closed"
+msgstr "Prudence dans cette zone : Chenal fermé"
+#
+msgid "Caution Area: Fishery - nets in water"
+msgstr "Prudence dans cette zone : Zone de pêche, présence de filets immergés"
+#
+msgid "Caution Area: Harbour closed"
+msgstr "Prudence dans cette zone : Port fermé"
+#
+msgid "Caution Area: Marine event"
+msgstr "Prudence dans cette zone : Evenement maritime"
+#
+msgid "Caution Area: Marine mammals habitat (implies whales NOT observed)"
+msgstr ""
+"Prudence dans cette zone : Zone fréquentée par des mamifères marins (Aucune "
+"baleine observée)"
+#
+msgid "Caution Area: Marine mammals in area - reduce speed"
+msgstr ""
+"Prudence dans cette zone : Mammifère marins présents. Réduire la vitesse."
+#
+msgid "Caution Area: Marine mammals in area - report sightings"
+msgstr ""
+"Prudence dans cette zone : Mammifère marins présents. Rapportez vos "
+"observations"
+#
+msgid "Caution Area: Marine mammals in area - stay clear"
+msgstr "Prudence dans cette zone : Mammifères marins présents. Restez à l'écart"
+#
+msgid "Caution Area: Protected habitat - no fishing or anchoring"
+msgstr ""
+"Prudence dans cette zone : Habitat protégé. Pêche et mouillage interdit."
+#
+msgid "Caution Area: Protected habitat - reduce speed"
+msgstr "Prudence dans cette zone : Habitat protégé. Réduire la vitesse"
+#
+msgid "Caution Area: Protected habitat - stay clear"
+msgstr "Prudence dans cette zone : Habitat protégé. Restez à l'écart"
+#
+msgid "Caution Area: Risk (define in Associated text field)"
+msgstr "Prudence dans cette zone : Risque (Décrit dans le texte associé)"
+#
+msgid "Caution Area: Seaplane operations"
+msgstr "Prudence dans cette zone : Présence d'hydravion"
+#
+msgid "Caution Area: Survey operations"
+msgstr "Prudence dans cette zone : Enquête en cours"
+#
+msgid "Caution Area: Swim area"
+msgstr "Prudence dans cette zone : Zone de baignade"
+#
+msgid "Caution Area: Traffic congestion"
+msgstr "Prudence dans cette zone : Traffic dense"
+#
+msgid "Caution Area: Underwater operation"
+msgstr "Prudence dans cette zone : Exploitation sous marine"
+#
+msgid "Caution Area: Underwater vehicle operation"
+msgstr "Prudence dans cette zone : Sousmarin en action"
+#
 #
 msgid "Cell"
 msgstr "Cellule"
@@ -840,8 +929,47 @@ msgstr "unités de profondeur"
 msgid "Chart Display Options"
 msgstr "Options d'affichage des cartes"
 #
+msgid "Chart Feature: Bridge closed"
+msgstr "Complément à la carte : Pont fermé"
+#
+msgid "Chart Feature: Bridge fully open"
+msgstr "Complément à la carte : Pont complètement ouvert"
+#
+msgid "Chart Feature: Bridge partially open"
+msgstr "Complément à la carte : Pont partiellement ouvert"
+#
+msgid "Chart Feature: Channel obstruction"
+msgstr "Complément à la carte : Chenal obstrué"
+#
+msgid "Chart Feature: Reduced vertical clearance"
+msgstr "Complément à la carte : Faible hauteur d'eau"
+#
+msgid "Chart Feature: Semi-submerged object"
+msgstr "Complément à la carte : Objet semi submergé"
+#
+msgid "Chart Feature: Shoal area"
+msgstr "Complément à la carte : Haut fond"
+#
+msgid "Chart Feature: Shoal area due east"
+msgstr "Complément à la carte : Haut-fond plein est"
+#
+msgid "Chart Feature: Shoal area due north"
+msgstr "Complément à la carte : Haut-fond plein nord"
+#
+msgid "Chart Feature: Shoal area due south"
+msgstr "Complément à la carte : Haut-fond plein sud"
+#
+msgid "Chart Feature: Shoal area due west"
+msgstr "Complément à la carte : Haut-fond plein ouest"
+#
+msgid "Chart Feature: Submerged object"
+msgstr "Complément à la carte : Objet submergé"
+#
+msgid "Chart Feature: Sunken vessel"
+msgstr "Complément à la carte : Navire coulé"
+#
 msgid "Chart Groups"
-msgstr "Gestionnaire de groupes de cartes"
+msgstr "Groupes de cartes"
 #
 # arque :
 msgid "Chart Information Objects"
@@ -852,7 +980,6 @@ msgstr "Imprimer la carte"
 #
 msgid "Chart Up Mode"
 msgstr "Carte vers le haut : Activer"
-#
 #
 msgid "Chart1::Event...TCMgr Not Available"
 msgstr "Carte1::Evènement...TCMgr invalide"
@@ -887,6 +1014,9 @@ msgstr "Ne rien sélectionner"
 #
 msgid "Clear Anchor Watch"
 msgstr "Alarme de mouillage : Désactiver"
+#
+msgid "Clearance granted - proceed to berth"
+msgstr "Autorisation accordée : Procédez à l'accostage"
 #
 # Toolbox/Langue
 msgid "Click to cancel the font selection."
@@ -934,10 +1064,10 @@ msgid "Container vessel"
 msgstr "Porte-conteneurs"
 #
 msgid "Control checksum"
-msgstr "Contrtôle du checksum"
+msgstr "Contrôle du checksum"
 #
-msgid "Copy"
-msgstr "Copier"
+msgid "Copy As KML"
+msgstr ""
 #
 msgid "Copy Log File to Clipboard"
 msgstr "Copier le fichier log dans le presse papier"
@@ -945,8 +1075,17 @@ msgstr "Copier le fichier log dans le presse papier"
 msgid "Copy Settings File to Clipboard"
 msgstr "Copier le fichier d'initialisation dans le presse-papier"
 #
-msgid "Copy..."
+#, fuzzy
+msgid "Copy as KML"
+msgstr "Copier comme du texte"
+#
+#, fuzzy
+msgid "Copy as KML..."
 msgstr "Copier ..."
+#
+#, c-format
+msgid "Couldn't load sound data from '%s'."
+msgstr ""
 #
 msgid "Course"
 msgstr "Cap"
@@ -972,7 +1111,6 @@ msgstr "Navire de croisière"
 #
 msgid "Current"
 msgstr "Afficher les courants"
-#
 #
 msgid "Cyan"
 msgstr "Cyan"
@@ -1013,9 +1151,8 @@ msgstr "Gestion des ports de connexion "
 msgid "Data Source :"
 msgstr "Source de données NMEA : "
 #
-#, fuzzy
 msgid "DataPort"
-msgstr "Port"
+msgstr "Port com"
 #
 msgid "De-Cluttered Text"
 msgstr "Désencombrer le texte"
@@ -1025,7 +1162,6 @@ msgstr "Désactiver"
 #
 msgid "Decimal Degrees"
 msgstr "Degrés décimaux"
-#
 #
 msgid "Deep Depth"
 msgstr "Eaux profondes"
@@ -1062,7 +1198,6 @@ msgstr "Waypoint : Supprimer"
 msgid "Delete..."
 msgstr "Supprimer ..."
 #
-#
 msgid "Depart From"
 msgstr "Départ de"
 #
@@ -1078,7 +1213,6 @@ msgstr "Afficher : Sondes"
 #
 msgid "Description"
 msgstr "Description"
-#
 #
 msgid "Destination"
 msgstr "Destination"
@@ -1102,20 +1236,59 @@ msgid "Display Category"
 msgstr "Contenu affiché"
 #
 msgid "Display Options"
-msgstr "Options d'affichage des cartes"
+msgstr "Options d'affichage du bateau"
 #
 #
 msgid "Distance"
 msgstr "Distance totale"
 #
 msgid "Distance Between Rings"
-msgstr "Intervalles entre deux cercles :"
+msgstr "Intervalle entre deux cercles :"
 #
 msgid "Distance Unit"
 msgstr "Unité de la distance entre deux cercles"
 #
 msgid "Distress"
 msgstr "Détresse"
+#
+msgid "Distress Area: Person overboard"
+msgstr "Zone de détresse : Homme à la mer"
+#
+msgid "Distress Area: Pollution response area"
+msgstr "Zone de détresse : Zone en cours de dépollution"
+#
+msgid "Distress Area: SAR area"
+msgstr "Zone de détresse : Zone de recherche SAR"
+#
+msgid "Distress Area: Vessel abandoning ship"
+msgstr "Zone de détresse : Navire abandonné"
+#
+msgid "Distress Area: Vessel collision"
+msgstr "Zone de détresse : Navire en collision"
+#
+msgid "Distress Area: Vessel disabled and adrift"
+msgstr "Zone de détresse : Navire endomagé dérivant"
+#
+msgid "Distress Area: Vessel fire/explosion"
+msgstr "Zone de détresse : Navire en feu. Risque d'explosion."
+#
+msgid "Distress Area: Vessel flooding"
+msgstr "Zone de détresse : Navire prenant l'eau"
+#
+msgid "Distress Area: Vessel grounding"
+msgstr "Zone de détresse : Navire échoué"
+#
+msgid "Distress Area: Vessel listing/capsizing"
+msgstr "Distress Area: Vessel listing/capsizing"
+#
+msgid "Distress Area: Vessel requests medical assistance"
+msgstr "Zone de détresse : Navire demandant une assistance médicale"
+#
+msgid "Distress Area: Vessel sinking"
+msgstr "Zone de détresse : Naufrage d'un navire"
+#
+msgid "Distress Area: Vessel under assault"
+msgstr "Zone de détresse : Navire en cours d'abordage"
 #
 msgid ""
 "Do you also want to toggle the visibility of shared waypoints being part of "
@@ -1136,17 +1309,20 @@ msgstr "Trait mixte"
 msgid "Dredge"
 msgstr "Drague"
 #
+msgid "Drop"
+msgstr "Non envoyé"
+#
 msgid "Drop MOB Marker"
 msgstr "Insérer un point MOB (Homme à la mer)"
 #
 msgid "Drop Mark"
-msgstr "Waypoint/marque : Insérer ici"
+msgstr "Waypoint/marque : Créer ici"
 #
 msgid "Drop Sentences"
-msgstr "Phrase rejetée"
+msgstr "Phrases rejetées"
 #
 msgid "Drop sentences"
-msgstr "Phrases rejetées"
+msgstr "Phrases non envoyées"
 #
 msgid "E&xport All..."
 msgstr "Exporter tout ..."
@@ -1168,7 +1344,7 @@ msgid "Edit"
 msgstr "Editer"
 #
 msgid "Elapsed time : "
-msgstr "Durée écoulée :"
+msgstr "Durée écoulée :  "
 #
 msgid "Enable"
 msgstr "Permettre"
@@ -1197,23 +1373,50 @@ msgid "Enter the NMEA sentence"
 msgstr "Entrer la phrase NMEA"
 #
 msgid "Enter the NMEA sentence (2, 3 or 5 characters)"
-msgstr "Entrer la phrase NMEA (2, 3 ou 5 caractères)"
+msgstr "Entrer le préfixe ou la phrase NMEA (2, 3 ou 5 caractères)"
+#
+msgid "Environmental Caution Area: Hazardous sea ice"
+msgstr "Environmental Caution Area : Icebergs possibles"
+#
+msgid "Environmental Caution Area: Heavy icing"
+msgstr "Environmental Caution Area : Givrage important"
+#
+msgid "Environmental Caution Area: High waves"
+msgstr "Environmental Caution Area : Hautes vagues"
+#
+msgid "Environmental Caution Area: High wind"
+msgstr "Environmental Caution Area : Vent fort"
+#
+msgid "Environmental Caution Area: Restricted visibility (fog, rain, etc.)"
+msgstr ""
+"Environmental Caution Area : Visibilité réduite (Brouillard, pluie, etc ...)"
+#
+msgid "Environmental Caution Area: Storm front (line squall)"
+msgstr "Environmental Caution Area : Front d'orage (Rafales de vent)"
+#
+msgid "Environmental Caution Area: Storm warning (storm cell or line of storms)"
+msgstr ""
+"Environmental Caution Area : Alerte aux orages (Cellule orageuse ou ligne "
+"d'orages)"
+#
+msgid "Environmental Caution Area: Strong currents"
+msgstr "Environmental Caution Area : Courants forts"
 #
 msgid "Error on Route Upload.  Please check logfiles..."
 msgstr ""
-"Route : Erreur durant le chargement. Veuillez vérifier le fichier opencpn."
-"log ..."
+"Route : Erreur durant le chargement. Plus de détailsà ce sujet dans  le "
+"fichier opencpn.log ..."
 #
 msgid "Error on Waypoint Upload.  Please check logfiles..."
 msgstr ""
-"Waypoint : Erreur durant le chargement. Veuillez vérifier le fichier opencpn."
-"log ..."
+"Waypoint : Erreur durant le chargement. Plus de détails à ce sujet dans le "
+"fichier opencpn.log ..."
 #
 msgid "Error!"
 msgstr "Erreur !"
 #
 msgid "Estimated time : "
-msgstr "Durée estimée :"
+msgstr "Durée estimée :  "
 #
 msgid "Export GPX file"
 msgstr "GPX : Exporter un fichier"
@@ -1281,9 +1484,8 @@ msgstr "Pour ce segment, la route orthodromique est "
 msgid "Force Full Database Rebuild"
 msgstr "Forcer la reconstruction de la base de données"
 #
-#, fuzzy
 msgid "Format uploads for Furuno GP3X"
-msgstr "Formats chargés pour Furuno GP3X"
+msgstr "Formats Furuno GP3X en sortie"
 #
 msgid "Freightbarge"
 msgstr "Chaland de transport de fret"
@@ -1303,7 +1505,7 @@ msgstr ""
 "côté tribord)"
 #
 msgid "GPS/Plotter Port"
-msgstr ""
+msgstr "Port du GPS/traceur"
 #
 msgid "GPSD"
 msgstr "GPSD"
@@ -1360,9 +1562,8 @@ msgstr "Aide"
 msgid "Here"
 msgstr "Ici"
 #
-#, fuzzy
 msgid "Hide AIS Targets"
-msgstr "Cibles AIS"
+msgstr "Cacher les cibles AIS"
 #
 # Mm
 msgid "Hide Target CPA"
@@ -1409,8 +1610,8 @@ msgstr "Icône"
 #
 msgid "If checked, only the sentences with a valid checksum are passed through"
 msgstr ""
-"En cas de checksum, seules les phrases ayant un checked sum correct sont "
-"acceptées"
+"En cas de contrôle du checksum, seules les phrases ayant un checked sum "
+"correct sont acceptées"
 #
 msgid "Ignore Sentences"
 msgstr "Phrases ignorées"
@@ -1424,11 +1625,29 @@ msgstr "GPX : Importer un fichier"
 msgid "Important Text Only"
 msgstr "Afficher : Textes importants seulement"
 #
+msgid "In"
+msgstr "Entrée "
+#
 msgid "In: None"
-msgstr "Entrée : aucun"
+msgstr "Entrée : Aucun filtrage"
+#
+msgid "Information: Icebreaker waiting area"
+msgstr "Information : Zone d'attente d'un brise glace"
+#
+msgid "Information: Location of response units"
+msgstr "Information : Emplacement des unités d'intervention"
+#
+msgid "Information: Pilot boarding position"
+msgstr "Information : Poste d'embarquement du pilote"
+#
+msgid "Information: Places of refuge"
+msgstr "Information : Emplacements d'attente"
+#
+msgid "Information: Position of icebreakers"
+msgstr "Information : Emplacement des briseglaces"
 #
 msgid "Inland Blue Flag"
-msgstr "Pavillon bleu, eaux int"
+msgstr "Pavillon bleu, eaux int. "
 #
 msgid "Input filtering"
 msgstr "Filtrage en entrée"
@@ -1437,15 +1656,27 @@ msgstr "Filtrage en entrée"
 msgid "Insert Waypoint"
 msgstr "Insérer un waypoint"
 #
+msgid ""
+"Instruction: Await instructions prior to proceeding beyond this point/juncture"
+msgstr "Instruction : Attendez les consignes avant de dépasser ce point"
+#
+msgid "Instruction: Contact Port Administration at this point/juncture"
+msgstr ""
+"Instruction : Contactez l'administration du port à ce stade selon la "
+"conjoncture"
+#
+msgid "Instruction: Contact VTS at this point/juncture"
+msgstr "Instruction : Contactez l'administration du port à ce point"
+#
+msgid "Instruction: Do not proceed beyond this point/juncture"
+msgstr "Instruction : Ne dépasser pas ce point"
+#
 msgid "Isol. Dngr"
 msgstr "Dang. isol."
 #
 #
 msgid "Isolated Danger"
 msgstr "Danger isolé"
-#
-msgid "Just "
-msgstr "Seulement"
 #
 msgid "KML Standard (Google Earth and others)"
 msgstr "KML standard (Google earth et autres)"
@@ -1483,6 +1714,26 @@ msgstr "Police maritime"
 # Couche
 msgid "Layer Name"
 msgstr "Nom de la couche"
+#
+#, fuzzy
+msgid "Layer Route"
+msgstr "Route : Coller"
+#
+#, fuzzy
+msgid "Layer Route: "
+msgstr "Route : Coller"
+#
+msgid "Layer Routepoint"
+msgstr ""
+#
+#, fuzzy
+msgid "Layer Track"
+msgstr "Trace : Coller"
+#
+# Menu contextuel : Waypoint
+#, fuzzy
+msgid "Layer Waypoint"
+msgstr "Waypoint : coller"
 #
 # Couche
 msgid "Layers"
@@ -1532,7 +1783,6 @@ msgstr "Feu"
 msgid "Light Descriptions"
 msgstr "Feux : Afficher leurs caractéristiques."
 #
-#
 msgid "Light Gray"
 msgstr "Gris clair"
 #
@@ -1566,7 +1816,8 @@ msgid "Links are opened for editing."
 msgstr "Chaque lien peut être modifié par clic gauche"
 #
 msgid "Links are opened in the default browser."
-msgstr "Un clic gauche ouvre chaque lien par son logiciel par défaut."
+msgstr ""
+"Un clic gauche ouvre chaque lien à l'aide du logiciel par défaut de ce PC."
 #
 msgid "Liquified gas tanker"
 msgstr "Navire-citerne pour gaz liquéfié"
@@ -1774,7 +2025,6 @@ msgstr "Fenêtre de débugage NMEA"
 msgid "NMi"
 msgstr "NMi"
 #
-#
 msgid "Name"
 msgstr "Nom"
 #
@@ -1790,15 +2040,14 @@ msgstr "Aller jusqu'ici"
 msgid "Navigate To This"
 msgstr "Aller jusqu'ici"
 #
-#, fuzzy
 msgid "Net"
-msgstr "Suiv."
+msgstr "Web"
 #
 msgid "Network"
-msgstr "Network"
+msgstr "Réseau"
 #
 msgid "New Chart Group"
-msgstr "Nouveau groupes de cartes"
+msgstr "Nouveau groupe de cartes"
 #
 msgid "New Group..."
 msgstr "Nouveau groupe"
@@ -1808,7 +2057,7 @@ msgid "Next"
 msgstr "Suiv."
 #
 msgid "Next tide event"
-msgstr "marée : Prochain événement"
+msgstr "Marée : Prochain événement"
 #
 msgid "No"
 msgstr "Aucun"
@@ -1825,7 +2074,8 @@ msgid ""
 msgstr ""
 "           Pas de carte installée \n"
 "Veuillez sélectionner le ou les dossiers de cartes dans le sous onglet "
-"\"Cartes chargées\" de l'onglet \"Cartes/données\" de la \"Boite à outils\"."
+"\"Cartes chargées\" de l'onglet \"Cartes/données\" dans les \"Options (Boite "
+"à outils)\"."
 #
 msgid "No, I don't want to hide it."
 msgstr "Non, je ne veux pas le cacher"
@@ -1895,7 +2145,6 @@ msgstr "OpenCPN traite le dossier ..."
 msgid "OpenCPN Group Notice"
 msgstr "Avis du groupe OpenCPN"
 #
-#
 msgid "OpenCPN Info"
 msgstr "Informations OpenCPN "
 #
@@ -1941,11 +2190,17 @@ msgstr "Options (Boite à outils) :"
 msgid "Other"
 msgstr "Tout"
 #
+msgid "Other - Define in associated text field"
+msgstr "Autre : Voir description dans le texte associé"
+#
+msgid "Out"
+msgstr "  Sortie "
+#
 msgid "Output"
 msgstr "Sortie"
 #
 msgid "Output Message"
-msgstr "Message d'OpenCPN"
+msgstr "Message envoyé"
 #
 msgid "Output filtering"
 msgstr "Filtrage en sortie"
@@ -1956,7 +2211,6 @@ msgstr "Sortie sur ce port (exemple : pilote automatique ou répéteur NMEA)"
 #
 msgid "OverZoom"
 msgstr "Zoom excessif."
-#
 #
 msgid "Overwrite existing file?"
 msgstr "Voulez vous remplacer le fichier existant ?"
@@ -2009,7 +2263,6 @@ msgstr "Bateau pilote"
 #
 msgid "Plain"
 msgstr "Limites : Pointillées"
-#
 #
 msgid "Plan Speed"
 msgstr "Vitesse prévue"
@@ -2104,13 +2357,15 @@ msgstr "Priorité"
 msgid "Problem discovered"
 msgstr "Problème découvert"
 #
+msgid "Proceed to this location - await instructions"
+msgstr "Passez à cet endroit - Attendre les instructions"
+#
 msgid "Processing Waypoints..."
-msgstr "Traitement des waypoints"
+msgstr "Traitement des waypoint"
 #
 #
 msgid "Progress..."
 msgstr "Chargement..."
-#
 #
 msgid "Properties"
 msgstr "Propriétés"
@@ -2239,8 +2494,11 @@ msgstr "Point de référence :"
 msgid "Reference Station :"
 msgstr "Port de référence :"
 #
+msgid "Reject"
+msgstr "Rejeté"
+#
 msgid "Remaining time : "
-msgstr "Durée restante :"
+msgstr "Durée restante : "
 #
 msgid "Remove Chart"
 msgstr "Enlever ce dossier du groupe sélectionné"
@@ -2272,6 +2530,14 @@ msgstr "Age du rapport"
 msgid "Report as of"
 msgstr "Rapport comme de "
 #
+msgid "Report from ship: Icing info"
+msgstr "Observationt de navire : Présence de glace"
+#
+msgid ""
+"Report from ship: Miscellaneous information - define in Associated text field"
+msgstr ""
+"Observation de navire : Diverse informations décrites dans le texte associé"
+#
 # AIS
 msgid "Reserved 11"
 msgstr "Reservé 11"
@@ -2287,6 +2553,27 @@ msgstr "Reservé 13"
 # AIS
 msgid "Reserved 14"
 msgstr "Reservé 14"
+#
+msgid "Restricted Area: Active military OPAREA"
+msgstr "Zone de restriction : OPAREA, Militaire en action"
+#
+msgid "Restricted Area: Drifting Mines"
+msgstr "Zone de restriction : Mines dérivantes"
+#
+msgid "Restricted Area: Entry approval required prior to transit"
+msgstr "Zone de restriction : Autorisation d'entrée requise"
+#
+msgid "Restricted Area: Entry prohibited"
+msgstr "Zone de restriction : Entrée interdite"
+#
+msgid "Restricted Area: Firing - danger area."
+msgstr "Zone de restriction : Zone de tir"
+#
+msgid "Restricted Area: Fishing prohibited"
+msgstr "Zone de restriction : Pêche interdite"
+#
+msgid "Restricted Area: No anchoring."
+msgstr "Zone de restriction : Mouillage interdit"
 #
 # AIS
 msgid "Restricted Manoeuvrability"
@@ -2314,6 +2601,9 @@ msgstr "Droit"
 msgid "Rollover"
 msgstr "Info par survol d'une cible."
 #
+msgid "Rouge or suspicious vessel"
+msgstr "Navire voyou ou suspect"
+#
 msgid "Route"
 msgstr "Route :"
 #
@@ -2336,6 +2626,15 @@ msgstr "Trace -> Route"
 #
 msgid "Route: "
 msgstr "Route :"
+#
+msgid "Route: Alternative route"
+msgstr "Route : Route alternative"
+#
+msgid "Route: Recommended route"
+msgstr "Route : Route recommandée"
+#
+msgid "Route: Recommended route through ice"
+msgstr "Route : Route recommandée à travers les glaces"
 #
 # Toolbox/Langue
 msgid "RouteLegInfoRollover"
@@ -2399,6 +2698,15 @@ msgstr "Navire de recherche et sauvetage en mer"
 msgid "Seatalk"
 msgstr "Seatalk"
 #
+msgid "Security Alert - Level 1"
+msgstr "Alerte de sécurité - Niveau 1"
+#
+msgid "Security Alert - Level 2"
+msgstr "Alerte de sécurité - Niveau 2"
+#
+msgid "Security Alert - Level 3"
+msgstr "Alerte de sécurité - Niveau 3"
+#
 msgid "See the log file at "
 msgstr "Voyez le fichier log à :"
 #
@@ -2422,16 +2730,14 @@ msgid ""
 "after data reduction:"
 msgstr ""
 "Sélectionner l'erreur maximale permise (en mètres)\n"
-"après reduction des données :"
-#
+"après réduction des données :"
 #
 msgid "Send"
-msgstr "Envoyer"
+msgstr "Envoyé"
 #
 # Menu contextuel : Route
 msgid "Send Route To GPS"
 msgstr "Route : Envoyer au GPS"
-#
 #
 msgid "Send To GPS..."
 msgstr "Envoyer au GPS ..."
@@ -2440,7 +2746,7 @@ msgid "Send to GPS"
 msgstr "Envoyer au GPS"
 #
 msgid "Sentence Filter"
-msgstr "Filtre de phrase"
+msgstr "Filtre de phrases"
 #
 msgid "Serial"
 msgstr "Série"
@@ -2462,7 +2768,6 @@ msgstr "Faible profondeur"
 msgid "Shift to Larger Scale Chart"
 msgstr "Passer à l'échelle supérieure"
 #
-#
 msgid "Shift to Smaller Scale Chart"
 msgstr "Passer à l'échelle inférieure"
 #
@@ -2470,14 +2775,13 @@ msgid "Ship Icon Type"
 msgstr "Caractéristiques du bateau"
 #
 msgid "Ships"
-msgstr " Bateaux"
+msgstr "Bateaux"
 #
 msgid "Short dash"
 msgstr "Tiret court"
 #
-#, fuzzy
 msgid "Show"
-msgstr "Afficher le nom"
+msgstr "Montrer"
 #
 msgid "Show AIS Targets"
 msgstr "Afficher les cibles"
@@ -2496,7 +2800,7 @@ msgid "Show Current Information"
 msgstr "Courants : Montrer les informations"
 #
 msgid "Show Currents"
-msgstr "Afficher les Courants"
+msgstr "Afficher les courants"
 #
 msgid "Show Depth Units"
 msgstr "Profondeur : Afficher l'unité"
@@ -2580,6 +2884,10 @@ msgstr "SOG"
 msgid "Solid"
 msgstr "Trait plein"
 #
+#, c-format
+msgid "Sound file '%s' is in unsupported format."
+msgstr ""
+#
 #
 msgid "Spare"
 msgstr "Secours"
@@ -2593,7 +2901,6 @@ msgstr "Marque spéciale"
 #
 msgid "Speed"
 msgstr "Vitesse"
-#
 #
 msgid "Speed (Kts)"
 msgstr "Vitesse, Noeuds "
@@ -2669,7 +2976,7 @@ msgid "Target List..."
 msgstr "Liste des cibles ..."
 #
 msgid "Target Query..."
-msgstr "Informations émises par la cible ..."
+msgstr "Informations émises par cette cible ..."
 #
 msgid "Target info"
 msgstr "Infos sur la cible"
@@ -2719,8 +3026,8 @@ msgid ""
 "The currently running Track was not merged.\n"
 "You can merge it later when it is completed."
 msgstr ""
-"La piste  active sélectionnée n'est pas fusionnée\n"
-"Vous pouvez la fusionnée ultérieurement lorsqu'elle sera terminée."
+"La trace  active sélectionnée n'a pas été fusionnée\n"
+"Vous pourrez la fusionner ultérieurement lorsqu'elle sera terminée."
 #
 # Toolbox/Langue
 msgid "The font colour."
@@ -2754,7 +3061,7 @@ msgid ""
 "delete it?"
 msgstr ""
 "Le waypoint que vous voulez supprimer est utilisé dans une route. Voulez vous "
-"vraiement le supprimer ?"
+"vraiment le supprimer ?"
 #
 #
 msgid "There"
@@ -2766,7 +3073,7 @@ msgid ""
 "\n"
 msgstr ""
 "Il existe des waypoint aux mêmes positions que ceux que vous voulez créer. "
-"Voulez les vous fusionner les nouveau waypoint avec les anciens ?\n"
+"Voulez les vous fusionner les nouveaux waypoint avec les anciens ?\n"
 "\n"
 #
 msgid ""
@@ -2774,8 +3081,8 @@ msgid ""
 "delete them as well? This will change the routes and disable the anchor "
 "alarms. Answering No keeps the waypoints used in routes or alarms."
 msgstr ""
-"Il y a des waypoints utilisés dans des routes ou des alarmes de mouillage. "
-"Voulez-vous les supprimer aussi ? Cela va changer les routes et désactiver "
+"Il y a des waypoint utilisés dans des routes ou des alarmes de mouillage. "
+"Voulez-vous les supprimer aussi ? Cela va changer les routes ou désactiver "
 "les alarmes de mouillage. Répondre non maintient les waypoint utilisés dans "
 "les routes ou les alarmes"
 #
@@ -2793,7 +3100,7 @@ msgid ""
 "Perhaps your current printer is not set correctly?"
 msgstr ""
 "Problème d'impression.\n"
-"Votre imprimante actuelle est peut-être mal configurée ?"
+"Votre imprimante actuelle est elle bienl configurée ?"
 #
 #
 msgid "This Leg"
@@ -2846,7 +3153,6 @@ msgstr "Outils de renseignement"
 msgid "Toolbar and Window Style"
 msgstr "Style de la barre d'icônes et de la fenêtre"
 #
-#
 msgid "Total Distance"
 msgstr "Distance totale"
 #
@@ -2870,17 +3176,17 @@ msgstr "Trace : Propriétés ...."
 #
 # Menu contextuel : Trace
 msgid "Tracking Precision"
-msgstr "Précisions de la trace"
+msgstr "Précision de la trace"
 #
 #
 msgid "Tracks"
 msgstr "Traces"
 #
 msgid "Transmit Sentences"
-msgstr "Phrses transmises"
+msgstr "Phrases transmises"
 #
 msgid "Transmit sentences"
-msgstr "Phrases transmises"
+msgstr "Phrases envoyées"
 #
 msgid "Transverse Mercator"
 msgstr "Mercator transverse"
@@ -2922,7 +3228,6 @@ msgstr "UDP"
 msgid "URL"
 msgstr "URL"
 #
-#
 msgid "UTC"
 msgstr "UTC"
 #
@@ -2932,6 +3237,10 @@ msgstr "Indisponible"
 # AIS
 msgid "Undefined"
 msgstr "Non défini"
+#
+# AIS
+msgid "Undefined (default)"
+msgstr "Indéfini (par défaut)"
 #
 # AIS
 msgid "Under way sailing"
@@ -2951,7 +3260,6 @@ msgstr "Porte containers de haute mer"
 msgid "Unk"
 msgstr "Inc."
 #
-#
 msgid "Unknown"
 msgstr "Inconnue"
 #
@@ -2963,22 +3271,17 @@ msgstr "Annul. Routes/Traces/WP"
 msgid "Unspecified"
 msgstr "Non spécifié"
 #
-#
 msgid "Update Control"
 msgstr "Contrôler la mise à jour"
 #
 msgid "Use Accelerated Graphics (OpenGL)"
 msgstr "OpenGL : Utiliser cette technologie d'accélération graphique"
 #
-#, fuzzy
 msgid "Use Garmin (GRMN) mode for input"
-msgstr ""
-"Chargement de waypoint et routes : Utiliser le mode Garmin GRMN/GRMN (Hôte) ."
+msgstr "Utiliser le mode Garmin GRMN en entrée."
 #
-#, fuzzy
 msgid "Use Garmin GRMN (Host) mode for uploads"
-msgstr ""
-"Chargement de waypoint et routes : Utiliser le mode Garmin GRMN/GRMN (Hôte) ."
+msgstr "Utiliser le mode Garmin GRMN en sortie."
 #
 msgid "Use nearby waypoint?"
 msgstr "Utiliser le waypoint situé à proximité ?"
@@ -2997,6 +3300,9 @@ msgstr "Perso. : Y"
 #
 msgid "User Y Offset (Metres)"
 msgstr "Réglage personnel Y (mètres)"
+#
+msgid "VTS active target"
+msgstr "Cible active VTS"
 #
 msgid "Vector Charts"
 msgstr "Cartes vectorielles"
@@ -3020,6 +3326,9 @@ msgstr "Navire remorquant"
 # AIS
 msgid "Vessel Towing, Long"
 msgstr "Navire remorquant, grande longueur"
+#
+msgid "Vessel requesting non-distress assistance"
+msgstr "Navire ne demandant pas d'assistance d'urgence"
 #
 msgid "Vessel, type unknown"
 msgstr "Navire, nature inconnue"
@@ -3110,7 +3419,6 @@ msgstr "Dév.      D"
 msgid "Yat"
 msgstr "Yat"
 #
-#
 msgid "Yellow"
 msgstr "Jaune"
 #
@@ -3124,7 +3432,7 @@ msgid ""
 "You can't hide the last tool from the toolbar\n"
 "as this would make is inaccessible."
 msgstr ""
-"Vous ne pouvez pas cacher la dernière icône de la barre d'icônes.\n"
+"Vous ne pouvez pas cacher toutes les icône de la barre d'icônes.\n"
 "Ceci rendrait la barre d'icônes inaccessible."
 #
 msgid "You must enter the address..."
@@ -3170,8 +3478,27 @@ msgstr "WGS Y"
 msgid "wxFB Website"
 msgstr "Site web wxFB"
 #
+#
+#
 #~ msgid "Add this chart to quilt."
 #~ msgstr "Mosaïque des cartes : Ajouter cette carte"
+#
+#
+#
+#~ msgid "All but"
+#~ msgstr " Tout mais "
+#
+#
+#
+#~ msgid "Copy"
+#~ msgstr "Copier"
+#
+#
+#
+#~ msgid "Just "
+#~ msgstr " Seulement"
+#
+#
 #
 #~ msgid "Remove this chart from quilt."
 #~ msgstr "Mosaïque des cartes : Retirer cette carte"

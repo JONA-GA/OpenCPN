@@ -57,6 +57,10 @@
 #include "wx/socket.h"
 #endif
 
+#ifndef __WXMSW__
+#include <sys/socket.h>                 // needed for (some) Mac builds
+#endif
+
 #ifdef __WXMSW__
 #include <windows.h>
 #include <dbt.h>
@@ -64,6 +68,8 @@
 #include <winioctl.h>
 #include <initguid.h>
 #endif
+
+#include <string>
 
 //----------------------------------------------------------------------------
 //   constants
@@ -102,8 +108,8 @@ enum {
 //Type definitions for connection parameters
 typedef enum
 {
-    Serial = 0,
-    Network = 1
+    SERIAL = 0,
+    NETWORK = 1
 } ConnectionType;
 
 typedef enum
@@ -259,9 +265,8 @@ public:
     ListType GetInputSentenceListType(){ return m_input_filter_type; }
     ListType GetOutputSentenceListType(){ return m_output_filter_type; }
     bool GetChecksumCheck(){ return m_bchecksumCheck; }
+    ConnectionType GetConnectionType(){ return m_connection_type; }
     
-    
-
     int                 m_Thread_run_flag;
 private:
     void Init(void);
@@ -270,7 +275,7 @@ private:
     void OnSocketEvent(wxSocketEvent& event);
     void OnTimerNMEA(wxTimerEvent& event);
 
-
+    wxMutex             m_output_mutex;
     bool                m_bok;
     wxEvtHandler        *m_consumer;
     wxString            m_portstring;
@@ -287,6 +292,7 @@ private:
 
     wxIPV4address       m_addr;
     wxSocketBase        *m_sock;
+    wxSocketBase        *m_tsock;
     wxString            m_sock_buffer;
     wxString            m_net_addr;
     wxString            m_net_port;
@@ -347,11 +353,14 @@ public:
     OCP_DataStreamInput_Thread(DataStream *Launcher,
                                   wxEvtHandler *MessageTarget,
                                   const wxString& PortName,
-                                  const wxString& strBaudRate );
+                                  const wxString& strBaudRate,
+                                  wxMutex *out_mutex,
+                                  dsPortType io_select
+                              );
 
     ~OCP_DataStreamInput_Thread(void);
     void *Entry();
-    int SendMsg(const wxString& msg);
+    void SetOutMsg(wxString msg);
 
     void OnExit(void);
 
@@ -365,10 +374,13 @@ private:
     int ReadComPortPhysical(int port_descriptor, int count, unsigned char *p);
     bool CheckComPortPhysical(int port_descriptor);
 
+    wxMutex                 *m_pout_mutex;
     wxEvtHandler            *m_pMessageTarget;
     DataStream              *m_launcher;
     wxString                m_PortName;
-
+    dsPortType              m_io_select;
+    wxString                m_outmsg;
+    
     char                    *put_ptr;
     char                    *tak_ptr;
 
@@ -414,6 +426,7 @@ public:
     ListType        OutputSentenceListType;
     wxArrayString   OutputSentenceList;
     int             Priority;
+    bool            bEnabled;
 
     wxString        Serialize();
     void            Deserialize(wxString &configStr);
@@ -427,7 +440,7 @@ public:
 
     bool            Valid;
 private:
-    wxString FilterTypeToStr(ListType type);
+    wxString FilterTypeToStr(ListType type, FilterDirection dir);
 };
 
 WX_DEFINE_ARRAY(ConnectionParams *, wxArrayOfConnPrm);

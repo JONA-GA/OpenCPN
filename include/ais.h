@@ -44,6 +44,7 @@
 #include "dychart.h"
 #include "chart1.h"
 #include "datastream.h"         // For GenericPosDatEx
+#include "navutil.h"
 
 //    Constants
 #ifndef PI
@@ -141,7 +142,7 @@ WX_DECLARE_LIST(AISTargetTrackPoint, AISTargetTrackList);
 const size_t AIS8_001_22_NUM_NAMES=128;
 const size_t AIS8_001_22_SUBAREA_SIZE=87;
 
-extern const char *ais8_001_22_notice_names[AIS8_001_22_NUM_NAMES];
+extern wxString ais8_001_22_notice_names[];
 
 enum Ais8_001_22_AreaShapeEnum
 {
@@ -227,7 +228,7 @@ public:
     int                       ROTIND;
     char                      CallSign[8];                // includes terminator
     char                      ShipName[21];
-    char                      ShipNameExtension[21];
+    char                      ShipNameExtension[15];
     unsigned char             ShipType;
     int                       IMO;
 
@@ -338,11 +339,12 @@ public:
     void OnEvtAIS(OCPN_DataStreamEvent& event);
     AIS_Error Decode(const wxString& str);
     AIS_Target_Hash *GetTargetList(void) {return AISTargetList;}
+    AIS_Target_Hash *GetAreaNoticeSourcesList(void) {return AIS_AreaNotice_Sources;}
     AIS_Target_Data *Get_Target_Data_From_MMSI(int mmsi);
     int GetNumTargets(void){ return m_n_targets;}
     bool IsAISSuppressed(void){ return m_bSuppressed; }
     bool IsAISAlertGeneral(void) { return m_bGeneralAlert; }
-    AIS_Error DecodeSingleVDO( const wxString& str, GenericPosDatEx *pos );
+    AIS_Error DecodeSingleVDO( const wxString& str, GenericPosDatEx *pos, wxString *acc );
     
 private:
     void OnActivate(wxActivateEvent& event);
@@ -359,6 +361,7 @@ private:
     void BuildERIShipTypeHash(void);
 
     AIS_Target_Hash *AISTargetList;
+    AIS_Target_Hash *AIS_AreaNotice_Sources;
 
     bool              m_busy;
     wxTimer           TimerAIS;
@@ -373,7 +376,7 @@ private:
 
     bool             m_bAIS_Audio_Alert_On;
     wxTimer          m_AIS_Audio_Alert_Timer;
-    wxSound          m_AIS_Sound;
+    OCPN_Sound       m_AIS_Sound;
     int              m_n_targets;
     bool             m_bSuppressed;
     bool             m_bGeneralAlert;
