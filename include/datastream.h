@@ -134,8 +134,8 @@ typedef enum
 typedef enum
 {
     PROTO_NMEA0183 = 0,
-    PROTO_SEATALK = 1,
-    PROTO_NMEA2000 = 2
+    PROTO_SEATALK = 2,
+    PROTO_NMEA2000 = 1
 } DataProtocol;
 
 #define DS_SOCKET_ID             5001
@@ -222,6 +222,7 @@ public:
                const wxString& BaudRate,
                dsPortType io_select,
                int priority = 0,
+			   DataProtocol iProtocol = PROTO_NMEA0183,
                bool bGarmin = false,
                int EOS_type = DS_EOS_CRLF,
                int handshake_type = DS_HANDSHAKE_NONE,
@@ -235,6 +236,7 @@ public:
     wxString GetPort(){ return m_portstring; }
     dsPortType GetIoSelect(){ return m_io_select; }
     int GetPriority(){ return m_priority; }
+	DataProtocol GetDataProtocol(){return m_iProtocol;}
     void *GetUserData(){ return m_user_data; }
 
     bool SendSentence( const wxString &sentence );
@@ -283,6 +285,7 @@ private:
     wxString            m_BaudRate;
     dsPortType          m_io_select;
     int                 m_priority;
+	DataProtocol 		m_iProtocol;
     int                 m_handshake;
     void                *m_user_data;
 

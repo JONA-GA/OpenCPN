@@ -2152,6 +2152,7 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
                                            wxString::Format(wxT("%i"),cp->Baudrate),
                                            port_type,
                                            cp->Priority,
+										   cp->Protocol,
                                            cp->Garmin
                                          );
             dstr->SetInputFilter(cp->InputSentenceList);

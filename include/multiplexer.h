@@ -72,6 +72,7 @@ class Multiplexer : public wxEvtHandler
         wxString baud_rate_save;
         dsPortType port_type_save;
         int priority_save;
+		DataProtocol iprotocol_save;
         wxArrayString input_sentence_list_save;
         ListType input_sentence_list_type_save;
         wxArrayString output_sentence_list_save;

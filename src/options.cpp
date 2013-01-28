@@ -2281,7 +2281,7 @@ ConnectionParams * options::SaveConnectionParams()
     else
         m_pConnectionParams->OutputSentenceListType = BLACKLIST;
     m_pConnectionParams->Port = m_comboPort->GetValue();
-    m_pConnectionParams->Protocol = PROTO_NMEA0183;
+    m_pConnectionParams->Protocol = (DataProtocol)m_choiceSerialProtocol->GetSelection();  // todo ga
     
     m_pConnectionParams->bEnabled = m_connection_enabled;
     return m_pConnectionParams;
@@ -2515,7 +2515,8 @@ void options::OnApplyClick( wxCommandEvent& event )
                                            cp->GetDSPort(),
                                            wxString::Format(wxT("%i"), cp->Baudrate),
                                            port_type,
-                                           cp->Priority,
+                                           cp->Priority,  // todo ga
+										   cp->Protocol,
                                            cp->Garmin
                                          );
             dstr->SetInputFilter(cp->InputSentenceList);
