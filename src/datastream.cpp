@@ -95,7 +95,7 @@ wxEvent* OCPN_DataStreamEvent::Clone() const
 BEGIN_EVENT_TABLE(DataStream, wxEvtHandler)
 
     EVT_SOCKET(DS_SOCKET_ID, DataStream::OnSocketEvent)
-//  EVT_TIMER(TIMER_NMEA1, DataStream::OnTimerNMEA)
+    EVT_TIMER(TIMER_SOCKET, DataStream::OnTimerSocket)
 
   END_EVENT_TABLE()
 
@@ -136,6 +136,8 @@ void DataStream::Init(void)
     m_Thread_run_flag = -1;
     m_sock = 0;
     m_tsock = 0;
+    
+    m_socket_timer.SetOwner(this, TIMER_SOCKET);
     
 }
 
@@ -277,6 +279,7 @@ void DataStream::Open(void)
                 case TCP:{
                     wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
                     tcp_socket->Connect(m_addr, FALSE);
+                    m_brx_connect_event = false;
                     break;
                 }
                 case UDP:{
@@ -287,6 +290,8 @@ void DataStream::Open(void)
             m_bok = true;
         }
     }
+    m_connect_time = wxDateTime::Now();
+    
 }
 
 
@@ -341,6 +346,19 @@ void DataStream::Close()
         m_GarminHandler->Close();
         delete m_GarminHandler;
     }
+    
+    m_socket_timer.Stop();
+}
+
+void DataStream::OnTimerSocket(wxTimerEvent& event)
+{
+    //  Do a deferred reconnect
+    wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
+    
+    if(tcp_socket)
+        tcp_socket->Connect(m_addr, FALSE);
+    m_brx_connect_event = false;
+    m_connect_time = wxDateTime::Now();
 }
 
 
@@ -417,21 +435,34 @@ void DataStream::OnSocketEvent(wxSocketEvent& event)
         {
    //          wxSocketError e = m_sock->LastError();          // this produces wxSOCKET_WOULDBLOCK.
             if(m_net_protocol == TCP) {
-                wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
-                tcp_socket->Connect(m_addr, FALSE);
+                wxDateTime now = wxDateTime::Now();
+                wxTimeSpan since_connect = now - m_connect_time;
+
+                int retry_time = 1000;          // default
+
+                //  If the socket has never connected, and it is a short interval since the connect request
+                //  then stretch the time a bit.  This happens on Windows if there is no dafault IP on any interface
+                
+                if(!m_brx_connect_event && (since_connect.GetSeconds() < 5) )
+                    retry_time = 10000;         // 10 secs
+                
+                    
+                m_socket_timer.Start(10000, wxTIMER_ONE_SHOT);
                 break;
             }
         }
 
         case wxSOCKET_CONNECTION :
         {
-            if(m_net_protocol == GPSD)
-            {
+            if(m_net_protocol == GPSD) {
                 //      Sign up for watcher mode, Cooked NMEA
                 //      Notethat SIRF devices will be converted by gpsd into pseudo-NMEA
                 char cmd[] = "?WATCH={\"class\":\"WATCH\", \"nmea\":true}";
                 m_sock->Write(cmd, strlen(cmd));
             }
+            else if(m_net_protocol == TCP)
+                m_brx_connect_event = true;
+                
 
             break;
         }
@@ -443,10 +474,6 @@ void DataStream::OnSocketEvent(wxSocketEvent& event)
 
 
 
-
-void DataStream::OnTimerNMEA(wxTimerEvent& event)
-{
-}
 
 bool DataStream::SentencePassesFilter(const wxString& sentence, FilterDirection direction)
 {
@@ -602,7 +629,8 @@ OCP_DataStreamInput_Thread::OCP_DataStreamInput_Thread(DataStream *Launcher,
     m_pMessageTarget = MessageTarget;
 
     m_PortName = PortName;
-
+    m_FullPortName = _T("Serial:") + PortName;
+    
     m_pout_mutex = pout_mutex;
     m_io_select = io_select;
     
@@ -1113,11 +1141,8 @@ HandleASuccessfulRead:
                     tak_ptr = tptr;
 
                     // parse and send the message
-//                    if(g_bShowOutlines)
-                    {
-                        wxString str_temp_buf(temp_buf, wxConvUTF8);
-                        Parse_And_Send_Posn(str_temp_buf);
-                    }
+                    wxString str_temp_buf(temp_buf, wxConvUTF8);
+                    Parse_And_Send_Posn(str_temp_buf);
                 }
                 else
                 {
@@ -1149,7 +1174,7 @@ void OCP_DataStreamInput_Thread::Parse_And_Send_Posn(wxString &str_temp_buf)
     OCPN_DataStreamEvent Nevent(wxEVT_OCPN_DATASTREAM, 0);
     std::string s = std::string(str_temp_buf.mb_str());
     Nevent.SetNMEAString(s);
-    Nevent.SetStreamName(std::string( m_launcher->GetPort().mb_str() ));
+    Nevent.SetStreamName(std::string( m_FullPortName.mb_str() ));
     Nevent.SetPriority(m_launcher->GetPriority());
     
     if( m_pMessageTarget )
