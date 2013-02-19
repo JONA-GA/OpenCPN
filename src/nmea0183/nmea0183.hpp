@@ -73,7 +73,6 @@
 #include "BWW.hpp"
 #include "DBT.hpp"
 #include "DCN.hpp"
-#include "DPT.hpp"
 #include "FSI.hpp"
 #include "GGA.hpp"
 #include "GLC.hpp"
@@ -81,17 +80,18 @@
 #include "GXA.hpp"
 #include "HSC.hpp"
 #include "LCD.hpp"
-#include "MTW.hpp"
-#include "MWV.hpp"
 #include "OLN.hpp"
 #include "OSD.hpp"
 #include "P.hpp"
 #include "RMA.hpp"
 */
+#include "dpt.hpp"
+#include "mwv.hpp"
 #include "hdm.hpp"
 #include "hdg.hpp"
 #include "hdt.hpp"
 #include "RMB.hpp"
+#include "mtw.hpp"
 #include "RMC.HPP"
 #include "wpl.hpp"
 #include "rte.hpp"
@@ -100,6 +100,7 @@
 #include "gsv.hpp"
 #include "gga.hpp"
 #include "GPwpl.hpp"
+#include "vhw.hpp"
 /*
 #include "ROT.hpp"
 #include "RPM.hpp"
@@ -166,7 +167,6 @@ class NMEA0183
       BWW Bww;
       DBT Dbt;
       DCN Dcn;
-      DPT Dpt;
       FSI Fsi;
       GGA Gga;
       GLC Glc;
@@ -174,14 +174,15 @@ class NMEA0183
       GXA Gxa;
       HSC Hsc;
       LCD Lcd;
-      MTW Mtw;
-      MWV Mwv;
       OLN Oln;
       OSD Osd;
       P   Proprietary;
       RMA Rma;
 */
-       HDM Hdm;
+	   DPT Dpt;
+	   MWV Mwv;
+       MTW Mtw;
+	   HDM Hdm;
        HDG Hdg;
        HDT Hdt;
        RMB Rmb;
@@ -193,6 +194,7 @@ class NMEA0183
        GSV Gsv;
        GGA Gga;
        GPWPL GPwpl;
+	   VHW Vhw;
  /*
       ROT Rot;
       RPM Rpm;
@@ -204,7 +206,7 @@ class NMEA0183
       TTM Ttm;
       VBW Vbw;
       VDR Vdr;
-      VHW Vhw;
+      
       VLW Vlw;
       VPW Vpw;
       VTG Vtg;

@@ -404,8 +404,14 @@ private:
     int                     m_takIndex;
     int                     m_putIndex;
     wxArrayString           m_outQueue;
-
-
+	
+#ifdef __POSIX__
+	bool seatalk(unsigned char d, bool cde) ;
+	bool getParity(unsigned int n);
+	int ind;
+	wxString recu;
+#endif	
+	
 #ifdef __WXMSW__
     HANDLE                  m_hSerialComm;
 #endif
@@ -602,8 +608,6 @@ public:
     ~GarminProtocolHandler();
 
     void Close(void);
-
-
     void StopIOThread(bool b_pause);
     void RestartIOThread(void);
 

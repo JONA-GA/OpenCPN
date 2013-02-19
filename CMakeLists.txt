@@ -287,6 +287,14 @@ SET(SRC_NMEA0183
 		src/nmea0183/gsv.cpp
 		src/nmea0183/GPwpl.cpp
 		src/nmea0183/GPwpl.hpp
+		src/nmea0183/mtw.hpp
+		src/nmea0183/mtw.cpp
+		src/nmea0183/mwv.hpp
+		src/nmea0183/mwv.cpp
+		src/nmea0183/dpt.hpp
+		src/nmea0183/dpt.cpp
+		src/nmea0183/vhw.hpp
+		src/nmea0183/vhw.cpp
 	)
 ADD_LIBRARY(NMEA0183 ${SRC_NMEA0183})
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/nmea0183)
@@ -356,14 +364,15 @@ SET(HDRS
 		include/compasswin.h
 		include/geodesic.h
 		include/datastream.h
-        include/multiplexer.h
+        	include/multiplexer.h
+		include/Seatalk.h
 )
 
 SET(SRCS
 		src/chart1.cpp
 		src/bbox.cpp
 		src/ocpn_pixel.cpp
-        src/ocpndc.cpp
+        	src/ocpndc.cpp
 		src/chartdb.cpp
 		src/chartdbs.cpp
 		src/chartimg.cpp
@@ -398,6 +407,7 @@ SET(SRCS
 		src/compasswin.cpp
 		src/geodesic.cpp
 		src/datastream.cpp
+		src/Seatalk.cpp
         src/multiplexer.cpp
     )
 

@@ -30,48 +30,27 @@
 #define _Seatalk_H_
 
 #include "wx/wxprec.h"
-#include "wx/ctb/serport.h"
 
 #ifndef  WX_PRECOMP
 #include "wx/wx.h"
 #endif //precompiled headers
 
-#include "connector_pi.h"
-
-
-
 //Forward declarations
-
-class SerialConnection;
-class ConnectionHandler;
-
-//Type definitions
-
-
-
-//----------------------------------------------------------------------------------------------------------
-//    Connection parameters class
-//----------------------------------------------------------------------------------------------------------
-class StkSerialConnection : public SerialConnection
+class StkToNmea
 {
 public:
-
-	StkSerialConnection(ConnectionHandler *handler) ;
-	~StkSerialConnection();
-	
-    void PushBuffer(const char * b, unsigned int l);
-	
-private:
-
-	void stk(unsigned char tre[255]);
-	void seatalk(unsigned char d, bool cde) ;
-	bool getParity(unsigned int n);
-	void received(const char *data, unsigned int len);
-	wxString m_sbuffer;
-    unsigned long vent ;
+	StkToNmea();
+	~StkToNmea();
+	wxString stk(unsigned char[255]);
+	unsigned long vent ;
 	float HeadingMag;
 	float Cog;
 	float Sow;
-};
+	
+	
+	};
+//Type definitions
+
+
 
 #endif

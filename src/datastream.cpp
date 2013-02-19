@@ -46,7 +46,7 @@
 
 #include "datastream.h"
 #include "garmin/jeeps/garmin_wrapper.h"
-
+#include "Seatalk.h"
 #include <vector>
 
 
@@ -118,6 +118,7 @@ DataStream::DataStream(wxEvtHandler *input_consumer,
     m_BaudRate = BaudRate;
     m_io_select = io_select;
     m_priority = priority;
+	m_iProtocol = iProtocol;
     m_handshake = handshake_type;
     m_user_data = user_data;
     m_bGarmin_GRMN_mode = bGarmin;
@@ -668,6 +669,61 @@ void OCP_DataStreamInput_Thread::OnExit(void)
 //      in a very machine specific way....
 
 #ifdef __POSIX__
+
+bool OCP_DataStreamInput_Thread::seatalk(unsigned char d, bool cde) 
+{
+	static unsigned int cpt;
+	static int len ;
+	static unsigned char tr[255];
+	int i;
+	//wxString recu ;
+	static bool b=false ;
+	bool status;	
+	status= false;
+	if (cde)
+	{ 
+		cpt = 255;
+		tr[0]= d;
+		b= true ;
+		
+	}else
+	{
+	if (b){
+		if (cpt == 254)	{
+			len = (d & 0x0f)+2;
+			cpt = len;
+			}
+		tr[(len -cpt)+1]= d ;
+		}	
+	}
+	if ( !--cpt and b ){
+		recu.Clear();
+		recu += wxT("** Con_ga ** " );
+		for (i=0;i<=len;i++)
+			{
+				recu += wxString::Format(_T("%2x"),tr[i]);
+				recu += wxString::FromAscii( ' ');
+			}
+		//stk(tr);
+		
+		status= true;
+		b=false; //debug
+	} 
+	return status; // commande complete
+	
+}
+
+bool OCP_DataStreamInput_Thread::getParity(unsigned int n)
+{
+    bool parity = 0;
+    while (n)
+    {
+        parity = !parity;
+        n      = n & (n - 1);
+    }
+    return !parity;
+}
+
 //    Entry Point
 void *OCP_DataStreamInput_Thread::Entry()
 {
@@ -758,50 +814,107 @@ void *OCP_DataStreamInput_Thread::Entry()
             *put_ptr++ = next_byte;
             if((put_ptr - rx_buffer) > DS_RX_BUFFER_SIZE)
             put_ptr = rx_buffer;
-
-            if(0x0a == next_byte)
-            nl_found = true;
-
-
-            //    Found a NL char, thus end of message?
-            if(nl_found)
+			
+	        switch (m_launcher->GetDataProtocol())
             {
-                char *tptr;
-                char *ptmpbuf;
+			case PROTO_NMEA2000 :
+				break;
+				
+			case PROTO_SEATALK	:
+			// this is working only with POSIX Linux serial driver
+				bool complete ;
+				switch ((unsigned char)next_byte)
+				{
+					case 0xff:
+					ind =1;
+					break;
+					
+					case 0x00:
+					if (ind==1)
+					{
+						ind= 2;
+						}
+					break;
+					
+					default:
+					if (ind ==2 ) /*  erreur parity impaire */
+					{
+						if ( getParity(next_byte) )
+						{ // even cde
+						complete = seatalk(next_byte,1);
+						}else 
+						{ //odd data
+						complete = seatalk(next_byte,0);
+						}
+					}else
+					{
+						if ( getParity(next_byte) )
+						{ // even data
+						complete = seatalk(next_byte,0);
+						}else 
+						{ //odd cde
+						complete = seatalk(next_byte,1);
+						}
+					}						
+					ind =0 ;
+					if (complete)
+					{
+					wxLogMessage(recu);
+					StkToNmea msg = new StktoNmea() ;
+					Parse_And_Send_Posn(msg.stk(recu));
+					}
+					break;
+				}
+				
 
-                //    Copy the message into a temporary _buffer
+				break;
+				
+			case PROTO_NMEA0183:
+				if(0x0a == next_byte)
+				nl_found = true;
 
-                tptr = tak_ptr;
-                ptmpbuf = temp_buf;
 
-                while((*tptr != 0x0a) && (tptr != put_ptr))
-                {
-                    *ptmpbuf++ = *tptr++;
+				//    Found a NL char, thus end of message?
+				if(nl_found)
+				{
+					char *tptr;
+					char *ptmpbuf;
 
-                    if((tptr - rx_buffer) > DS_RX_BUFFER_SIZE)
-                    tptr = rx_buffer;
+					//    Copy the message into a temporary _buffer
 
-                    wxASSERT_MSG((ptmpbuf - temp_buf) < DS_RX_BUFFER_SIZE, (const wxChar *)"temp_buf overrun1");
+					tptr = tak_ptr;
+					ptmpbuf = temp_buf;
 
-                }
-                if((*tptr == 0x0a) && (tptr != put_ptr))    // well formed sentence
-                {
-                    *ptmpbuf++ = *tptr++;
-                    if((tptr - rx_buffer) > DS_RX_BUFFER_SIZE)
-                    tptr = rx_buffer;
+					while((*tptr != 0x0a) && (tptr != put_ptr))
+					{
+						*ptmpbuf++ = *tptr++;
 
-                    wxASSERT_MSG((ptmpbuf - temp_buf) < DS_RX_BUFFER_SIZE, (const wxChar *)"temp_buf overrun2");
+						if((tptr - rx_buffer) > DS_RX_BUFFER_SIZE)
+						tptr = rx_buffer;
 
-                    *ptmpbuf = 0;
+						wxASSERT_MSG((ptmpbuf - temp_buf) < DS_RX_BUFFER_SIZE, (const wxChar *)"temp_buf overrun1");
 
-                    tak_ptr = tptr;
+					}
+					if((*tptr == 0x0a) && (tptr != put_ptr))    // well formed sentence
+					{
+						*ptmpbuf++ = *tptr++;
+						if((tptr - rx_buffer) > DS_RX_BUFFER_SIZE)
+						tptr = rx_buffer;
 
-                //    Message is ready to parse and send out
-                    wxString str_temp_buf(temp_buf, wxConvUTF8);
-                    Parse_And_Send_Posn(str_temp_buf);
-                }
+						wxASSERT_MSG((ptmpbuf - temp_buf) < DS_RX_BUFFER_SIZE, (const wxChar *)"temp_buf overrun2");
 
-            }                   //if nl
+						*ptmpbuf = 0;
+
+						tak_ptr = tptr;
+
+					//    Message is ready to parse and send out
+						wxString str_temp_buf(temp_buf, wxConvUTF8);
+						Parse_And_Send_Posn(str_temp_buf);
+					}
+
+				}                   //if nl
+			break;
+		} //end switch
         }                       // if newdata > 0
         
         //      Check for any pending output message
@@ -1291,14 +1404,20 @@ int OCP_DataStreamInput_Thread::OpenComPortPhysical(wxString &com_name, int baud
         ttyset.c_iflag &=~ (PARMRK | INPCK);
         ttyset.c_cflag &=~ (CSIZE | CSTOPB | PARENB | PARODD);
         ttyset.c_cflag |= (stopbits==2 ? CS7|CSTOPB : CS8);
+		if (this->m_launcher->GetDataProtocol()== PROTO_SEATALK) parity = 'E';
         switch (parity)
         {
+			//if Stk , parity is checked and marked
             case 'E':
-                ttyset.c_iflag |= INPCK;
-                ttyset.c_cflag |= PARENB;
+                if (this->m_launcher->GetDataProtocol()== PROTO_SEATALK) ttyset.c_iflag |= (PARMRK | INPCK);
+                else ttyset.c_iflag |= INPCK ;
+				ttyset.c_iflag &= ~IGNPAR;
+				ttyset.c_cflag |= PARENB;
                 break;
             case 'O':
-                ttyset.c_iflag |= INPCK;
+                if (this->m_launcher->GetDataProtocol()== PROTO_SEATALK) ttyset.c_iflag |= (PARMRK | INPCK);
+                else ttyset.c_iflag |= INPCK;
+				ttyset.c_iflag &= ~IGNPAR;
                 ttyset.c_cflag |= PARENB | PARODD;
                 break;
         }
