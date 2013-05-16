@@ -79,7 +79,7 @@ IF (NOT WIN32)
   ENDIF (EXISTS /etc/debian_version)
   IF (EXISTS /etc/redhat-release)
     SET (PACKAGE_FORMAT "RPM")
-    SET (PACKAGE_DEPS  "wxGTK mesa-libGLU mesa-libGL gettext zlib bzip2")
+    #    SET (PACKAGE_DEPS  "wxGTK mesa-libGLU mesa-libGL gettext zlib bzip2 portaudio")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "x86_64")
       SET (LIB_INSTALL_DIR "lib64")
@@ -90,7 +90,7 @@ IF (NOT WIN32)
   ENDIF (EXISTS /etc/redhat-release)
   IF (EXISTS /etc/suse-release OR EXISTS /etc/SuSE-release)
     SET (PACKAGE_FORMAT "RPM")
-    SET (PACKAGE_DEPS  "wxWidgets-wxcontainer MesaGLw libbz2")
+    #    SET (PACKAGE_DEPS  "libwx_baseu-2_8-0-wxcontainer MesaGLw libbz2-1 portaudio")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "x86_64")
       SET (LIB_INSTALL_DIR "lib64")
@@ -289,6 +289,8 @@ SET(SRC_NMEA0183
 		src/nmea0183/GPwpl.hpp
 		src/nmea0183/mtw.hpp
 		src/nmea0183/mtw.cpp
+                src/nmea0183/apb.cpp
+                src/nmea0183/apb.hpp
 		src/nmea0183/mwv.hpp
 		src/nmea0183/mwv.cpp
 		src/nmea0183/dpt.hpp
@@ -408,7 +410,7 @@ SET(SRCS
 		src/geodesic.cpp
 		src/datastream.cpp
 		src/Seatalk.cpp
-        src/multiplexer.cpp
+		src/multiplexer.cpp
     )
 
 IF(wx_Version MATCHES "2.9")

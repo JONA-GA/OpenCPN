@@ -141,6 +141,8 @@ typedef enum
 } DataProtocol;
 
 #define DS_SOCKET_ID             5001
+#define DS_SERVERSOCKET_ID       5002
+#define DS_ACTIVESERVERSOCKET_ID 5003
 
 #define     MAX_RX_MESSSAGE_SIZE  4096
 #define     RX_BUFFER_SIZE        4096
@@ -168,6 +170,7 @@ typedef struct {
 class OCP_DataStreamInput_Thread;
 class DataStream;
 class GarminProtocolHandler;
+class StkToNmea;
 
 //----------------------------------------------------------------------------
 // OCPN_DataStreamEvent
@@ -240,9 +243,7 @@ public:
     int GetPriority(){ return m_priority; }
 	DataProtocol GetDataProtocol(){return m_iProtocol;}
     void *GetUserData(){ return m_user_data; }
-
     bool SendSentence( const wxString &sentence );
-
     int GetLastError(){ return m_last_error; }
 
  //    Secondary thread life toggle
@@ -299,6 +300,13 @@ private:
     wxIPV4address       m_addr;
     wxSocketBase        *m_sock;
     wxSocketBase        *m_tsock;
+
+    //  TCP Server support
+    void OnServerSocketEvent(wxSocketEvent& event);             // The listener
+    void OnActiveServerEvent(wxSocketEvent& event);             // The open connection
+    wxSocketServer      *m_socket_server;                       //  The listening server
+    wxSocketBase        *m_socket_server_active;                //  The active connection
+    
     wxString            m_sock_buffer;
     wxString            m_net_addr;
     wxString            m_net_port;
@@ -316,6 +324,7 @@ private:
     wxDateTime          m_connect_time;
     bool                m_brx_connect_event;
     wxTimer             m_socket_timer;
+    int                 m_txenter;
 
 
 DECLARE_EVENT_TABLE()
@@ -330,7 +339,9 @@ DECLARE_EVENT_TABLE()
 //    This thread manages reading the NMEA data stream from the declared source
 //
 //-------------------------------------------------------------------------------------------------------------
-
+#ifdef __POSIX__
+#include "Seatalk.h"
+#endif
 #ifdef __WXMSW__
 #include <windows.h>
 #include <winioctl.h>
@@ -370,6 +381,17 @@ public:
     void *Entry();
     bool SetOutMsg(wxString msg);
     void OnExit(void);
+	
+#ifdef __POSIX__
+
+	StkToNmea	*s2n;
+	bool seatalk(unsigned char d, bool cde) ;
+	bool getParity(unsigned int n);
+	int ind;
+	wxString recu;
+	unsigned char buftmp[255];
+	
+#endif	
 
 private:
     void ThreadMessage(const wxString &msg);
@@ -404,13 +426,7 @@ private:
     int                     m_takIndex;
     int                     m_putIndex;
     wxArrayString           m_outQueue;
-	
-#ifdef __POSIX__
-	bool seatalk(unsigned char d, bool cde) ;
-	bool getParity(unsigned int n);
-	int ind;
-	wxString recu;
-#endif	
+
 	
 #ifdef __WXMSW__
     HANDLE                  m_hSerialComm;

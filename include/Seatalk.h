@@ -35,22 +35,21 @@
 #include "wx/wx.h"
 #endif //precompiled headers
 
-//Forward declarations
-class StkToNmea
+#include "wx/string.h"
+
+class StkToNmea 
 {
 public:
 	StkToNmea();
 	~StkToNmea();
-	wxString stk(unsigned char[255]);
+	
+	wxString Decode(unsigned char tre[255]);
+	
 	unsigned long vent ;
 	float HeadingMag;
 	float Cog;
 	float Sow;
 	
-	
-	};
-//Type definitions
-
-
+};
 
 #endif

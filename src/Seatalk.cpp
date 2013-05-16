@@ -1,18 +1,14 @@
 
+#include "wx/wxprec.h"
+
+#ifndef  WX_PRECOMP
+  #include "wx/wx.h"
+#endif //precompiled headers
 
 #include "Seatalk.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-//#include <string.h>
-#include <wx/string.h>
-#include <vector>
-
-
-
 #include "nmea0183/nmea0183.h"
 
-using namespace std;
 
 StkToNmea::StkToNmea()
 {
@@ -23,7 +19,7 @@ StkToNmea::~StkToNmea()
 	 };
 
 
-wxString StkToNmea::stk(unsigned char tre[255])
+wxString StkToNmea::Decode(unsigned char tre[255])
 {
 	NMEA0183 cm_nmea ;
 	float t;

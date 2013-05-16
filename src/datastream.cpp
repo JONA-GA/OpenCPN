@@ -46,7 +46,7 @@
 
 #include "datastream.h"
 #include "garmin/jeeps/garmin_wrapper.h"
-#include "Seatalk.h"
+
 #include <vector>
 
 
@@ -95,6 +95,8 @@ wxEvent* OCPN_DataStreamEvent::Clone() const
 BEGIN_EVENT_TABLE(DataStream, wxEvtHandler)
 
     EVT_SOCKET(DS_SOCKET_ID, DataStream::OnSocketEvent)
+    EVT_SOCKET(DS_SERVERSOCKET_ID, DataStream::OnServerSocketEvent)
+    EVT_SOCKET(DS_ACTIVESERVERSOCKET_ID, DataStream::OnActiveServerEvent)
     EVT_TIMER(TIMER_SOCKET, DataStream::OnTimerSocket)
 
   END_EVENT_TABLE()
@@ -137,6 +139,9 @@ void DataStream::Init(void)
     m_Thread_run_flag = -1;
     m_sock = 0;
     m_tsock = 0;
+    m_socket_server_active = 0;
+    m_socket_server = 0;
+    m_txenter = 0;
     
     m_socket_timer.SetOwner(this, TIMER_SOCKET);
     
@@ -239,9 +244,40 @@ void DataStream::Open(void)
             
             // Create the socket
             switch(m_net_protocol){
-                case GPSD:
-                case TCP:
+                case GPSD: {
                     m_sock = new wxSocketClient();
+                    m_sock->SetEventHandler(*this, DS_SOCKET_ID);
+                    m_sock->SetNotify(wxSOCKET_CONNECTION_FLAG | wxSOCKET_INPUT_FLAG | wxSOCKET_LOST_FLAG);
+                    m_sock->Notify(TRUE);
+                    m_sock->SetTimeout(1);              // Short timeout
+
+                    wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
+                    tcp_socket->Connect(m_addr, FALSE);
+                    m_brx_connect_event = false;
+                    
+                    break;
+                }
+                case TCP:
+                        //  TCP Datastreams can be either input or output, but not both...
+                    if((m_io_select == DS_TYPE_INPUT_OUTPUT) || (m_io_select == DS_TYPE_OUTPUT)) {
+                        m_socket_server = new wxSocketServer(m_addr, wxSOCKET_REUSEADDR );
+                        m_socket_server->SetEventHandler(*this, DS_SERVERSOCKET_ID);
+                        m_socket_server->SetNotify( wxSOCKET_CONNECTION_FLAG );
+                        m_socket_server->Notify(TRUE);
+                        m_socket_server->SetTimeout(1);              // Short timeout
+                    }
+                    else {
+                        m_sock = new wxSocketClient();
+                        m_sock->SetEventHandler(*this, DS_SOCKET_ID);
+                        m_sock->SetNotify(wxSOCKET_CONNECTION_FLAG | wxSOCKET_INPUT_FLAG | wxSOCKET_LOST_FLAG);
+                        m_sock->Notify(TRUE);
+                        m_sock->SetTimeout(1);              // Short timeout
+                        
+                        wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
+                        tcp_socket->Connect(m_addr, FALSE);
+                        m_brx_connect_event = false;
+                    }
+                    
                     break;
                 case UDP:
                     //  We need a local (bindable) address to create the Datagram receive socket
@@ -263,31 +299,18 @@ void DataStream::Open(void)
                             bool bam = m_tsock->SetOption(SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
                         }
                     }
+                    
+                    m_sock->SetEventHandler(*this, DS_SOCKET_ID);
+                    
+                    m_sock->SetNotify(wxSOCKET_CONNECTION_FLAG |
+                    wxSOCKET_INPUT_FLAG |
+                    wxSOCKET_LOST_FLAG);
+                    m_sock->Notify(TRUE);
+                    m_sock->SetTimeout(1);              // Short timeout
+                    
                     break;
             }
 
-            // Setup the event handler and subscribe to most events
-            m_sock->SetEventHandler(*this, DS_SOCKET_ID);
-
-            m_sock->SetNotify(wxSOCKET_CONNECTION_FLAG |
-                wxSOCKET_INPUT_FLAG |
-                wxSOCKET_LOST_FLAG);
-            m_sock->Notify(TRUE);
-            m_sock->SetTimeout(1);              // Short timeout
-
-            switch(m_net_protocol){
-                case GPSD:
-                case TCP:{
-                    wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
-                    tcp_socket->Connect(m_addr, FALSE);
-                    m_brx_connect_event = false;
-                    break;
-                }
-                case UDP:{
-                    break;
-                }
-            }
-            
             m_bok = true;
         }
     }
@@ -340,6 +363,18 @@ void DataStream::Close()
     {
         m_tsock->Notify(FALSE);
         m_tsock->Destroy();
+    }
+    
+    if(m_socket_server)
+    {
+        m_socket_server->Notify(FALSE);
+        m_socket_server->Destroy();
+    }
+    
+    if(m_socket_server_active)
+    {
+        m_socket_server_active->Notify(FALSE);
+        m_socket_server_active->Destroy();
     }
     
     //  Kill off the Garmin handler, if alive
@@ -475,6 +510,51 @@ void DataStream::OnSocketEvent(wxSocketEvent& event)
 
 
 
+void DataStream::OnServerSocketEvent(wxSocketEvent& event)
+{
+    
+    switch(event.GetSocketEvent())
+    {
+        case wxSOCKET_CONNECTION :
+        {
+            m_socket_server_active = m_socket_server->Accept(false);
+ 
+            if( m_socket_server_active ) {
+                m_socket_server_active->SetEventHandler(*this, DS_ACTIVESERVERSOCKET_ID);
+                m_socket_server_active->SetNotify( wxSOCKET_LOST_FLAG );
+                m_socket_server_active->Notify(true);
+            }
+            
+            break;
+        }
+        
+        default :
+            break;
+    }
+}
+
+void DataStream::OnActiveServerEvent(wxSocketEvent& event)
+{
+    wxSocketBase *sock = event.GetSocket();
+    
+    switch(event.GetSocketEvent())
+    {
+         case wxSOCKET_LOST:
+        {
+            sock->Destroy();
+            m_socket_server_active = 0;
+            break;
+        }
+        
+        
+        default :
+            break;
+    }
+}
+
+
+
+
 
 bool DataStream::SentencePassesFilter(const wxString& sentence, FilterDirection direction)
 {
@@ -576,30 +656,41 @@ bool DataStream::SendSentence( const wxString &sentence )
             }
             break;
         case NETWORK:
-            if( m_sock ) {
+            if(m_txenter)
+                return false;                 // do not allow recursion, could happen with non-blocking sockets
+            m_txenter++;
+
+            bool ret = true;
+            wxDatagramSocket* udp_socket;
                 switch(m_net_protocol){
-                    case GPSD:
-                    case TCP:{
-                        wxSocketClient* tcp_socket = dynamic_cast<wxSocketClient*>(m_sock);
-                        if( tcp_socket->IsDisconnected() )
-                            tcp_socket->Connect( m_addr, FALSE );
-                        else {
-                            tcp_socket->Write( payload.mb_str(), strlen( payload.mb_str() ) );
+                    case TCP:
+                        if( m_socket_server_active && m_socket_server_active->IsOk() ) {
+                            m_socket_server_active->Write( payload.mb_str(), strlen( payload.mb_str() ) );
                         }
-                    }
-                    break;
-                    case UDP:{
-                        wxDatagramSocket* udp_socket = dynamic_cast<wxDatagramSocket*>(m_tsock);
+                        else
+                            ret = false;
+                        break;
+                    case UDP:
+                        udp_socket = dynamic_cast<wxDatagramSocket*>(m_tsock);
                         if( udp_socket->IsOk() ) {
                             udp_socket->SendTo(m_addr, payload.mb_str(), payload.size() );
                             if( udp_socket->Error())
-                                return false;
+                                ret = false;
                         }
-                    }
-                }
+                        else
+                            ret = false;
+                        break;
+                    
+                    case GPSD:    
+                    default:
+                        ret = false;
+                        break;
             }
+            m_txenter--;
+            return ret;
             break;
     }
+    
     return true;
 }
 
@@ -640,7 +731,7 @@ OCP_DataStreamInput_Thread::OCP_DataStreamInput_Thread(DataStream *Launcher,
 
     put_ptr = rx_buffer;                            // local circular queue
     tak_ptr = rx_buffer;
-
+	s2n = new StkToNmea ;
     m_baud = 4800;                                  // default
     long lbaud;
     if(strBaudRate.ToLong(&lbaud))
@@ -659,6 +750,7 @@ OCP_DataStreamInput_Thread::~OCP_DataStreamInput_Thread(void)
 {
     delete[] rx_buffer;
     delete[] temp_buf;
+	//delete[] s2n ;
 }
 
 void OCP_DataStreamInput_Thread::OnExit(void)
@@ -674,16 +766,14 @@ bool OCP_DataStreamInput_Thread::seatalk(unsigned char d, bool cde)
 {
 	static unsigned int cpt;
 	static int len ;
-	static unsigned char tr[255];
 	int i;
-	//wxString recu ;
 	static bool b=false ;
 	bool status;	
 	status= false;
 	if (cde)
 	{ 
 		cpt = 255;
-		tr[0]= d;
+		buftmp[0]= d;
 		b= true ;
 		
 	}else
@@ -693,7 +783,7 @@ bool OCP_DataStreamInput_Thread::seatalk(unsigned char d, bool cde)
 			len = (d & 0x0f)+2;
 			cpt = len;
 			}
-		tr[(len -cpt)+1]= d ;
+		buftmp[(len -cpt)+1]= d ;
 		}	
 	}
 	if ( !--cpt and b ){
@@ -701,10 +791,9 @@ bool OCP_DataStreamInput_Thread::seatalk(unsigned char d, bool cde)
 		recu += wxT("** Con_ga ** " );
 		for (i=0;i<=len;i++)
 			{
-				recu += wxString::Format(_T("%2x"),tr[i]);
+				recu += wxString::Format(_T("%2x"),buftmp[i]);
 				recu += wxString::FromAscii( ' ');
 			}
-		//stk(tr);
 		
 		status= true;
 		b=false; //debug
@@ -860,8 +949,9 @@ void *OCP_DataStreamInput_Thread::Entry()
 					if (complete)
 					{
 					wxLogMessage(recu);
-					StkToNmea msg = new StktoNmea() ;
-					Parse_And_Send_Posn(msg.stk(recu));
+					wxString tempo;
+					tempo = s2n->Decode(buftmp);
+					Parse_And_Send_Posn(tempo);
 					}
 					break;
 				}
@@ -2554,6 +2644,7 @@ void *GARMIN_Serial_Thread::Entry()
     m_bconnected = false;
     
     bool not_done = true;
+    wxDateTime last_rx_time;
  
    
 #ifdef USE_GARMINHOST
@@ -2571,10 +2662,13 @@ void *GARMIN_Serial_Thread::Entry()
             //  Try to init the port once
             int v_init = Garmin_GPS_Init(m_port);
             if( v_init < 0 ){           //  Open failed, so sleep and try again
-                wxSleep(4);
-                
-                if(TestDestroy())
-                    goto thread_exit;
+                for( int i=0 ; i < 4 ; i++) {
+                    wxSleep(1);
+                    if(TestDestroy())
+                        goto thread_exit;
+                    if( !m_parent->m_Thread_run_flag )
+                        goto thread_exit;
+                }
             }
             else
                 m_bdetected = true;
@@ -2639,8 +2733,21 @@ void *GARMIN_Serial_Thread::Entry()
                             m_pMessageTarget->AddPendingEvent(Nevent);
                         }
                         
+                        last_rx_time = wxDateTime::Now();
+                        
                     }
-            }
+                }
+                else {
+                    wxDateTime now = wxDateTime::Now();
+                    if( last_rx_time.IsValid() ) {
+                        wxTimeSpan delta_time = now - last_rx_time;
+                        if( delta_time.GetSeconds() > 5 ) {
+                            m_bdetected = false;
+                            m_bconnected = false;
+                            Garmin_GPS_ClosePortVerify();
+                        }
+                    }
+                }
         }
     }                          // the big while...
             
