@@ -829,6 +829,9 @@ RouteManagerDialog::~RouteManagerDialog()
     delete btnImport;
     delete btnExport;
     delete btnExportViz;
+    btnImport = NULL;
+    btnExport = NULL;
+    btnExportViz = NULL;
     
     delete m_pNotebook;
 
@@ -1217,11 +1220,13 @@ void RouteManagerDialog::OnRteToggleVisibility( wxMouseEvent &event )
         // Process the clicked item
         Route *route = pRouteList->Item( m_pRouteListCtrl->GetItemData( clicked_index ) )->GetData();
                 
-        int wpts_set_viz = wxYES;
-        if( g_pRouteMan->DoesRouteContainSharedPoints(route) ) {        
-            wpts_set_viz = wxMessageBox( _("Do you also want to toggle the visibility of shared waypoints being part of this route?"), _("Question"), wxYES_NO );
+        int wpts_set_viz = wxID_YES;
+        bool togglesharedwpts = true;
+        if( g_pRouteMan->DoesRouteContainSharedPoints(route) && route->IsVisible() ) {
+            wpts_set_viz = OCPNMessageBox(  this, _("Do you also want to toggle the visibility of shared waypoints being part of this route?"), _("Question"), wxYES_NO );
+            togglesharedwpts = (wpts_set_viz == wxID_YES);
         }
-        route->SetVisible( !route->IsVisible(), (wpts_set_viz == wxYES) );
+        route->SetVisible( !route->IsVisible(), togglesharedwpts );
         m_pRouteListCtrl->SetItemImage( clicked_index, route->IsVisible() ? 0 : 1 );
 
         ::wxBeginBusyCursor();
@@ -1273,7 +1278,9 @@ void RouteManagerDialog::OnRteSelected( wxListEvent &event )
 //    route->SetVisible(!route->IsVisible());
     m_pRouteListCtrl->SetItemImage( clicked_index, route->IsVisible() ? 0 : 1 );
 //    pConfig->UpdateRoute(route);
-    cc1->Refresh();
+    
+    if( cc1 )
+        cc1->Refresh();
 
     UpdateRteButtons();
 
@@ -2036,7 +2043,7 @@ void RouteManagerDialog::OnWptDeleteClick( wxCommandEvent &event )
                 
                 if ( wp->m_bIsInRoute || wp->m_bIsInTrack )
                 {
-                    if ( wxYES == wxMessageBox( _( "The waypoint you want to delete is used in a route, do you really want to delete it?" ), _( "OpenCPN Alert" ), wxYES_NO ))
+                    if ( wxYES == OCPNMessageBox( this, _( "The waypoint you want to delete is used in a route, do you really want to delete it?" ), _( "OpenCPN Alert" ), wxYES_NO ))
                         pWayPointMan->DestroyWaypoint( wp );
                 }
                 else

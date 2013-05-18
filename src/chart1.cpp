@@ -406,6 +406,8 @@ bool                      g_bQuiltStart;
 
 bool                      g_bportable;
 
+bool                      g_bdisable_opengl;
+
 ChartGroupArray           *g_pGroupArray;
 int                       g_GroupIndex;
 
@@ -726,12 +728,15 @@ void MyApp::OnInitCmdLine( wxCmdLineParser& parser )
     parser.AddSwitch( _T("unit_test_1") );
 
     parser.AddSwitch( _T("p") );
+
+    parser.AddSwitch( _T("no_opengl") );
 }
 
 bool MyApp::OnCmdLineParsed( wxCmdLineParser& parser )
 {
     g_unit_test_1 = parser.Found( _T("unit_test_1") );
     g_bportable = parser.Found( _T("p") );
+    g_bdisable_opengl = parser.Found( _T("no_opengl") );
 
     return true;
 }
@@ -774,19 +779,27 @@ void MyApp::OnActivateApp( wxActivateEvent& event )
     else
     {
 //        printf("App Activate\n");
+        gFrame->SubmergeToolbar();              // This is needed to reset internal wxWidgets logic
+                                                // Also required for other TopLevelWindows here
         gFrame->SurfaceToolbar();
 
-        if(g_FloatingCompassDialog)
+        if(g_FloatingCompassDialog){
+            g_FloatingCompassDialog->Hide();
             g_FloatingCompassDialog->Show();
+        }
 
-        if(stats)
+        if(stats){
+            stats->Hide();
             stats->Show();
+        }
 
         if(console) {
-            if( g_pRouteMan->IsAnyRouteActive() )
+            if( g_pRouteMan->IsAnyRouteActive() ){
+                console->Hide();
                 console->Show();
+            }
         }
-        
+
         gFrame->Raise();
 
     }
@@ -805,7 +818,16 @@ bool MyApp::OnInit()
 
 //    bells_sound[0].Create(_T("/home/dsr/2bells.wav"));
 //    bells_sound[0].Play();
-    
+
+   //  On Windows, we allow only one instance unless the portable option is used
+#ifdef __WXMSW__
+    m_checker = new wxSingleInstanceChecker(_T("OpenCPN"));
+    if(!g_bportable) {
+        if ( m_checker->IsAnotherRunning() )
+            return false;               // exit quietly
+    }
+#endif
+
     g_pPlatform = new wxPlatformInfo;
 
     //    On MSW, force the entire process to run on one CPU core only
@@ -997,11 +1019,11 @@ bool MyApp::OnInit()
 
 #ifdef __WXMSW__
 
-//  Un-comment the following to establish a separate console window as a target for printf() in Windows   
+//  Un-comment the following to establish a separate console window as a target for printf() in Windows
 //     RedirectIOToConsole();
 
 #endif
-    
+
 //        wxLog::AddTraceMask("timer");               // verbose message traces to log output
 
 #ifndef __WXMSW__
@@ -1499,6 +1521,19 @@ if( 0 == g_memCacheLimit )
             wxFileName::GetPathSeparator() +
             _T("HARMONIC.IDX"));
 
+   //  Check the global AIS alarm sound file
+    //  If empty, preset default
+    if(g_sAIS_Alert_Sound_File.IsEmpty()) {
+        wxString default_sound =  ( g_SData_Locn + _T("sounds") + wxFileName::GetPathSeparator() + _T("2bells.wav"));
+
+        if( g_bportable ) {
+            wxFileName f( default_sound );
+            f.MakeRelativeTo( g_PrivateDataDir );
+            g_sAIS_Alert_Sound_File = f.GetFullPath();
+        }
+        else
+            g_sAIS_Alert_Sound_File = default_sound ;
+    }
 
 
     g_StartTime = wxInvalidDateTime;
@@ -1864,7 +1899,7 @@ if( 0 == g_memCacheLimit )
     }
 
     stats->Show( true );
-    
+
     gFrame->DoChartUpdate();
 
     g_FloatingToolbarDialog->LockPosition(false);
@@ -1929,12 +1964,16 @@ if( 0 == g_memCacheLimit )
     //  We need a deferred resize to get glDrawPixels() to work right.
     //  So we set a trigger to generate a resize after 5 seconds....
     //  See the "UniChrome" hack elsewhere
-    glChartCanvas *pgl = (glChartCanvas *) cc1->GetglCanvas();
-    if( pgl && ( pgl->GetRendererString().Find( _T("UniChrome") ) != wxNOT_FOUND ) ) {
-        gFrame->m_defer_size = gFrame->GetSize();
-        gFrame->SetSize( gFrame->m_defer_size.x - 10, gFrame->m_defer_size.y );
-        g_pauimgr->Update();
-        gFrame->m_bdefer_resize = true;
+    if ( !g_bdisable_opengl )
+    {
+        glChartCanvas *pgl = (glChartCanvas *) cc1->GetglCanvas();
+        if( pgl && ( pgl->GetRendererString().Find( _T("UniChrome") ) != wxNOT_FOUND ) )
+        {
+            gFrame->m_defer_size = gFrame->GetSize();
+            gFrame->SetSize( gFrame->m_defer_size.x - 10, gFrame->m_defer_size.y );
+            g_pauimgr->Update();
+            gFrame->m_bdefer_resize = true;
+        }
     }
     return TRUE;
 }
@@ -2038,7 +2077,7 @@ int MyApp::OnExit()
     if(portaudio_initialized)
         Pa_Terminate();
 #endif
-        
+
 
     //      Restore any changed system colors
 #ifdef __WXMSW__
@@ -2053,6 +2092,11 @@ int MyApp::OnExit()
     delete g_pauimgr;
 
     delete plocale_def_lang;
+
+#ifdef __WXMSW__
+    delete m_checker;
+#endif
+
     return TRUE;
 }
 
@@ -2132,7 +2176,8 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
     gVar = NAN;
     gSog = NAN;
     gCog = NAN;
-    
+    m_fixtime = 0;
+
     m_bpersistent_quilt = false;
 
     m_ChartUpdatePeriod = 1;                  // set the default (1 sec.) period
@@ -2141,7 +2186,7 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
     g_pMUX = new Multiplexer();
 
     g_pAIS = new AIS_Decoder( this );
-   
+
 
     for ( size_t i = 0; i < g_pConnectionParams->Count(); i++ )
     {
@@ -2168,7 +2213,7 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
             g_pMUX->AddStream(dstr);
         }
     }
-    
+
     g_pMUX->SetAISHandler(g_pAIS);
     g_pMUX->SetGPSHandler(this);
     //  Create/connect a dynamic event handler slot
@@ -2258,14 +2303,14 @@ void MyFrame::OnActivate( wxActivateEvent& event )
 
         if(stats)
             stats->Show();
-        
+
         if(console) {
             if( g_pRouteMan->IsAnyRouteActive() )
                 console->Show();
         }
-        
+
         gFrame->Raise();
-        
+
     }
     else {
     }
@@ -2562,7 +2607,7 @@ ocpnToolBarSimple *MyFrame::CreateAToolbar()
     if( ( pConfig ) && ( ps52plib ) ) if( ps52plib->m_bOK ) tb->ToggleTool( ID_TEXT,
             ps52plib->GetShowS57Text() );
 #endif
-    
+
     wxString initiconName;
     if( g_bShowAIS ) {
         tb->SetToolShortHelp( ID_AIS, _("Hide AIS Targets") );
@@ -2574,7 +2619,7 @@ ocpnToolBarSimple *MyFrame::CreateAToolbar()
     }
     tb->SetToolNormalBitmapEx( m_pAISTool, initiconName );
     m_lastAISiconName = initiconName;
-    
+
     tb->ToggleTool( ID_TRACK, g_bTrackActive );
 
     SetStatusBarPane( -1 );                   // don't show help on status bar
@@ -2790,7 +2835,7 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     FrameTimer1.Stop();
 
     g_pMUX->ClearStreams();
-    
+
     /*
      Automatically drop an anchorage waypoint, if enabled
      On following conditions:
@@ -2909,7 +2954,7 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
 
     cc1->Destroy();
     cc1 = NULL;
-    
+
 
     //    Unload the PlugIns
     //      Note that we are waiting until after the canvas is destroyed,
@@ -2929,14 +2974,14 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     }
 
     delete g_pMUX;
-    
+
     pthumbwin = NULL;
 
     g_FloatingToolbarDialog = NULL;
 
     g_pauimgr->UnInit();
 
-    
+
     this->Destroy();
 
 }
@@ -3125,7 +3170,7 @@ void MyFrame::SetGroupIndex( int index )
     ViewPort vp = cc1->GetVP();
 
     g_GroupIndex = new_index;
-    
+
     //  Invalidate the "sticky" chart on group change, since it might not be in the new group
     g_sticky_chart = -1;
 
@@ -3245,7 +3290,7 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
 
         case ID_AIS: {
             g_bShowAIS = !g_bShowAIS;
-            
+
             if( g_toolbar ) {
                 if( g_bShowAIS )
                     g_toolbar->SetToolShortHelp( ID_AIS, _("Hide AIS Targets") );
@@ -3258,15 +3303,15 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
                 iconName = _T("AIS");
             else
                 iconName = _T("AIS_Disabled");
-            
+
             if( m_pAISTool && g_toolbar) {
                 g_toolbar->SetToolNormalBitmapEx( m_pAISTool, iconName );
                 g_toolbar->Refresh();
                 m_lastAISiconName = iconName;
             }
-                
+
             cc1->ReloadVP();
-                
+
             break;
         }
 
@@ -3447,7 +3492,9 @@ void MyFrame::ActivateMOB( void )
 
     RoutePoint *pWP_MOB = new RoutePoint( gLat, gLon, _T ( "mob" ), mob_label, GPX_EMPTY_STRING );
     pWP_MOB->m_bKeepXRoute = true;
+    pWP_MOB->m_bIsolatedMark = true;
     pSelect->AddSelectableRoutePoint( gLat, gLon, pWP_MOB );
+    pConfig->AddNewWayPoint( pWP_MOB, -1 );       // use auto next num
 
     if( bGPSValid && !wxIsNaN(gCog) && !wxIsNaN(gSog) ) {
         //    Create a point that is one mile along the present course
@@ -3559,7 +3606,7 @@ void MyFrame::ToggleCourseUp( void )
         double stuff = 0.;
         if( !wxIsNaN(gCog) ) stuff = gCog;
 
-        if( g_COGAvgSec > 0) { 
+        if( g_COGAvgSec > 0) {
             for( int i = 0; i < g_COGAvgSec; i++ )
                 COGTable[i] = stuff;
         }
@@ -3805,7 +3852,9 @@ void MyFrame::JumpToPosition( double lat, double lon, double scale )
 
     SetToolbarItemState( ID_FOLLOW, false );
 
-//      RequestNewToolbar();
+    if( g_pi_manager ) {
+        g_pi_manager->SendViewPortToRequestingPlugIns( cc1->GetVP() );
+    }
 }
 
 int MyFrame::DoOptionsDialog()
@@ -4650,15 +4699,14 @@ void MyFrame::OnFrameTimer1( wxTimerEvent& event )
             GPSData.kHdm = gHdm;
             GPSData.kHdt = gHdt;
             GPSData.nSats = g_SatsInView;
-            
-            wxDateTime now = wxDateTime::Now();
-            GPSData.FixTime = now.GetTicks();
-            
+
+            GPSData.FixTime = m_fixtime;
+
             if(g_pi_manager)
                 g_pi_manager->SendPositionFixToAllPlugIns( &GPSData );
-        
+
     }
-    
+
     //   Check for anchorwatch alarms                                 // pjotrc 2010.02.15
     if( pAnchorWatchPoint1 ) {
         double dist;
@@ -4918,7 +4966,7 @@ void MyFrame::TouchAISActive( void )
             if( g_pAIS->IsAISAlertGeneral() ) iconName = _T("AIS_AlertGeneral_Active");
             if( g_pAIS->IsAISSuppressed() ) iconName = _T("AIS_Suppressed_Active");
             if( !g_bShowAIS ) iconName = _T("AIS_Disabled");
-            
+
             if( m_lastAISiconName != iconName ) {
                 if( g_toolbar) {
                     g_toolbar->SetToolNormalBitmapEx( m_pAISTool, iconName );
@@ -4949,7 +4997,7 @@ void MyFrame::UpdateAISTool( void )
             iconName = _T("AIS_AlertGeneral");
         if( !g_bShowAIS )
             iconName = _T("AIS_Disabled");
-        
+
         //  Manage timeout for AIS activity indicator
         if( g_nAIS_activity_timer ) {
             g_nAIS_activity_timer--;
@@ -4967,13 +5015,13 @@ void MyFrame::UpdateAISTool( void )
         }
 
         if( ( m_lastAISiconName != iconName ) ) b_update = true;
-        
+
         if( b_update && g_toolbar) {
             g_toolbar->SetToolNormalBitmapEx( m_pAISTool, iconName );
             g_toolbar->Refresh();
             m_lastAISiconName = iconName;
         }
-        
+
     }
 }
 
@@ -4999,7 +5047,7 @@ void MyFrame::OnFrameCOGTimer( wxTimerEvent& event )
         FrameCOGTimer.Start( g_COGAvgSec * 1000, wxTIMER_CONTINUOUS );
     else
         FrameCOGTimer.Start( 100, wxTIMER_CONTINUOUS );
-    
+
 }
 
 void MyFrame::DoCOGSet( void )
@@ -6375,32 +6423,32 @@ bool MyFrame::EvalPriority( wxString message, wxString stream_name, int stream_p
 {
     bool bret = true;
     wxString msg_type = message.Mid(1, 5);
-    
+
     //  If the message type has never been seen before...
     if( NMEA_Msg_Hash.find( msg_type ) == NMEA_Msg_Hash.end() ) {
         NMEA_Msg_Container *pcontainer = new NMEA_Msg_Container;
         pcontainer-> current_priority = -1;     //  guarantee to execute the next clause
         pcontainer->stream_name = stream_name;
         pcontainer->receipt_time = wxDateTime::Now();
-        
+
         NMEA_Msg_Hash[msg_type] = pcontainer;
     }
-    
+
     NMEA_Msg_Container *pcontainer = NMEA_Msg_Hash[msg_type];
     wxString old_port = pcontainer->stream_name;
-    
+
     int old_priority = pcontainer->current_priority;
-    
+
     //  If the message has been seen before, and the priority is greater than or equal to current priority,
     //  then simply update the record
     if( stream_priority >= pcontainer->current_priority ) {
         pcontainer->receipt_time = wxDateTime::Now();
         pcontainer-> current_priority = stream_priority;
         pcontainer->stream_name = stream_name;
-        
+
         bret = true;
     }
-    
+
     //  If the message has been seen before, and the priority is less than the current priority,
     //  then if the time since the last recorded message is greater than GPS_TIMEOUT_SECONDS
     //  then update the record with the new priority and stream.
@@ -6410,15 +6458,15 @@ bool MyFrame::EvalPriority( wxString message, wxString stream_name, int stream_p
             pcontainer->receipt_time = wxDateTime::Now();
             pcontainer-> current_priority = stream_priority;
             pcontainer->stream_name = stream_name;
-            
+
             bret = true;
         }
         else
             bret = false;
     }
- 
+
     wxString new_port = pcontainer->stream_name;
- 
+
     //  If the data source or priority has changed for this message type, emit a log entry
     if (pcontainer->current_priority != old_priority ||
         new_port != old_port )
@@ -6428,20 +6476,20 @@ bool MyFrame::EvalPriority( wxString message, wxString stream_name, int stream_p
                                             new_port.c_str(),
                                             pcontainer->current_priority);
             wxLogMessage(logmsg );
-            
+
             if( g_NMEALogWindow) {
                 wxDateTime now = wxDateTime::Now();
                 wxString ss = now.FormatISOTime();
                 ss.Append( _T(" ") );
                 ss.Append( logmsg );
                 ss.Prepend( _T("<RED>") );
-                
+
                 g_NMEALogWindow->Add( ss );
                 g_NMEALogWindow->Refresh( false );
             }
-            
+
         }
-        
+
     return bret;
 }
 
@@ -6454,18 +6502,18 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
 
     wxString str_buf = wxString(event.GetNMEAString().c_str(), wxConvUTF8);
     wxString stream_name = wxString(event.GetStreamName().c_str(), wxConvUTF8);
-    
+
     if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
         g_total_NMEAerror_messages++;
         wxString msg( _T("MEH.NMEA Sentence received...") );
         msg.Append( str_buf );
         wxLogMessage( msg );
     }
-    
+
     //  The message must be at least reasonably formed...
     if( (str_buf[0] != '$')  &&  (str_buf[0] != '!') )
         return;
-    
+
     bool b_accept = EvalPriority( str_buf, stream_name, event.GetStreamPriority() );
     if( b_accept ) {
         m_NMEA0183 << str_buf;
@@ -6494,7 +6542,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                         }
                         else
                             ll_valid = false;
-                        
+
                         gSog = m_NMEA0183.Rmc.SpeedOverGroundKnots;
                         gCog = m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue;
 
@@ -6512,8 +6560,12 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
 
                         sfixtime = m_NMEA0183.Rmc.UTCTime;
 
-                        if(ll_valid )
+                        if(ll_valid ){
                             gGPS_Watchdog = gps_watchdog_timeout_ticks;
+                            wxDateTime now = wxDateTime::Now();
+                            m_fixtime = now.GetTicks();
+                        }
+
                         pos_valid = ll_valid;
                     }
                 } else
@@ -6552,7 +6604,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                             gHdm = m_NMEA0183.Hdg.MagneticSensorHeadingDegrees;
                             if( !wxIsNaN(m_NMEA0183.Hdg.MagneticSensorHeadingDegrees) )
                                 gHDx_Watchdog = gps_watchdog_timeout_ticks;
-                            
+
                             if( m_NMEA0183.Hdg.MagneticVariationDirection == East )
                                 gVar = m_NMEA0183.Hdg.MagneticVariationDegrees;
                             else if( m_NMEA0183.Hdg.MagneticVariationDirection == West )
@@ -6563,7 +6615,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                     gVAR_Watchdog = gps_watchdog_timeout_ticks;
                             }
 
-                            
+
                         } else
                             if( g_nNMEADebug ) {
                                 wxString msg( _T("   ") );
@@ -6600,7 +6652,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                     gCog = m_NMEA0183.Vtg.TrackDegreesTrue;
                                     if( !wxIsNaN(m_NMEA0183.Vtg.SpeedKnots) && !wxIsNaN(m_NMEA0183.Vtg.TrackDegreesTrue) )
                                         gGPS_Watchdog = gps_watchdog_timeout_ticks;
-                                    
+
                                 } else
                                     if( g_nNMEADebug ) {
                                         wxString msg( _T("   ") );
@@ -6644,7 +6696,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                 }
                                                 else
                                                     ll_valid = false;
-                                                
+
                                                 if( !wxIsNaN(m_NMEA0183.Gll.Position.Longitude.Longitude) ) {
                                                     double lln =
                                                             m_NMEA0183.Gll.Position.Longitude.Longitude;
@@ -6657,11 +6709,15 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                 }
                                                 else
                                                     ll_valid = false;
-                                                
+
                                                 sfixtime = m_NMEA0183.Gll.UTCTime;
 
-                                                if(ll_valid)
+                                                if(ll_valid){
                                                     gGPS_Watchdog = gps_watchdog_timeout_ticks;
+                                                    wxDateTime now = wxDateTime::Now();
+                                                    m_fixtime = now.GetTicks();
+                                                }
+
                                                 pos_valid = ll_valid;
                                             }
                                         } else
@@ -6690,7 +6746,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                     }
                                                     else
                                                         ll_valid = false;
-                                                    
+
                                                     if( !wxIsNaN(m_NMEA0183.Gga.Position.Longitude.Longitude) ) {
                                                         double lln =
                                                                 m_NMEA0183.Gga.Position.Longitude.Longitude;
@@ -6703,13 +6759,17 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                     }
                                                     else
                                                         ll_valid = false;
-                                                    
+
                                                     sfixtime = m_NMEA0183.Gga.UTCTime;
 
-                                                    if(ll_valid)
+                                                    if(ll_valid){
                                                         gGPS_Watchdog = gps_watchdog_timeout_ticks;
+                                                        wxDateTime now = wxDateTime::Now();
+                                                        m_fixtime = now.GetTicks();
+                                                    }
+
                                                     pos_valid = ll_valid;
-                                                    
+
                                                     g_SatsInView =
                                                             m_NMEA0183.Gga.NumberOfSatellitesInUse;
                                                     gSAT_Watchdog = sat_watchdog_timeout_ticks;
@@ -6730,43 +6790,45 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
         else if(str_buf.Mid( 1, 5 ).IsSameAs( _T("AIVDO") ) ) {
             GenericPosDatEx gpd;
             AIS_Error nerr = AIS_GENERIC_ERROR;
-            if(g_pAIS) 
+            if(g_pAIS)
                 nerr = g_pAIS->DecodeSingleVDO(str_buf, &gpd, &m_VDO_accumulator);
-            
+
             if(nerr == AIS_NoError){
                 if( !wxIsNaN(gpd.kLat) )
                     gLat = gpd.kLat;
-                if( !wxIsNaN(gpd.kLon) ) 
+                if( !wxIsNaN(gpd.kLon) )
                     gLon = gpd.kLon;
-                
+
                 gCog = gpd.kCog;
                 gSog = gpd.kSog;
- 
-/*                
+
+/*
                 gVar = gpd.kVar;
                 if( !wxIsNaN(gpd.kVar) ) {
                     g_bVAR_Rx = true;
                     gVAR_Watchdog = gps_watchdog_timeout_ticks;
                 }
-*/                
+*/
                 gHdt = gpd.kHdt;
                 if( !wxIsNaN(gpd.kHdt) ) {
                     g_bHDT_Rx = true;
                     gHDT_Watchdog = gps_watchdog_timeout_ticks;
                 }
-  
-/*  
+
+/*
                 gHdm = gpd.kHdm;
                 if( !wxIsNaN(gpd.kHdm) ) {
                     gHDx_Watchdog = gps_watchdog_timeout_ticks;
                 }
 */
 
-                if( !wxIsNaN(gpd.kLat) && !wxIsNaN(gpd.kLon) ) { 
+                if( !wxIsNaN(gpd.kLat) && !wxIsNaN(gpd.kLon) ) {
                     gGPS_Watchdog = gps_watchdog_timeout_ticks;
                     pos_valid = true;
+                    wxDateTime now = wxDateTime::Now();
+                    m_fixtime = now.GetTicks();
                 }
-                
+
             }
             else {
                 if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
@@ -6777,7 +6839,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                 }
             }
         }
-        
+
         else {
             bis_recognized_sentence = false;
             if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
@@ -6805,6 +6867,7 @@ void MyFrame::PostProcessNNEA( bool pos_valid, wxString &sfixtime )
     if( !g_bHDT_Rx ) {
         if( !wxIsNaN(gVar) && !wxIsNaN(gHdm)) {
             gHdt = gHdm + gVar;
+            gHDT_Watchdog = gps_watchdog_timeout_ticks;
         }
     }
 
@@ -7263,7 +7326,7 @@ int paternAdd (const char* patern) {
   int ind;
 
   // snan table for a free slot inside devpatern table
-  for (ind=0; devPatern[ind] != (char*)-1; ind++) 
+  for (ind=0; devPatern[ind] != (char*)-1; ind++)
        if (devPatern[ind] == NULL) break;
 
   // table if full
@@ -7288,7 +7351,7 @@ int paternFilter (const struct dirent * dir) {
      if (devPatern [ind] != NULL) res=(char*)strcasestr(dir->d_name,devPatern [ind]);
      if (res != NULL) break;
   }
-  
+
   // File does not fit researched patern
   if (res == NULL) return 0;
 
@@ -7307,27 +7370,27 @@ int paternFilter (const struct dirent * dir) {
   return 0;
 }
 
-int isTTYreal(const char *dev) 
+int isTTYreal(const char *dev)
 {
     struct serial_struct serinfo;
     int ret = 0;
-    
+
     int fd = open(dev, O_RDWR | O_NONBLOCK | O_NOCTTY);
-    
+
     // device name is pointing to a real device
     if(fd > 0) {
         if (ioctl(fd, TIOCGSERIAL, &serinfo)==0) {
             // If device type is no PORT_UNKNOWN we accept the port
-            if (serinfo.type != PORT_UNKNOWN) 
+            if (serinfo.type != PORT_UNKNOWN)
                 ret = 1;
         }
         close (fd);
     }
-    
+
     return ret;
 }
-    
-    
+
+
 #endif
 
 wxArrayString *EnumerateSerialPorts( void )
@@ -7343,17 +7406,17 @@ wxArrayString *EnumerateSerialPorts( void )
         paternAdd ( "ttyGPS" );
         paternAdd ( "refcom" );
     }
-    
+
  //  Looking for user privilege openable devices in /dev
  //  Fulup use scandir to improve user experience and support new generation of AIS devices.
 
       wxString sdev;
       int ind, fcount;
       struct dirent **filelist = {0};
-     
+
       // scan directory filter is applied automatically by this call
       fcount = scandir("/dev", &filelist, paternFilter, alphasort);
-  
+
       for(ind = 0; ind < fcount; ind++)  {
        wxString sdev (filelist[ind]->d_name, wxConvUTF8);
        sdev.Prepend (_T("/dev/"));
@@ -7362,16 +7425,16 @@ wxArrayString *EnumerateSerialPorts( void )
        free(filelist[ind]);
       }
 
-      
+
 //        We try to add a few more, arbitrarily, for those systems that have fixed, traditional COM ports
-    
-    if( isTTYreal("/dev/ttyS0") ) 
+
+    if( isTTYreal("/dev/ttyS0") )
         preturn->Add( _T("/dev/ttyS0") );
 
-    if( isTTYreal("/dev/ttyS1") ) 
+    if( isTTYreal("/dev/ttyS1") )
         preturn->Add( _T("/dev/ttyS1") );
 
-   
+
 #endif
 
 #ifdef PROBE_PORTS__WITH_HELPER
@@ -8032,10 +8095,10 @@ int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& c
 #ifdef __WXOSX__
     if(g_FloatingToolbarDialog)
         g_FloatingToolbarDialog->Hide();
-    
+
     if( g_FloatingCompassDialog )
         g_FloatingCompassDialog->Hide();
-    
+
     if( stats )
         stats->Hide();
 #endif
@@ -8048,14 +8111,14 @@ int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& c
 
     if( g_FloatingCompassDialog )
         g_FloatingCompassDialog->Show();
-    
+
     if( stats )
         stats->Show();
-    
+
     if(parent)
         parent->Raise();
 #endif
-    
+
     return ret;
 }
 
@@ -8121,54 +8184,54 @@ static const WORD MAX_CONSOLE_LINES = 500;
 void RedirectIOToConsole()
 
 {
-    
+
     int hConHandle;
-    
+
     long lStdHandle;
-    
+
     CONSOLE_SCREEN_BUFFER_INFO coninfo;
-    
+
     FILE *fp;
-    
+
     // allocate a console for this app
-    
+
     AllocConsole();
-    
+
     // set the screen buffer to be big enough to let us scroll text
-    
+
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &coninfo);
     coninfo.dwSize.Y = MAX_CONSOLE_LINES;
     SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE),coninfo.dwSize);
-    
+
     // redirect unbuffered STDOUT to the console
-    
+
     lStdHandle = (long)GetStdHandle(STD_OUTPUT_HANDLE);
     hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
     fp = _fdopen( hConHandle, "w" );
     *stdout = *fp;
     setvbuf( stdout, NULL, _IONBF, 0 );
-    
-    
+
+
     // redirect unbuffered STDIN to the console
-    
+
     lStdHandle = (long)GetStdHandle(STD_INPUT_HANDLE);
     hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
     fp = _fdopen( hConHandle, "r" );
     *stdin = *fp;
     setvbuf( stdin, NULL, _IONBF, 0 );
-    
+
     // redirect unbuffered STDERR to the console
-    
+
     lStdHandle = (long)GetStdHandle(STD_ERROR_HANDLE);
     hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
     fp = _fdopen( hConHandle, "w" );
     *stderr = *fp;
     setvbuf( stderr, NULL, _IONBF, 0 );
-    
+
     // make cout, wcout, cin, wcin, wcerr, cerr, wclog and clog point to console as well
-    
+
     //ios::sync_with_stdio();
-    
+
 }
 
 //#endif

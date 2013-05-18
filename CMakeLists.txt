@@ -741,11 +741,11 @@ SET_SOURCE_FILES_PROPERTIES(
 SET_SOURCE_FILES_PROPERTIES(
            data/doc/help_en_US.html PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/doc )
 
-FILE(GLOB DOC_FILES "${CMAKE_SOURCE_DIR}/data/doc/OpenCPN User Manual_files/*")
+FILE(GLOB DOC_FILES "${CMAKE_SOURCE_DIR}/data/doc/images/*")
 FOREACH (_currentDocFile ${DOC_FILES})
   SET_SOURCE_FILES_PROPERTIES(
            ${_currentDocFile}
-           PROPERTIES MACOSX_PACKAGE_LOCATION "SharedSupport/doc/OpenCPN User Manual_files" )
+           PROPERTIES MACOSX_PACKAGE_LOCATION "SharedSupport/doc/images" )
 ENDFOREACH (_currentDocFile )
 
 SET_SOURCE_FILES_PROPERTIES(
@@ -1020,7 +1020,7 @@ IF(WIN32 AND NOT UNIX)
 
   SET(CPACK_NSIS_INSTALLED_ICON_NAME "opencpn.exe")
   SET(CPACK_NSIS_PACKAGE_NAME_LC "opencpn")
-
+ 
 #  These lines set the name of the Windows Start Menu shortcut and the icon that goes with it
   SET(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME} ${PACKAGE_VERSION}")
   SET(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/src/bitmaps\\\\opencpn.ico")
@@ -1104,6 +1104,9 @@ IF(UNIX AND NOT APPLE)
     SET(CPACK_RPM_PACKAGE_ARCHITECTURE  ${ARCH})
     SET(CPACK_RPM_PACKAGE_REQUIRES  ${PACKAGE_DEPS})
     SET(CPACK_RPM_USER_BINARY_SPECFILE "${CMAKE_SOURCE_DIR}/opencpn.spec.in")
+    SET(CPACK_OPENCPN_RPM_BINDIR "${CMAKE_INSTALL_PREFIX}/${PREFIX_BIN}")
+    SET(CPACK_OPENCPN_RPM_LIBDIR "${PREFIX_LIB}")
+    SET(CPACK_OPENCPN_RPM_DATADIR "${CMAKE_INSTALL_PREFIX}/${PREFIX_DATA}")
     SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenSource Chart Plotter/Navigator")
     SET(CPACK_PACKAGE_DESCRIPTION "OpenCPN is a concise ChartPlotter/Navigator. The application supports: GPS/GPDS Position Input, BSB Raster Chart Display, S57 Vector ENChart Display, AIS Input Decoding, Waypoint Autopilot Navigation .")
     SET(CPACK_SET_DESTDIR ON)
@@ -1144,6 +1147,7 @@ INCLUDE(CPack)
 IF(APPLE)
 # -- Run the BundleUtilities cmake code
   SET(CPACK_BUNDLE_PLIST "${CMAKE_SOURCE_DIR}/buildosx/Info.plist")
+  SET(MACOSX_BUNDLE_BUNDLE_NAME "OpenCPN")
 
   SET(APPS "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app")
   SET(DIRS "")
