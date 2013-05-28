@@ -2322,8 +2322,8 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
                                            wxString::Format(wxT("%i"),cp->Baudrate),
                                            port_type,
                                            cp->Priority,
-										   cp->Protocol,
-                                           cp->Garmin
+										   cp->Garmin,
+                                           cp->Protocol
                                          );
             dstr->SetInputFilter(cp->InputSentenceList);
             dstr->SetInputFilterType(cp->InputSentenceListType);
@@ -6894,10 +6894,8 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                     gGPS_Watchdog = gps_watchdog_timeout_ticks;
                     wxDateTime now = wxDateTime::Now();
                     m_fixtime = now.GetTicks();
-
                     pos_valid = true;
-                    wxDateTime now = wxDateTime::Now();
-                    m_fixtime = now.GetTicks();
+                    
                 }
 
             }

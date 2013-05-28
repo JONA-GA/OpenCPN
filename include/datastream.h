@@ -152,8 +152,8 @@ public:
                const wxString& BaudRate,
                dsPortType io_select,
                int priority = 0,
-			   DataProtocol iProtocol = PROTO_NMEA0183,
                bool bGarmin = false,
+			   DataProtocol iProtocol = PROTO_NMEA0183,
                int EOS_type = DS_EOS_CRLF,
                int handshake_type = DS_HANDSHAKE_NONE,
                void *user_data = NULL );

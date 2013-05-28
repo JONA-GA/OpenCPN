@@ -279,8 +279,8 @@ bool Multiplexer::CreateAndRestoreSavedStreamProperties()
                                        baud_rate_save,
                                        port_type_save,
                                        priority_save,
-									   iprotocol_save,
-                                       bGarmin_GRMN_mode_save
+									   bGarmin_GRMN_mode_save,
+                                       iprotocol_save
                                      );
     dstr->SetInputFilter(input_sentence_list_save);
     dstr->SetInputFilterType(input_sentence_list_type_save);

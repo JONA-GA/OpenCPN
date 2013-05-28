@@ -390,8 +390,6 @@ class MyFrame: public wxFrame
     
     time_t              m_fixtime;
 
-    time_t              m_fixtime;
-
     DECLARE_EVENT_TABLE()
 };
 
