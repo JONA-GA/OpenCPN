@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  cm93 Chart Object
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,11 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- */
-
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"
@@ -584,7 +581,7 @@ cm93_dictionary::cm93_dictionary()
 }
 
 
-bool cm93_dictionary::LoadDictionary ( wxString dictionary_dir )
+bool cm93_dictionary::LoadDictionary(const wxString & dictionary_dir)
 {
       int i, nline;
       wxString line;
@@ -2690,7 +2687,13 @@ Extended_Geometry *cm93chart::BuildGeom ( Object *pobject, wxFileOutputStream *p
                               if ( ncontours > m_ncontour_alloc - 1 )
                               {
                                     m_ncontour_alloc *= 2;
+                                    int * tmp = m_pcontour_array;
                                     m_pcontour_array = ( int * ) realloc ( m_pcontour_array, m_ncontour_alloc * sizeof ( int ) );
+                                    if (NULL == tmp)
+                                    {
+                                        free (tmp);
+                                        tmp = NULL;
+                                    }
                               }
                               m_pcontour_array[ncontours] = nRingVertex;               // store the vertex count
 
@@ -3116,7 +3119,7 @@ wxString ParseTEXTA ( wxString& val )
 
 
 
-void cm93chart::translate_colmar ( wxString &sclass, S57attVal *pattValTmp )
+void cm93chart::translate_colmar(const wxString &sclass, S57attVal *pattValTmp)
 {
       int *pcur_attr = ( int * ) pattValTmp->value;
       int cur_attr = *pcur_attr;
@@ -3339,7 +3342,7 @@ S57Obj *cm93chart::CreateS57Obj ( int cell_index, int iobject, int subcell, Obje
                         *pAVR = tf1;
 #else
                         *pAVR = *pf;
-#endif                        
+#endif
                         pattValTmp->valType = OGR_REAL;
                         pattValTmp->value   = pAVR;
                         break;
@@ -4295,7 +4298,7 @@ int cm93chart::loadsubcell ( int cellindex, wxChar sub_char )
             double dlon = m_dval / 3.;
             double lat, lon;
             Get_CM93_Cell_Origin ( cellindex, GetNativeScale(), &lat, &lon );
-            printf ( "\n   Attempting loadcell %d scale %c, sub_char %c at lat: %g/%g lon:%g/%g\n", cellindex, wxChar ( m_scalechar[0] ), sub_char, lat, lat + dlat, lon, lon+dlon );
+            printf ( "\n   Attempting loadcell %d scale %lc, sub_char %lc at lat: %g/%g lon:%g/%g\n", cellindex, wxChar ( m_scalechar[0] ), sub_char, lat, lat + dlat, lon, lon+dlon );
       }
 
       int jlat = ( int ) ( ( ( ilat - 30 ) / m_dval ) * m_dval ) + 30;     // normalize
@@ -4362,7 +4365,7 @@ int cm93chart::loadsubcell ( int cellindex, wxChar sub_char )
                         if ( sub_char == '0' )
                               printf ( "   Tried to load non-existent CM93 cell\n" );
                         else
-                              printf ( "   No sub_cells of scale(%c) found\n", sub_char );
+                              printf ( "   No sub_cells of scale(%lc) found\n", sub_char );
                   }
 
                   return 0;
@@ -4417,8 +4420,15 @@ wxPoint *cm93chart::GetDrawBuffer ( int nSize )
 //    Reallocate the cm93chart DrawBuffer if it is currently too small
       if ( nSize > m_nDrawBufferSize )
       {
+            wxPoint * tmp = m_pDrawBuffer;
             m_pDrawBuffer = ( wxPoint * ) realloc ( m_pDrawBuffer, sizeof ( wxPoint ) * ( nSize + 1 ) );
-            m_nDrawBufferSize = nSize + 1;
+            if (NULL == m_pDrawBuffer)
+            {
+                free (tmp);
+                tmp = NULL;
+            }
+            else
+                m_nDrawBufferSize = nSize + 1;
       }
       return m_pDrawBuffer;
 }
@@ -4450,7 +4460,7 @@ cm93manager::~cm93manager ( void )
       delete m_pcm93Dict;
 }
 
-bool cm93manager::Loadcm93Dictionary ( wxString name )
+bool cm93manager::Loadcm93Dictionary(const wxString & name)
 {
 
       //  Find and load cm93_dictionary

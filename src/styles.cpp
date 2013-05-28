@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  Chart Symbols
@@ -21,9 +21,7 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- *
- */
+ **************************************************************************/
 
 #include "wx/wxprec.h"
 
@@ -36,13 +34,14 @@
 #include <stdlib.h>
 
 #include "styles.h"
+#include "chart1.h"
 
 extern wxString *pHome_Locn;
 extern wxString g_SData_Locn;
 
 using namespace ocpnStyle;
 
-void bmdump( wxBitmap bm, wxString name )
+void bmdump(wxBitmap bm, wxString name)
 {
     wxImage img = bm.ConvertToImage();
     img.SaveFile( name << _T(".png"), wxBITMAP_TYPE_PNG );
@@ -54,10 +53,9 @@ void bmdump( wxBitmap bm, wxString name )
 wxBitmap MergeBitmaps( wxBitmap back, wxBitmap front, wxSize offset )
 {
     wxBitmap merged( back.GetWidth(), back.GetHeight(), back.GetDepth() );
-#if (defined(__WXGTK__) || defined(__WXMAC__))
+#if (!wxCHECK_VERSION(2,9,4) && (defined(__WXGTK__) || defined(__WXMAC__)))
 
     // Manual alpha blending for broken wxWidgets platforms.
-
     merged.UseAlpha();
     back.UseAlpha();
     front.UseAlpha();
@@ -136,7 +134,9 @@ wxBitmap ConvertTo24Bit( wxColor bgColor, wxBitmap front ) {
     if( front.GetDepth() == 24 ) return front;
 
     wxBitmap result( front.GetWidth(), front.GetHeight(), 24 );
+#if !wxCHECK_VERSION(2,9,4)
     front.UseAlpha();
+#endif
 
     wxImage im_front = front.ConvertToImage();
     wxImage im_result = result.ConvertToImage();
@@ -168,7 +168,7 @@ wxBitmap ConvertTo24Bit( wxColor bgColor, wxBitmap front ) {
 // Tools and Icons perform on-demand loading and dimming of bitmaps.
 // Changing color scheme invalidatres all loaded bitmaps.
 
-wxBitmap Style::GetIcon( wxString name )
+wxBitmap Style::GetIcon(const wxString & name)
 {
     if( iconIndex.find( name ) == iconIndex.end() ) {
         wxString msg( _T("The requested icon was not found in the style: ") );
@@ -177,7 +177,7 @@ wxBitmap Style::GetIcon( wxString name )
         return wxBitmap( GetToolSize().x, GetToolSize().y ); // Prevents crashing.
     }
 
-    int index = iconIndex[name];
+    int index = iconIndex[name]; // FIXME: this operation is not const but should be, use 'find'
 
     Icon* icon = (Icon*) icons.Item( index );
 
@@ -190,11 +190,11 @@ wxBitmap Style::GetIcon( wxString name )
     return icon->icon;
 }
 
-wxBitmap Style::GetToolIcon( wxString toolname, int iconType, bool rollover )
+wxBitmap Style::GetToolIcon(const wxString & toolname, int iconType, bool rollover )
 {
 
     if( toolIndex.find( toolname ) == toolIndex.end() ) {
-//  This will produce a flood of log messages for some PlugIns, notably WMM_PI, and GRADAR_PI        
+//  This will produce a flood of log messages for some PlugIns, notably WMM_PI, and GRADAR_PI
 //        wxString msg( _T("The requested tool was not found in the style: ") );
 //        msg += toolname;
 //        wxLogMessage( msg );
@@ -213,12 +213,12 @@ wxBitmap Style::GetToolIcon( wxString toolname, int iconType, bool rollover )
             wxSize size = tool->customSize;
             if( size.x == 0 ) size = toolSize[currentOrientation];
             wxRect location( tool->iconLoc, size );
-            
+
             //  If rollover icon does not exist, use the defult icon
             if( rollover ) {
                 if( (tool->rolloverLoc.x != 0) || (tool->rolloverLoc.y != 0) )
                     location = wxRect( tool->rolloverLoc, size );
-            }                    
+            }
 
             if( currentOrientation ) {
                 location.x -= verticalIconOffset.x;
@@ -527,7 +527,7 @@ Style::~Style( void )
     iconIndex.clear();
 }
 
-StyleManager::StyleManager( void )
+StyleManager::StyleManager(void)
 {
     isOK = false;
     currentStyle = NULL;
@@ -537,7 +537,7 @@ StyleManager::StyleManager( void )
     SetStyle( _T("") );
 }
 
-StyleManager::StyleManager( wxString& configDir )
+StyleManager::StyleManager(const wxString & configDir)
 {
     isOK = false;
     currentStyle = NULL;
@@ -545,7 +545,7 @@ StyleManager::StyleManager( wxString& configDir )
     SetStyle( _T("") );
 }
 
-StyleManager::~StyleManager( void )
+StyleManager::~StyleManager(void)
 {
     for( unsigned int i = 0; i < styles.Count(); i++ ) {
         delete (Style*) ( styles.Item( i ) );
@@ -553,7 +553,7 @@ StyleManager::~StyleManager( void )
     styles.Clear();
 }
 
-void StyleManager::Init( wxString fromPath )
+void StyleManager::Init(const wxString & fromPath)
 {
     TiXmlDocument doc;
 
@@ -886,7 +886,7 @@ void StyleManager::Init( wxString fromPath )
     }
 }
 
-void StyleManager::SetStyle( wxString name )
+void StyleManager::SetStyle(wxString name)
 {
     Style* style = NULL;
     bool ok = true;

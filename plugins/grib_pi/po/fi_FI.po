@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: grib_pi 2.2.1111\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-06-11 10:28-0400\n"
+"POT-Creation-Date: 2013-04-24 14:34+1200\n"
 "PO-Revision-Date: 2010-12-09 22:34+0200\n"
 "Last-Translator: Asko Laite <alaite@netti.fi>\n"
 "Language-Team: Asko Laite <alaite@netti.fi>\n"
@@ -18,23 +18,119 @@ msgstr ""
 "X-Poedit-Language: Finnish\n"
 "X-Poedit-Country: FINLAND\n"
 #
-msgid "&Close"
+msgid " (Dup)"
+msgstr ""
+#
+msgid " Deg"
+msgstr ""
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#, fuzzy
+msgid " data"
+msgstr "GRIB Data"
+#
+msgid "Action"
+msgstr ""
+#
+msgid "Air Temp"
+msgstr ""
+#
+msgid "Air Temperature"
+msgstr ""
+#
+msgid "Barbed Arrows"
+msgstr ""
+#
+msgid "Building Isobar map"
+msgstr ""
+#
+msgid "Celcius"
+msgstr ""
+#
+msgid "Cloud"
+msgstr ""
+#
+msgid "Cloud Cover"
+msgstr ""
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#, fuzzy
+msgid "Colors"
 msgstr "&Sulje"
 #
-msgid "Current Velocity, Kts."
+msgid "Copy First Cumulative Missing Record"
+msgstr ""
+#
+msgid "Copy Missing Wave Records"
+msgstr ""
+#
+#, fuzzy
+msgid "Current"
 msgstr "Virran nopeus, solmua"
 #
-msgid "GRIB"
-msgstr "GRIB"
+msgid "Days"
+msgstr ""
 #
-msgid "GRIB Data"
-msgstr "GRIB Data"
+msgid "Direction Arrows"
+msgstr ""
+#
+msgid "Display"
+msgstr ""
+#
+msgid "Error"
+msgstr ""
+#
+msgid "Error:  Can't read this File!"
+msgstr ""
+#
+msgid "Error:  File does not exist!"
+msgstr ""
+#
+msgid "Fahrenheit"
+msgstr ""
+#
+msgid "Failed to send mail message"
+msgstr ""
+#
+msgid "Feet"
+msgstr ""
+#
+msgid "GRIB Data at Cursor"
+msgstr ""
 #
 msgid "GRIB Display Control"
 msgstr "GRIB Näyttöohjaus"
-#
-msgid "GRIB File Directory"
-msgstr "GRIB-tiedostohakemisto"
 #
 msgid "GRIB PlugIn for OpenCPN"
 msgstr "GRIB moduuli OpenCPN:lle"
@@ -58,48 +154,445 @@ msgstr ""
 "- pintaveden lämpötila\n"
 "-virran nopeus ja suunta"
 #
-msgid "GRIB Preferences"
-msgstr "GRIB asetukset"
+msgid "Generic"
+msgstr ""
 #
 msgid "Grib"
 msgstr "Grib"
 #
-msgid "Please Zoom or Scale Out to view suppressed CRAIN GRIB"
-msgstr "Zoomaa ulos nähdäksesi GRIB sadetiedon"
+#, fuzzy
+msgid "Grib Preferences"
+msgstr "GRIB asetukset"
 #
-msgid "Please Zoom or Scale Out to view suppressed HTSGW GRIB"
+msgid "Grib Settings"
+msgstr ""
+#
+msgid "Inches"
+msgstr ""
+#
+msgid "Interpolate between gribs"
+msgstr ""
+#
+msgid "Interval"
+msgstr ""
+#
+msgid "Iso Bars"
+msgstr ""
+#
+msgid "KPH"
+msgstr ""
+#
+msgid "Knots"
+msgstr ""
+#
+msgid "Local Time"
+msgstr ""
+#
+msgid "Loop Mode"
+msgstr ""
+#
+msgid "M/S"
+msgstr ""
+#
+msgid "MPH"
+msgstr ""
+#
+msgid "Mapi is not installed or invalid on this computer"
+msgstr ""
+#
+msgid "Meters"
+msgstr ""
+#
+msgid "MilliBars"
+msgstr ""
+#
+msgid "Millimeters"
+msgstr ""
+#
+msgid "Model"
+msgstr ""
+#
+msgid "MyLabel"
+msgstr ""
+#
+msgid "N/A"
+msgstr ""
+#
+msgid "Next"
+msgstr ""
+#
+msgid "Now"
+msgstr ""
+#
+msgid "Numbers"
+msgstr ""
+#
+msgid "Open File"
+msgstr ""
+#
+msgid "OpenCpn failed to logon! Please verify your eMail environment"
+msgstr ""
+#
+msgid "OverlayMap"
+msgstr ""
+#
+msgid "Parameters"
+msgstr ""
+#
+msgid "Percentage"
+msgstr ""
+#
+msgid "Period"
+msgstr ""
+#
+msgid "Play"
+msgstr ""
+#
+#, fuzzy
+msgid "Please Zoom or Scale Out to view suppressed "
 msgstr "Zoomaa ulos nähdäksesi GRIB merkitsevän aallonkorkeuden"
 #
-msgid "Please Zoom or Scale Out to view suppressed OCEAN CURRENT GRIB"
-msgstr "Zoomaa ulos nähdäksesi GRIB virtatiedot"
+msgid "Precipitation"
+msgstr ""
 #
-msgid "Please Zoom or Scale Out to view suppressed SEATEMP GRIB"
-msgstr "Zoomaa ulos nähdäksesi GRIB pintalämpötilan"
-#
-msgid "Pressure, mBar"
+#, fuzzy
+msgid "Pressure"
 msgstr "Ilampaine, mbar"
 #
-msgid "Sea Surface Temp, C"
+msgid "Previous"
+msgstr ""
+#
+msgid "Quickscat"
+msgstr ""
+#
+msgid "Rain"
+msgstr ""
+#
+msgid "Range"
+msgstr ""
+#
+msgid "Ref : "
+msgstr ""
+#
+msgid "Request"
+msgstr ""
+#
+msgid "Request Pofile"
+msgstr ""
+#
+msgid "Resolution"
+msgstr ""
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#, fuzzy
+msgid "Sea Temp"
 msgstr "Meriveden pintalämpötila, C"
 #
-msgid "Select GRIB Directory"
+msgid "Sea Temperature"
+msgstr ""
+#
+msgid "SeaTemp"
+msgstr ""
+#
+#, fuzzy
+msgid "Select a GRIB file"
 msgstr "Valitse GRIB-hakemisto"
 #
-msgid "Show GRIB icon"
-msgstr "Näytä GRIB-ikoni"
+msgid "Send"
+msgstr ""
 #
-msgid "Significant Wave Height, m"
-msgstr "Merkitsevä aallonkorkeus, m"
+msgid "Settings"
+msgstr ""
+#
+msgid "Size"
+msgstr ""
+#
+msgid "Slices per Update"
+msgstr ""
+#
+msgid "Slices per hour"
+msgstr ""
+#
+msgid "Spacing"
+msgstr ""
+#
+msgid "Stop"
+msgstr ""
+#
+msgid "UTC"
+msgstr ""
+#
+msgid "Units"
+msgstr ""
+#
+msgid "Updates per Second"
+msgstr ""
+#
+msgid "Use Gradual Colors"
+msgstr ""
 #
 msgid "Use High Definition Graphics"
 msgstr "Käytä tarkkuusgrafiikkaa"
 #
-#, c-format
-msgid "WARNING:  QuickScat GRIB data is %d hours old."
-msgstr "VAROITUS:  QuickScat GRIB data on %d tuntia vanhaa."
+msgid "Wave"
+msgstr ""
 #
-msgid "Wind Direction"
-msgstr "Tuulen suunta"
+msgid "Wind"
+msgstr ""
 #
-msgid "Wind Speed, Kts."
-msgstr "Tuulen nopeus, solmua"
+msgid "Wind Gust"
+msgstr ""
+#
+msgid "Wind Scat"
+msgstr ""
+#
+msgid ""
+"Your request is ready. An eMail is prepared in your eMail environment.\n"
+"You have just to click 'send' to send it.\n"
+"OK to continue ..."
+msgstr ""
+#
+msgid ""
+"Your request was sent (if your system has an MTA configured and is able to "
+"send mail).\n"
+"OK to continue ..."
+msgstr ""
+#
+msgid "Zone"
+msgstr ""
+#
+msgid "eMail"
+msgstr ""
+#
+msgid "eMail To"
+msgstr ""
+#
+msgid "eMail error"
+msgstr ""
+#
+msgid "mmHG"
+msgstr ""
+#
+msgid "playback"
+msgstr ""
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Data Display Preferences"
+#~ msgstr "GRIB asetukset"
+#
+#
+#~ msgid "GRIB"
+#~ msgstr "GRIB"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "GRIB File Directory"
+#~ msgstr "GRIB-tiedostohakemisto"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Air Temp.(2m) GRIB"
+#~ msgstr "Zoomaa ulos nähdäksesi GRIB pintalämpötilan"
+#
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed CURRENT GRIB"
+#~ msgstr "Zoomaa ulos nähdäksesi GRIB virtatiedot"
+#
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Clouds Cover GRIB"
+#~ msgstr "Zoomaa ulos nähdäksesi GRIB virtatiedot"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Sea Surf.Temp. GRIB"
+#~ msgstr "Zoomaa ulos nähdäksesi GRIB pintalämpötilan"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Total Rainfall GRIB"
+#~ msgstr "Zoomaa ulos nähdäksesi GRIB sadetiedon"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Pressure (MSL)"
+#~ msgstr "Ilampaine, mbar"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Request Preferences"
+#~ msgstr "GRIB asetukset"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Show GRIB icon"
+#~ msgstr "Näytä GRIB-ikoni"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Sign.Wave Height"
+#~ msgstr "Merkitsevä aallonkorkeus, m"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "WARNING:  QuickScat GRIB data is %d hours old."
+#~ msgstr "VAROITUS:  QuickScat GRIB data on %d tuntia vanhaa."
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Wind Direction(10m)"
+#~ msgstr "Tuulen suunta"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Wind Speed and Direction(10m)"
+#~ msgstr "Tuulen suunta"
+#
+#
+#
+#
+#, fuzzy
+#~ msgid "Wind Speed(10m)"
+#~ msgstr "Tuulen nopeus, solmua"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Wind Speed, Kts."
+#~ msgstr "Tuulen nopeus, solmua"

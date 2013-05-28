@@ -46,9 +46,9 @@
 #include "styles.h"
 #include "routeman.h"
 #include "navutil.h"
+#include "FontMgr.h"
 
 extern Routeman         *g_pRouteMan;
-extern FontMgr          *pFontMgr;
 extern MyFrame          *gFrame;
 extern bool             g_bShowActiveRouteHighway;
 extern double           gCog;
@@ -470,8 +470,8 @@ void AnnunText::SetColorScheme( ColorScheme cs )
 
 void AnnunText::RefreshFonts()
 {
-    m_plabelFont = pFontMgr->GetFont( m_LegendTextElement );
-    m_pvalueFont = pFontMgr->GetFont( m_ValueTextElement );
+    m_plabelFont = FontMgr::Get().GetFont( m_LegendTextElement );
+    m_pvalueFont = FontMgr::Get().GetFont( m_ValueTextElement );
 
     CalculateMinSize();
 

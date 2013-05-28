@@ -444,7 +444,6 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index)
 //      Using internal Triangle tesselator
 int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon)
 {
-
     //  Make a quick sanity check of the polygon coherence
     bool b_ok = true;
     OGRLineString *tls = poly->getExteriorRing();
@@ -465,7 +464,7 @@ int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat,
     }
     
     if( !b_ok )
-        return 2;
+        return ERROR_BAD_OGRPOLY;
     
     
     m_pxgeom = NULL;
@@ -1152,20 +1151,20 @@ int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, 
     else {
         int tnpta  = poly->getExteriorRing()->getNumPoints();
         if(tnpta < 3 )
-        b_ok = false;
+            b_ok = false;
     }
-      
+
+    
     for( iir=0 ; iir < poly->getNumInteriorRings() ; iir++)
     {
         int tnptr = poly->getInteriorRing(iir)->getNumPoints();
         if( tnptr < 3 )
-        b_ok = false;
+            b_ok = false;
     }
-     
+    
     if( !b_ok )
-       return 2;
-     
-                
+        return ERROR_BAD_OGRPOLY;
+    
 
 #ifdef __WXMSW__
 //  If using the OpenGL dlls provided with Windows,

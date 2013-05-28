@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  S57 Chart Object
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,13 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- *
- */
-
-
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef __S57CHART_H__
 #define __S57CHART_H__
@@ -45,6 +40,9 @@
 #include "iso8211.h"
 
 #include "gdal.h"
+#include "s57RegistrarMgr.h"
+#include "S57ClassRegistrar.h"
+#include "S57Light.h"
 
 #include "s52s57.h"                 //types
 #include "chcanv.h"                // for Viewport
@@ -57,7 +55,6 @@
 // ----------------------------------------------------------------------------
 // S57 Utility Prototypes
 // ----------------------------------------------------------------------------
-extern "C" int  s57_initialize(const wxString& csv_dir, FILE *flog);
 extern "C" bool s57_GetChartExtent(const wxString& FullPath, Extent *pext);
 
 void s57_DrawExtendedLightSectors( ocpnDC& temp_dc, ViewPort& VPoint, std::vector<s57Sector_t>& sectorlegs );
@@ -313,38 +310,6 @@ private:
       long        m_plib_state_hash;
       bool        m_btex_mem;
       char        m_usage_char;
-};
-
-//----------------------------------------------------------------------------
-//    This class encapsulates the results (per object) of an S57 object query
-//----------------------------------------------------------------------------
-//
-class S57ObjectDesc
-{
-public:
-      wxString    S57ClassName;
-      wxString    S57ClassDesc;
-      wxString    Attributes;
-};
-
-class S57Light {
-public:
-      wxArrayString attributeNames;
-      wxArrayString attributeValues;
-      wxString position;
-      bool hasSectors;
-};
-
-//------------------------------------------------------------------------
-//  s57RegistrarMgr Definition
-//  This is a class holding the ctor and dtor for the global registrar
-//------------------------------------------------------------------------
-
-class s57RegistrarMgr
-{
-      public:
-            s57RegistrarMgr(const wxString& csv_dir, FILE *flog);
-            ~s57RegistrarMgr();
 };
 
 #endif

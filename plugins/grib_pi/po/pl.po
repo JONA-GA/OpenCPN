@@ -4,7 +4,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: opencpn 2.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-06-11 10:28-0400\n"
+"POT-Creation-Date: 2013-04-24 14:34+1200\n"
 "PO-Revision-Date: 2010-03-29 20:29+0100\n"
 "Last-Translator: Piotr Carlson <pjotrc@interia.pl>\n"
 "Language-Team: Wladyslaw Stolle <stollew@poczta.onet.pl>\n"
@@ -17,30 +17,129 @@ msgstr ""
 "X-Poedit-SourceCharset: utf-8\n"
 #
 # 
-# 
-# 
-#, fuzzy
-msgid "&Close"
-msgstr "Zamknij"
+msgid " (Dup)"
+msgstr ""
 #
 # 
-# 
-# 
-msgid "Current Velocity, Kts."
+msgid " Deg"
 msgstr ""
 #
 # 
 # 
 # 
-msgid "GRIB"
-msgstr "GRIB"
-#
 # 
 # 
 # 
-msgid "GRIB Data"
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#, fuzzy
+msgid " data"
 msgstr "Dane GRIB"
 #
+# 
+msgid "Action"
+msgstr ""
+#
+msgid "Air Temp"
+msgstr ""
+#
+msgid "Air Temperature"
+msgstr ""
+#
+msgid "Barbed Arrows"
+msgstr ""
+#
+msgid "Building Isobar map"
+msgstr ""
+#
+msgid "Celcius"
+msgstr ""
+#
+msgid "Cloud"
+msgstr ""
+#
+msgid "Cloud Cover"
+msgstr ""
+#
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#, fuzzy
+msgid "Colors"
+msgstr "Zamknij"
+#
+msgid "Copy First Cumulative Missing Record"
+msgstr ""
+#
+msgid "Copy Missing Wave Records"
+msgstr ""
+#
+msgid "Current"
+msgstr ""
+#
+# 
+msgid "Days"
+msgstr ""
+#
+msgid "Direction Arrows"
+msgstr ""
+#
+msgid "Display"
+msgstr ""
+#
+msgid "Error"
+msgstr ""
+#
+# 
+msgid "Error:  Can't read this File!"
+msgstr ""
+#
+msgid "Error:  File does not exist!"
+msgstr ""
+#
+msgid "Fahrenheit"
+msgstr ""
+#
+msgid "Failed to send mail message"
+msgstr ""
+#
+msgid "Feet"
+msgstr ""
+#
+msgid "GRIB Data at Cursor"
+msgstr ""
+#
+# 
 # 
 # 
 # 
@@ -48,14 +147,10 @@ msgid "GRIB Display Control"
 msgstr "Ustawienia prezentacji GRIB"
 #
 # 
-# 
-# 
-msgid "GRIB File Directory"
-msgstr "Katalog plików GRIB"
-#
 msgid "GRIB PlugIn for OpenCPN"
 msgstr ""
 #
+# 
 msgid ""
 "GRIB PlugIn for OpenCPN\n"
 "Provides basic GRIB file overlay capabilities for several GRIB file types.\n"
@@ -67,98 +162,502 @@ msgid ""
 "- surface current direction and speed."
 msgstr ""
 #
-msgid "GRIB Preferences"
+msgid "Generic"
 msgstr ""
 #
+# 
 msgid "Grib"
 msgstr ""
 #
-# 
-# 
-# 
-msgid "Please Zoom or Scale Out to view suppressed CRAIN GRIB"
+msgid "Grib Preferences"
 msgstr ""
-"Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot. opadów "
-"deszczu"
+#
+msgid "Grib Settings"
+msgstr ""
+#
+msgid "Inches"
+msgstr ""
+#
+msgid "Interpolate between gribs"
+msgstr ""
 #
 # 
-# 
-# 
-msgid "Please Zoom or Scale Out to view suppressed HTSGW GRIB"
+msgid "Interval"
 msgstr ""
-"Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot."
-"wysokości fali znacznej"
 #
+msgid "Iso Bars"
+msgstr ""
+#
+msgid "KPH"
+msgstr ""
+#
+msgid "Knots"
+msgstr ""
+#
+# 
+msgid "Local Time"
+msgstr ""
+#
+msgid "Loop Mode"
+msgstr ""
+#
+msgid "M/S"
+msgstr ""
+#
+msgid "MPH"
+msgstr ""
+#
+msgid "Mapi is not installed or invalid on this computer"
+msgstr ""
+#
+msgid "Meters"
+msgstr ""
+#
+msgid "MilliBars"
+msgstr ""
+#
+msgid "Millimeters"
+msgstr ""
+#
+# 
+msgid "Model"
+msgstr ""
+#
+msgid "MyLabel"
+msgstr ""
+#
+msgid "N/A"
+msgstr ""
+#
+msgid "Next"
+msgstr ""
+#
+msgid "Now"
+msgstr ""
+#
+msgid "Numbers"
+msgstr ""
+#
+msgid "Open File"
+msgstr ""
+#
+msgid "OpenCpn failed to logon! Please verify your eMail environment"
+msgstr ""
+#
+msgid "OverlayMap"
+msgstr ""
+#
+# 
+msgid "Parameters"
+msgstr ""
+#
+msgid "Percentage"
+msgstr ""
+#
+# 
+msgid "Period"
+msgstr ""
+#
+msgid "Play"
+msgstr ""
+#
+# 
 # 
 # 
 # 
 #, fuzzy
-msgid "Please Zoom or Scale Out to view suppressed OCEAN CURRENT GRIB"
-msgstr ""
-"Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot. opadów "
-"deszczu"
-#
-# 
-# 
-# 
-#, fuzzy
-msgid "Please Zoom or Scale Out to view suppressed SEATEMP GRIB"
+msgid "Please Zoom or Scale Out to view suppressed "
 msgstr ""
 "Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot."
 "wysokości fali znacznej"
 #
+msgid "Precipitation"
+msgstr ""
+#
 # 
 # 
 # 
-msgid "Pressure, mBar"
+# 
+#, fuzzy
+msgid "Pressure"
 msgstr "Ciśnienie, mBar"
 #
+msgid "Previous"
+msgstr ""
+#
+msgid "Quickscat"
+msgstr ""
+#
+msgid "Rain"
+msgstr ""
+#
+msgid "Range"
+msgstr ""
+#
 # 
+msgid "Ref : "
+msgstr ""
+#
+msgid "Request"
+msgstr ""
+#
 # 
+msgid "Request Pofile"
+msgstr ""
+#
 # 
-msgid "Sea Surface Temp, C"
+msgid "Resolution"
+msgstr ""
+#
+msgid "Sea Temp"
+msgstr ""
+#
+msgid "Sea Temperature"
+msgstr ""
+#
+msgid "SeaTemp"
 msgstr ""
 #
 # 
 # 
 # 
+# 
 #, fuzzy
-msgid "Select GRIB Directory"
+msgid "Select a GRIB file"
 msgstr "Katalog plików GRIB"
 #
 # 
-# 
-# 
-msgid "Show GRIB icon"
-msgstr "Pokaż ikonę GRIB"
+msgid "Send"
+msgstr ""
+#
+msgid "Settings"
+msgstr ""
+#
+msgid "Size"
+msgstr ""
+#
+msgid "Slices per Update"
+msgstr ""
+#
+msgid "Slices per hour"
+msgstr ""
+#
+msgid "Spacing"
+msgstr ""
+#
+msgid "Stop"
+msgstr ""
 #
 # 
-# 
-# 
-msgid "Significant Wave Height, m"
-msgstr "Wysokość fali znacznej, m"
+msgid "UTC"
+msgstr ""
 #
+# 
+msgid "Units"
+msgstr ""
+#
+msgid "Updates per Second"
+msgstr ""
+#
+msgid "Use Gradual Colors"
+msgstr ""
+#
+# 
 # 
 # 
 # 
 msgid "Use High Definition Graphics"
 msgstr "Użyj grafiki wysokiej rozdzielczości"
 #
+msgid "Wave"
+msgstr ""
+#
 # 
+msgid "Wind"
+msgstr ""
+#
+msgid "Wind Gust"
+msgstr ""
+#
+msgid "Wind Scat"
+msgstr ""
+#
 # 
+msgid ""
+"Your request is ready. An eMail is prepared in your eMail environment.\n"
+"You have just to click 'send' to send it.\n"
+"OK to continue ..."
+msgstr ""
+#
 # 
-#, c-format
-msgid "WARNING:  QuickScat GRIB data is %d hours old."
-msgstr "UWAGA: Dane QuickScat GRIB pochodzą sprzed %d godzin."
+msgid ""
+"Your request was sent (if your system has an MTA configured and is able to "
+"send mail).\n"
+"OK to continue ..."
+msgstr ""
+#
+# 
+msgid "Zone"
+msgstr ""
+#
+# 
+msgid "eMail"
+msgstr ""
+#
+# 
+msgid "eMail To"
+msgstr ""
+#
+msgid "eMail error"
+msgstr ""
+#
+msgid "mmHG"
+msgstr ""
+#
+msgid "playback"
+msgstr ""
+#
 #
 # 
 # 
 # 
-msgid "Wind Direction"
-msgstr "Kierunek wiatru"
+# 
+#~ msgid "GRIB"
+#~ msgstr "GRIB"
+#
+#
 #
 # 
 # 
 # 
-msgid "Wind Speed, Kts."
-msgstr "Prędkość wiatru, w."
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#~ msgid "GRIB File Directory"
+#~ msgstr "Katalog plików GRIB"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Air Temp.(2m) GRIB"
+#~ msgstr ""
+#~ "Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot."
+#~ "wysokości fali znacznej"
+#
+#
+#
+# 
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed CURRENT GRIB"
+#~ msgstr ""
+#~ "Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot. "
+#~ "opadów deszczu"
+#
+#
+#
+# 
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Clouds Cover GRIB"
+#~ msgstr ""
+#~ "Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot. "
+#~ "opadów deszczu"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Sea Surf.Temp. GRIB"
+#~ msgstr ""
+#~ "Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot."
+#~ "wysokości fali znacznej"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Please Zoom or Scale Out to view suppressed Total Rainfall GRIB"
+#~ msgstr ""
+#~ "Proszę zmniejszyć powiększenie lub skalę aby wyświetlić dane GRIB dot. "
+#~ "opadów deszczu"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Pressure (MSL)"
+#~ msgstr "Ciśnienie, mBar"
+#
+#
+#
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#~ msgid "Show GRIB icon"
+#~ msgstr "Pokaż ikonę GRIB"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Sign.Wave Height"
+#~ msgstr "Wysokość fali znacznej, m"
+#
+#
+#
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#~ msgid "WARNING:  QuickScat GRIB data is %d hours old."
+#~ msgstr "UWAGA: Dane QuickScat GRIB pochodzą sprzed %d godzin."
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Wind Direction(10m)"
+#~ msgstr "Kierunek wiatru"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Wind Speed and Direction(10m)"
+#~ msgstr "Kierunek wiatru"
+#
+#
+#
+# 
+# 
+# 
+# 
+#, fuzzy
+#~ msgid "Wind Speed(10m)"
+#~ msgstr "Prędkość wiatru, w."
+#
+#
+#
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#~ msgid "Wind Speed, Kts."
+#~ msgstr "Prędkość wiatru, w."

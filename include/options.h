@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  Options Dialog
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,10 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- */
-
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef _OPTIONS_H_
 #define _OPTIONS_H_
@@ -127,6 +125,8 @@ enum {
     ID_SCAMINCHECKBOX,
     ID_SCANCHECKBOX,
     ID_SDMMFORMATCHOICE,
+    ID_DISTANCEFORMATCHOICE,
+    ID_SPEEDFORMATCHOICE,
     ID_SELECTLIST,
     ID_SHOWDEPTHUNITSBOX1,
     ID_SHOWGPSWINDOW,
@@ -200,12 +200,12 @@ public:
     wxWindow* GetContentWindow() const;
 
     void CreateControls();
-    size_t CreatePanel( wxString title );
-    wxScrolledWindow *AddPage( size_t parent, wxString title );
+    size_t CreatePanel(const wxString & title);
+    wxScrolledWindow *AddPage(size_t parent, const wxString & title);
     bool DeletePage( wxScrolledWindow *page );
     void SetColorScheme( ColorScheme cs );
 
-    void SetInitChartDir( wxString &dir )
+    void SetInitChartDir(const wxString &dir)
     {
         m_init_chart_dir = dir;
     }
@@ -252,7 +252,7 @@ public:
     void OnRemoveTideDataLocation( wxCommandEvent &event );
     void OnCharHook( wxKeyEvent& event );
     void OnChartsPageChange( wxListbookEvent& event );
-    
+
     void UpdateWorkArrayFromTextCtl();
 
 // Should we show tooltips?
@@ -344,7 +344,7 @@ public:
 
     SentenceListDlg* m_stcdialog_in;
     SentenceListDlg* m_stcdialog_out;
-    
+
     // Virtual event handlers, overide them in your derived class
     void OnSelectDatasource( wxListEvent& event );
     void OnAddDatasourceClick( wxCommandEvent& event );
@@ -365,7 +365,7 @@ public:
     void OnValChange( wxCommandEvent& event );
     void OnUploadFormatChange( wxCommandEvent& event );
     void OnConnectionToggleEnable( wxMouseEvent &event );
-    
+
     bool connectionsaved;
     bool m_connection_enabled;
 
@@ -432,6 +432,9 @@ public:
     wxTextCtrl                *m_pText_ACK_Timeout;
     wxCheckBox                *m_pCheck_Show_Area_Notices;
     wxCheckBox                *m_pCheck_Draw_Target_Size;
+    wxCheckBox                *m_pCheck_Show_Target_Name;
+    wxTextCtrl                *m_pText_Show_Target_Name_Scale;
+    wxCheckBox                *m_pCheck_Wpl_Aprs;
     wxCheckBox                *m_pCheck_ShowAllCPA;
 //    For Ship page
     wxFlexGridSizer*        realSizes;
@@ -446,9 +449,9 @@ public:
 
 //    For Fonts page
     wxBoxSizer              *m_itemBoxSizerFontPanel;
-    wxComboBox              *m_itemFontElementListBox;
-    wxComboBox              *m_itemStyleListBox;
-    wxComboBox              *m_itemLangListBox;
+    wxChoice                *m_itemFontElementListBox;
+    wxChoice                *m_itemStyleListBox;
+    wxChoice                *m_itemLangListBox;
     bool                    m_bVisitLang;
 
 //    For "AIS Options"
@@ -470,6 +473,8 @@ public:
     wxCheckBox              *pFullScreenToolbar;
     wxCheckBox              *pTransparentToolbar;
     wxChoice                *pSDMMFormat;
+    wxChoice                *pDistanceFormat;
+    wxChoice                *pSpeedFormat;
 
     wxCheckBox              *pTrackShowIcon;
     wxCheckBox              *pTrackDaily;
@@ -525,8 +530,8 @@ private:
     void SetNMEAFormToNet();
     void ClearNMEAForm();
     bool m_bNMEAParams_shown;
-    
-    
+
+
     void SetConnectionParams(ConnectionParams *cp);
     void SetDSFormRWStates();
     void FillSourceList();
@@ -548,7 +553,7 @@ public:
     void SetInitialSettings();
     void CompleteInitialSettings();
     void PopulateTrees();
-    
+
     void PopulateTreeCtrl( wxTreeCtrl *ptc, const wxArrayString &dir_array, const wxColour &col,
             wxFont *pFont = NULL );
     wxTreeCtrl *AddEmptyGroupPage( const wxString& label );
@@ -569,8 +574,8 @@ public:
     bool m_UIcomplete;
     bool m_settingscomplete;
     bool m_treespopulated;
-    
-    
+
+
 private:
     int FindGroupBranch( ChartGroup *pGroup, wxTreeCtrl *ptree, wxTreeItemId item,
             wxString *pbranch_adder );
@@ -854,7 +859,7 @@ class SentenceListDlg : public wxDialog
         wxButton* m_sdbSizer4Cancel;
         wxArrayString standard_sentences;
         wxStaticBox *m_pclbBox;
-        
+
     // Virtual event handlers, overide them in your derived class
         void OnStcSelect( wxCommandEvent& event );
         void OnAddClick( wxCommandEvent& event );
@@ -865,7 +870,7 @@ class SentenceListDlg : public wxDialog
         void OnCLBToggle( wxCommandEvent& event );
         void OnCheckAllClick( wxCommandEvent& event );
         void OnClearAllClick( wxCommandEvent& event );
-        
+
     public:
 
     SentenceListDlg( FilterDirection dir,

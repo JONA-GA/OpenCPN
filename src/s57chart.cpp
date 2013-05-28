@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  S57 Chart Object
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,11 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- */
-
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"
@@ -289,10 +286,19 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
 
                 if( !strncmp( buf, "HDRLEN", 6 ) ) {
                     hdr_len = atoi( buf + 7 );
+		    char * tmp = hdr_buf;
                     hdr_buf = (char *) realloc( hdr_buf, hdr_len );
-                    pfpx->Read( hdr_buf, hdr_len );
-                    mybuf_ptr = hdr_buf;
-                    hdr_end = hdr_buf + hdr_len;
+                    if (NULL == hdr_buf)
+                    {
+                        free ( tmp );
+                        tmp = NULL;
+                    }
+                    else
+                    {
+                        pfpx->Read( hdr_buf, hdr_len );
+                        mybuf_ptr = hdr_buf;
+                        hdr_end = hdr_buf + hdr_len;
+                    }
                 }
 
                 else if( !strncmp( buf, geoMatch, 6 ) ) {
@@ -688,6 +694,9 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
 
                         }
                     }
+                    else {                      // not "POLYTESSGEO"
+                        pfpx->Ungetch(buf, strlen(buf) );
+                    }
 
                     break;
                 }
@@ -858,8 +867,16 @@ int S57Obj::my_bufgetl( char *ib_read, char *ib_end, char *buf, int buf_len_max 
 wxString S57Obj::GetAttrValueAsString( char *AttrName )
 {
     wxString str;
-    char *tattList = (char *) calloc( attList->Len() + 1, 1 );
-    strncpy( tattList, attList->mb_str(), attList->Len() );
+    char *tattList = NULL;
+    
+    wxCharBuffer buffer=attList->ToUTF8();
+    if(buffer.data()) {
+        size_t len = strlen( buffer.data() );
+        tattList = (char *) calloc( len + 1, 1 );
+        strncpy( tattList, buffer.data(), len );
+    }
+    else
+        return str;
 
     char *patl = tattList;
     char *patr;
@@ -2958,7 +2975,6 @@ bool s57chart::CreateHeaderDataFromENC( void )
     pFeat = GetChartFirstM_COVR( catcov );
 
     while( pFeat ) {
-
                 //    Get the next M_COVR feature, and create possible additional entries for COVR
                 OGRPolygon *poly = (OGRPolygon *) ( pFeat->GetGeometryRef() );
                 OGRLinearRing *xring = poly->getExteriorRing();
@@ -2997,6 +3013,7 @@ bool s57chart::CreateHeaderDataFromENC( void )
                         pNoCovrCntArray->Add( npt );
                     }
                 }
+                
 
             delete pFeat;
             pFeat = GetChartNextM_COVR( catcov );
@@ -3250,15 +3267,22 @@ bool s57chart::CreateHeaderDataFromSENC( void )
 
     //   Decide on pub date to show
 
-    int d000 = atoi(
-            ( date_000/*(wxString((const wchar_t *)date_000, wxConvUTF8)*/.Mid( 0, 4 ) ).mb_str() );
-    int dupd = atoi(
-            ( date_upd/*(wxString((const wchar_t *)date_upd, wxConvUTF8)*/.Mid( 0, 4 ) ).mb_str() );
-
-    if( dupd > d000 ) m_PubYear = date_upd/*wxString((const wchar_t *)date_upd, wxConvUTF8)*/.Mid(
-            0, 4 );
+    int d000 = 0;
+    wxString sd000 =date_000.Mid( 0, 4 );
+    wxCharBuffer dbuffer=sd000.ToUTF8();
+    if(dbuffer.data())
+        d000 = atoi(dbuffer.data() );
+        
+    int dupd = 0;
+    wxString sdupd =date_upd.Mid( 0, 4 );
+    wxCharBuffer ubuffer = sdupd.ToUTF8();
+    if(ubuffer.data())
+        dupd = atoi(ubuffer.data() );
+    
+    if( dupd > d000 )
+        m_PubYear = sdupd;
     else
-        m_PubYear = date_000/*wxString((const wchar_t *)date_000, wxConvUTF8)*/.Mid( 0, 4 );
+        m_PubYear = sd000;
 
     wxDateTime dt;
     dt.ParseDate( date_000 );
@@ -3503,8 +3527,10 @@ int s57chart::GetUpdateFileArray( const wxFileName file000, wxArrayString *UpFil
             wxString FileToAdd( DirName000 );
             FileToAdd.Append( file.GetFullName() );
 
-            if( !filename.IsSameAs( _T("CATALOG.031"), false ) )           // don't process catalogs
-                    {
+            wxCharBuffer buffer=FileToAdd.ToUTF8();             // Check file namme for convertability
+                
+            if( buffer.data() && !filename.IsSameAs( _T("CATALOG.031"), false ) )           // don't process catalogs
+            {
 //          We must check the update file for validity
 //          1.  Is update field DSID:EDTN  equal to base .000 file DSID:EDTN?
 //          2.  Is update file DSID.ISDT greater than or equal to base .000 file DSID:ISDT
@@ -3583,7 +3609,9 @@ int s57chart::GetUpdateFileArray( const wxFileName file000, wxArrayString *UpFil
         wxString Last = dummy_array->Last();
         wxFileName fnl( Last );
         ext = fnl.GetExt();
-        retval = atoi( ext.mb_str() );
+        wxCharBuffer buffer=ext.ToUTF8();
+        if(buffer.data())            
+            retval = atoi( buffer.data() );
     }
 
     if( UpFiles == NULL ) delete dummy_array;
@@ -3835,9 +3863,6 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
     const char *pp = "wb";
     fps57 = fopen( tmp_file.mb_str(), pp );
 
-    char t[200];
-    strcpy( t, tmp_file.mb_str() );
-
     if( fps57 == NULL ) {
         wxString msg( _T("   s57chart::BuildS57File  Unable to create temp SENC file ") );
         msg.Append( tfn.GetFullPath() );
@@ -3849,7 +3874,12 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
 
     fprintf( fps57, "SENC Version= %d\n", CURRENT_SENC_FORMAT_VERSION );
 
-    strncpy( temp, nice_name.mb_str(), 200 );
+    wxCharBuffer buffer=nice_name.ToUTF8();
+    if(buffer.data()) 
+        strncpy( temp, buffer.data(), 200 );
+    else
+        strncpy( temp, "UTF8Error", 200 );
+    
     temp[200] = '\0';
     fprintf( fps57, "NAME=%s\n", temp );
 
@@ -3863,7 +3893,8 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
     //      Record .000 file date and size for primitive detection of updates to .000 file
     wxDateTime ModTime000;
     wxString mt = _T("20000101");
-    if( file000.GetTimes( NULL, &ModTime000, NULL ) ) mt = ModTime000.Format( _T("%Y%m%d") );
+    if( file000.GetTimes( NULL, &ModTime000, NULL ) )
+        mt = ModTime000.Format( _T("%Y%m%d") );
     strncpy( temp, mt.mb_str(), 200 );
     fprintf( fps57, "FILEMOD000=%s\n", temp );
 
@@ -4015,7 +4046,7 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
 
             nProg = iObj;
             if( nProg > m_nGeoRecords - 1 ) nProg = m_nGeoRecords - 1;
-            if( s_ProgDialog ) bcont = s_ProgDialog->Update( nProg, sobj );
+            if( s_ProgDialog && nProg % 10 == 0 ) bcont = s_ProgDialog->Update( nProg, sobj ); //We update just every 10th object to improve performance as updating the dialog is very expensive...
 
             geoType = wkbUnknown;
 //      This test should not be necessary for real (i.e not C_AGGR) features
@@ -4180,6 +4211,14 @@ int s57chart::BuildRAZFromSENCFile( const wxString& FullPath )
 
                 }
 
+                //      Ensure that Area objects actually describe a valid object
+                if( GEO_AREA == obj->Primitive_type ) {
+                    if( !obj->BBObj.GetValid() ) {
+                        delete obj;
+                        continue;
+                    }
+                }
+                    
 //      This is where Simplified or Paper-Type point features are selected
                 switch( obj->Primitive_type ){
                     case GEO_POINT:
@@ -4388,16 +4427,23 @@ int s57chart::BuildRAZFromSENCFile( const wxString& FullPath )
     delete SENC_prog;
 
     //   Decide on pub date to show
+    int d000 = 0;
+    wxString sd000 =date_000.Mid( 0, 4 );
+    wxCharBuffer dbuffer=sd000.ToUTF8();
+    if(dbuffer.data())
+        d000 = atoi(dbuffer.data() );
 
-    int d000 = atoi(
-            ( date_000/*(wxString((const wchar_t *)date_000, wxConvUTF8)*/.Mid( 0, 4 ) ).mb_str() );
-    int dupd = atoi(
-            ( date_upd/*(wxString((const wchar_t *)date_upd, wxConvUTF8)*/.Mid( 0, 4 ) ).mb_str() );
+    int dupd = 0;
+    wxString sdupd =date_upd.Mid( 0, 4 );
+    wxCharBuffer ubuffer = sdupd.ToUTF8();
+    if(ubuffer.data())
+        dupd = atoi(ubuffer.data() );
 
-    if( dupd > d000 ) m_PubYear = date_upd/*wxString((const wchar_t *)date_upd, wxConvUTF8)*/.Mid(
-            0, 4 );
+    if( dupd > d000 )
+        m_PubYear = sdupd;
     else
-        m_PubYear = date_000/*wxString((const wchar_t *)date_000, wxConvUTF8)*/.Mid( 0, 4 );
+        m_PubYear = sd000;
+
 
     //    Set some base class values
     wxDateTime upd;
@@ -5156,8 +5202,7 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                 error_code = ppg->ErrorCode;
                 if( error_code == ERROR_NO_DLL ) {
                     if( !bGLUWarningSent ) {
-                        wxLogMessage(
-                                _T("   Warning...Could not find glu32.dll, trying internal tess.") );
+                        wxLogMessage( _T("   Warning...Could not find glu32.dll, trying internal tess.") );
                         bGLUWarningSent = true;
                     }
 
@@ -5167,16 +5212,15 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                     error_code = ppg->ErrorCode;
                 }
 
-                if( error_code ) wxLogMessage( _T("   Error: S57 SENC Create Error %d"),
-                        ppg->ErrorCode );
-
+                if( error_code )
+                    wxLogMessage( _T("   Warning: S57 SENC Geometry Error %d, Some Features ignored."), ppg->ErrorCode );
                 else
                     ppg->Write_PolyTriGroup( fpOut );
+                
                 delete ppg;
 
                 //    Capture the Vector Table geometry indices
-
-                if(!error_code){
+                if( !error_code ) {
                     int *pNAME_RCID;
                     int nEdgeVectorRecords;
                     OGRFeature *pEdgeVectorRecordFeature;
@@ -5238,6 +5282,7 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                     poReader->SetOptions( papszReaderOptions );
                     CSLDestroy( papszReaderOptions );
                 }
+                
                 break;
             }
 
@@ -6101,7 +6146,6 @@ int s57chart::CompareLights( const void** l1ptr, const void** l2ptr )
 wxString s57chart::CreateObjDescriptions( ListOfObjRazRules* rule_list )
 {
     wxString ret_val;
-    char *curr_att;
     int attrCounter;
     wxString curAttrName, value;
     bool isLight = false;
@@ -6112,7 +6156,7 @@ wxString s57chart::CreateObjDescriptions( ListOfObjRazRules* rule_list )
     wxString lightsHtml;
     wxString positionString;
     wxArrayPtrVoid lights;
-    S57Light* curLight;
+    S57Light* curLight = NULL;
 
     for( ListOfObjRazRules::Node *node = rule_list->GetLast(); node; node = node->GetPrevious() ) {
         ObjRazRules *current = node->GetData();
@@ -6195,96 +6239,102 @@ wxString s57chart::CreateObjDescriptions( ListOfObjRazRules* rule_list )
             }
         }
 
-        //    Get the Attributes and values
-
-        char *curr_att0 = (char *) calloc( current->obj->attList->Len() + 1, 1 );
-        strncpy( curr_att0, current->obj->attList->mb_str(), current->obj->attList->Len() );
-        curr_att = curr_att0;
-
-        attrCounter = 0;
-
-        wxString attribStr;
-        int noAttr = 0;
-        attribStr << _T("<table border=0 cellspacing=0 cellpadding=0>");
-
-        bool inDepthRange = false;
-
-        while( *curr_att ) {
-            //    Attribute name
-            curAttrName.Clear();
-            noAttr++;
-            while( ( *curr_att ) && ( *curr_att != '\037' ) ) {
-                char t = *curr_att++;
-                curAttrName.Append( t );
-            }
-
-            if( *curr_att == '\037' ) curr_att++;
-
-            // Sort out how some kinds of attibutes are displayed to get a more readable look.
-            // DEPARE gets just its range. Lights are grouped.
-
-            if( isLight ) {
-                curLight->attributeNames.Add( curAttrName );
-                if( curAttrName.StartsWith( _T("SECTR") ) ) curLight->hasSectors = true;
-            } else {
-                if( curAttrName == _T("DRVAL1") ) {
-                    attribStr << _T("<tr><td><font size=-1>");
-                    inDepthRange = true;
-                } else if( curAttrName == _T("DRVAL2") ) {
-                    attribStr << _T(" - ");
-                    inDepthRange = false;
-                } else {
-                    if( inDepthRange ) {
-                        attribStr << _T("</font></td></tr>\n");
-                        inDepthRange = false;
-                    }
-                    attribStr << _T("<tr><td valign=top><font size=-2>") << curAttrName;
-                    attribStr << _T("</font></td><td>&nbsp;&nbsp;</td><td valign=top><font size=-1>");
-                }
-            }
-
-            // What we need to do...
-            // Change senc format, instead of (S), (I), etc, use the attribute types fetched from the S57attri...csv file
-            // This will be like (E), (L), (I), (F)
-            //  will affect lots of other stuff.  look for S57attVal.valType
-            // need to do this in creatsencrecord above, and update the senc format.
-
-            value = GetObjectAttributeValueAsString( current->obj, attrCounter, curAttrName );
-
-            if( isLight ) {
-                curLight->attributeValues.Add( value );
-            } else {
-                if( curAttrName == _T("INFORM") || curAttrName == _T("NINFOM") ) value.Replace(
-                        _T("|"), _T("<br>") );
-                attribStr << value;
-
-                if( !( curAttrName == _T("DRVAL1") ) ) {
-                    attribStr << _T("</font></td></tr>\n");
-                }
-            }
-
-            attrCounter++;
-
-        }             //while *curr_att
-
-        if( !isLight ) {
-            attribStr << _T("</table>\n");
-
-            objText += _T("<b>") + classDesc + _T("</b> <font size=-2>(") + className
-                    + _T(")</font>") + _T("<br>");
-
-            if( positionString.Length() ) objText << _T("<font size=-2>") << positionString
-                    << _T("</font><br>\n");
-
-            if( noAttr > 0 ) objText << attribStr;
-
-            if( node != rule_list->GetFirst() ) objText += _T("<hr noshade>");
-            objText += _T("<br>");
-            ret_val << objText;
+        //    Get the Attributes and values, making sure they can be converted from UTF8
+        char *curr_att0 = NULL;
+        wxCharBuffer buffer = current->obj->attList->ToUTF8();
+        if(buffer.data()) {
+            size_t len = strlen( buffer.data() );
+            curr_att0 = (char *) calloc( len + 1, 1 );
+            strncpy( curr_att0, buffer.data(), len );
         }
+        
+        if(curr_att0) {
+            char *curr_att = curr_att0;
 
-        free( curr_att0 );
+            attrCounter = 0;
 
+            wxString attribStr;
+            int noAttr = 0;
+            attribStr << _T("<table border=0 cellspacing=0 cellpadding=0>");
+
+            bool inDepthRange = false;
+
+            while( *curr_att ) {
+                //    Attribute name
+                curAttrName.Clear();
+                noAttr++;
+                while( ( *curr_att ) && ( *curr_att != '\037' ) ) {
+                    char t = *curr_att++;
+                    curAttrName.Append( t );
+                }
+
+                if( *curr_att == '\037' ) curr_att++;
+
+                // Sort out how some kinds of attibutes are displayed to get a more readable look.
+                // DEPARE gets just its range. Lights are grouped.
+
+                if( isLight ) {
+                    curLight->attributeNames.Add( curAttrName );
+                    if( curAttrName.StartsWith( _T("SECTR") ) ) curLight->hasSectors = true;
+                } else {
+                    if( curAttrName == _T("DRVAL1") ) {
+                        attribStr << _T("<tr><td><font size=-1>");
+                        inDepthRange = true;
+                    } else if( curAttrName == _T("DRVAL2") ) {
+                        attribStr << _T(" - ");
+                        inDepthRange = false;
+                    } else {
+                        if( inDepthRange ) {
+                            attribStr << _T("</font></td></tr>\n");
+                            inDepthRange = false;
+                        }
+                        attribStr << _T("<tr><td valign=top><font size=-2>") << curAttrName;
+                        attribStr << _T("</font></td><td>&nbsp;&nbsp;</td><td valign=top><font size=-1>");
+                    }
+                }
+
+                // What we need to do...
+                // Change senc format, instead of (S), (I), etc, use the attribute types fetched from the S57attri...csv file
+                // This will be like (E), (L), (I), (F)
+                //  will affect lots of other stuff.  look for S57attVal.valType
+                // need to do this in creatsencrecord above, and update the senc format.
+
+                value = GetObjectAttributeValueAsString( current->obj, attrCounter, curAttrName );
+
+                if( isLight ) {
+                    curLight->attributeValues.Add( value );
+                } else {
+                    if( curAttrName == _T("INFORM") || curAttrName == _T("NINFOM") ) value.Replace(
+                            _T("|"), _T("<br>") );
+                    attribStr << value;
+
+                    if( !( curAttrName == _T("DRVAL1") ) ) {
+                        attribStr << _T("</font></td></tr>\n");
+                    }
+                }
+
+                attrCounter++;
+
+            }             //while *curr_att
+
+            if( !isLight ) {
+                attribStr << _T("</table>\n");
+
+                objText += _T("<b>") + classDesc + _T("</b> <font size=-2>(") + className
+                        + _T(")</font>") + _T("<br>");
+
+                if( positionString.Length() ) objText << _T("<font size=-2>") << positionString
+                        << _T("</font><br>\n");
+
+                if( noAttr > 0 ) objText << attribStr;
+
+                if( node != rule_list->GetFirst() ) objText += _T("<hr noshade>");
+                objText += _T("<br>");
+                ret_val << objText;
+            }
+
+            free( curr_att0 );
+        }
     } // Object for loop
 
     if( lights.Count() > 0 ) {
@@ -6583,48 +6633,6 @@ const char *MyCSVGetField( const char * pszFilename, const char * pszKeyFieldNam
 }
 
 //------------------------------------------------------------------------
-//  s57RegistrarMgr Implementation
-//  This is a class holding the ctor and dtor for the global registrar
-//------------------------------------------------------------------------
-
-s57RegistrarMgr::s57RegistrarMgr( const wxString& csv_dir, FILE *flog )
-{
-    s57_initialize( csv_dir, flog );
-}
-
-s57RegistrarMgr::~s57RegistrarMgr()
-{
-    delete g_poRegistrar;
-    g_poRegistrar = NULL;
-}
-
-//------------------------------------------------------------------------
-//  Initialize GDAL/OGR S57ENC support
-//------------------------------------------------------------------------
-
-int s57_initialize( const wxString& csv_dir, FILE *flog )
-{
-
-    //      Get one instance of the s57classregistrar,
-    //      And be prepared to give it to any module that needs it
-
-    if( g_poRegistrar == NULL ) {
-        g_poRegistrar = new S57ClassRegistrar();
-
-        if( !g_poRegistrar->LoadInfo( csv_dir.mb_str(), FALSE ) ) {
-            wxString msg( _T("   Error: Could not load S57 ClassInfo from ") );
-            msg.Append( csv_dir );
-            wxLogMessage( msg );
-
-            delete g_poRegistrar;
-            g_poRegistrar = NULL;
-        }
-    }
-
-    return 0;
-}
-
-//------------------------------------------------------------------------
 //
 //          Some s57 Utilities
 //          Meant to be called "bare", usually with no class instance.
@@ -6666,7 +6674,7 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
         std::vector<int> sectorangles;
         for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
             if( fabs( sectorlegs[i].sector1 - sectorlegs[i].sector2 ) < 0.5 )
-                 continue;
+                continue;
             
             double endx, endy;
             ll_gc_ll( sectorlegs[i].pos.m_y, sectorlegs[i].pos.m_x,
@@ -6800,7 +6808,6 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
         for( ListOfObjRazRules::Node *node = rule_list->GetLast(); node; node = node->GetPrevious() ) {
             ObjRazRules *current = node->GetData();
             S57Obj* light = current->obj;
-            char* curr_att;
             int attrCounter;
             double sectr1 = -1;
             double sectr2 = -1;
@@ -6810,75 +6817,84 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
 
             if( !strcmp( light->FeatureName, "LIGHTS" ) ) {
                 wxPoint2DDouble objPos( light->m_lat, light->m_lon );
-                if( lightPosD.m_x == 0 && lightPosD.m_y == 0.0 ) lightPosD = objPos;
+                if( lightPosD.m_x == 0 && lightPosD.m_y == 0.0 )
+                    lightPosD = objPos;
+                
                 if( lightPosD == objPos ) {
-                    char *curr_att0 = (char *) calloc( light->attList->Len() + 1, 1 );
-                    strncpy( curr_att0, light->attList->mb_str(), light->attList->Len() );
-                    curr_att = curr_att0;
-
-                    attrCounter = 0;
-                    int noAttr = 0;
-                    bool inDepthRange = false;
-                    s57Sector_t sector;
-
-                    while( *curr_att ) {
-                        curAttrName.Clear();
-                        noAttr++;
-                        while( ( *curr_att ) && ( *curr_att != '\037' ) ) {
-                            char t = *curr_att++;
-                            curAttrName.Append( t );
-                        }
-
-                        if( *curr_att == '\037' ) curr_att++;
-
-                        wxString value = chart->GetObjectAttributeValueAsString( light, attrCounter, curAttrName );
-                        int opacity = 100;
-                        if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_DUSK ) opacity = 50;
-                        if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_NIGHT) opacity = 20;
-
-                        int yOpacity = (float)opacity*1.3; // Matched perception with red/green
-
-                        if( curAttrName == _T("SECTR1") ) value.ToDouble( &sectr1 );
-                        if( curAttrName == _T("SECTR2") ) value.ToDouble( &sectr2 );
-                        if( curAttrName == _T("VALNMR") ) value.ToDouble( &valnmr );
-                        if( curAttrName == _T("COLOUR") ) {
-                            sector.fillSector = true;
-                            color = wxColor( 255, 255, 0, yOpacity );
-                            if( value == _T("red(3)") ) {
-                                color = wxColor( 255, 0, 0, opacity );
-                                sector.fillSector = false;
-                            }
-                            if( value == _T("green(4)") ) {
-                                color = wxColor( 0, 255, 0, opacity );
-                                sector.fillSector = false;
-                            }
-                        }
-                        if( curAttrName == _T("EXCLIT") ) {
-                            if( value.Find( _T("(3)") ) ) valnmr = 1.0;  // Fog lights.
-                        }
-                        attrCounter++;
+                    char *curr_att0 = NULL;
+                    wxCharBuffer buffer=light->attList->ToUTF8();
+                    if(buffer.data()) {
+                        size_t len = strlen(buffer.data());
+                        curr_att0 = (char *) calloc( len + 1, 1 );
+                        strncpy( curr_att0, buffer.data(), len );
                     }
+                    if( curr_att0 ) {
+                        char *curr_att = curr_att0;
 
-                    free(curr_att0);
+                        attrCounter = 0;
+                        int noAttr = 0;
+                        bool inDepthRange = false;
+                        s57Sector_t sector;
 
-                    if( ( sectr1 >= 0 ) && ( sectr2 >= 0 ) ) {
-                        sector.pos.m_x = light->m_lon;
-                        sector.pos.m_y = light->m_lat;
+                        while( *curr_att ) {
+                            curAttrName.Clear();
+                            noAttr++;
+                            while( ( *curr_att ) && ( *curr_att != '\037' ) ) {
+                                char t = *curr_att++;
+                                curAttrName.Append( t );
+                            }
 
-                        sector.range = (valnmr > 0.0) ? valnmr : 2.5; // Short default range.
-                        sector.sector1 = sectr1;
-                        sector.sector2 = sectr2;
-                        sector.color = color;
+                            if( *curr_att == '\037' ) curr_att++;
 
-                        bool newsector = true;
-                        for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
-                            if( sectorlegs[i].pos == sector.pos &&
-                                sectorlegs[i].sector1 == sector.sector1 &&
-                                sectorlegs[i].sector2 == sector.sector2 ) newsector = false;
+                            wxString value = chart->GetObjectAttributeValueAsString( light, attrCounter, curAttrName );
+                            int opacity = 100;
+                            if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_DUSK ) opacity = 50;
+                            if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_NIGHT) opacity = 20;
+
+                            int yOpacity = (float)opacity*1.3; // Matched perception with red/green
+
+                            if( curAttrName == _T("SECTR1") ) value.ToDouble( &sectr1 );
+                            if( curAttrName == _T("SECTR2") ) value.ToDouble( &sectr2 );
+                            if( curAttrName == _T("VALNMR") ) value.ToDouble( &valnmr );
+                            if( curAttrName == _T("COLOUR") ) {
+                                sector.fillSector = true;
+                                color = wxColor( 255, 255, 0, yOpacity );
+                                if( value == _T("red(3)") ) {
+                                    color = wxColor( 255, 0, 0, opacity );
+                                    sector.fillSector = false;
+                                }
+                                if( value == _T("green(4)") ) {
+                                    color = wxColor( 0, 255, 0, opacity );
+                                    sector.fillSector = false;
+                                }
+                            }
+                            if( curAttrName == _T("EXCLIT") ) {
+                                if( value.Find( _T("(3)") ) ) valnmr = 1.0;  // Fog lights.
+                            }
+                            attrCounter++;
                         }
-                        if( newsector ) {
-                            sectorlegs.push_back( sector );
-                            newSectorsNeedDrawing = true;
+
+                        free(curr_att0);
+
+                        if( ( sectr1 >= 0 ) && ( sectr2 >= 0 ) ) {
+                            sector.pos.m_x = light->m_lon;
+                            sector.pos.m_y = light->m_lat;
+
+                            sector.range = (valnmr > 0.0) ? valnmr : 2.5; // Short default range.
+                            sector.sector1 = sectr1;
+                            sector.sector2 = sectr2;
+                            sector.color = color;
+
+                            bool newsector = true;
+                            for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
+                                if( sectorlegs[i].pos == sector.pos &&
+                                    sectorlegs[i].sector1 == sector.sector1 &&
+                                    sectorlegs[i].sector2 == sector.sector2 ) newsector = false;
+                            }
+                            if( newsector ) {
+                                sectorlegs.push_back( sector );
+                                newSectorsNeedDrawing = true;
+                            }
                         }
                     }
                 }

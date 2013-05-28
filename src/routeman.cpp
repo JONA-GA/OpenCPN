@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  Route Manager
@@ -21,9 +21,7 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- *
- */
+ **************************************************************************/
 
 #include "wx/wxprec.h"
 
@@ -52,6 +50,7 @@
 #include "routemanagerdialog.h"
 #include "pluginmanager.h"
 #include "multiplexer.h"
+#include "MarkIcon.h"
 
 #include <wx/dir.h>
 #include <wx/filename.h>
@@ -805,26 +804,6 @@ void Routeman::DeleteAllTracks( void )
 
 }
 
-void Routeman::AssembleAllRoutes( void )
-{
-    //    Iterate on the RouteList
-    wxRouteListNode *node = pRouteList->GetFirst();
-    while( node ) {
-        Route *proute = node->GetData();
-
-        proute->AssembleRoute();
-        if( proute->GetnPoints() ) {
-            pSelect->AddAllSelectableRouteSegments( proute );
-        } else                                // this route has no points
-        {
-            pConfig->DeleteConfigRoute( proute );
-            DeleteRoute( proute );
-        }
-
-        node = node->GetNext();                   // Route
-    }
-}
-
 void Routeman::DeleteTrack( Route *pRoute )
 {
     if( pRoute ) {
@@ -946,139 +925,21 @@ wxString Routeman::GetRouteReverseMessage( void )
             _("Waypoints can be renamed to reflect the new order, the names will be '001', '002' etc.\n\nDo you want to rename the waypoints?") );
 }
 
-//-------------------------------------------------------------------------------
-//
-//   Route "Send to GPS..." Dialog Implementation
-//
-//-------------------------------------------------------------------------------
-
-IMPLEMENT_DYNAMIC_CLASS( SendToGpsDlg, wxDialog )
-BEGIN_EVENT_TABLE( SendToGpsDlg, wxDialog ) EVT_BUTTON( ID_STG_CANCEL, SendToGpsDlg::OnCancelClick )
-EVT_BUTTON( ID_STG_OK, SendToGpsDlg::OnSendClick )
-END_EVENT_TABLE()
-
-SendToGpsDlg::SendToGpsDlg()
+Route *Routeman::FindRouteByGUID(wxString &guid)
 {
-    m_itemCommListBox = NULL;
-    m_pgauge = NULL;
-    m_SendButton = NULL;
-    m_CancelButton = NULL;
-    m_pRoute = NULL;
-    m_pRoutePoint = NULL;
-}
-
-SendToGpsDlg::SendToGpsDlg( wxWindow* parent, wxWindowID id, const wxString& caption,
-        const wxString& hint, const wxPoint& pos, const wxSize& size, long style )
-{
-    Create( parent, id, caption, hint, pos, size, style );
-}
-
-SendToGpsDlg::~SendToGpsDlg()
-{
-    delete m_itemCommListBox;
-    delete m_pgauge;
-    delete m_SendButton;
-    delete m_CancelButton;
-}
-
-bool SendToGpsDlg::Create( wxWindow* parent, wxWindowID id, const wxString& caption,
-        const wxString& hint, const wxPoint& pos, const wxSize& size, long style )
-{
-    SetExtraStyle( GetExtraStyle() | wxWS_EX_BLOCK_EVENTS );
-    wxDialog::Create( parent, id, caption, pos, size, style );
-
-    CreateControls( hint );
-    GetSizer()->Fit( this );
-    GetSizer()->SetSizeHints( this );
-    Centre();
-
-    return TRUE;
-}
-
-void SendToGpsDlg::CreateControls( const wxString& hint )
-{
-    SendToGpsDlg* itemDialog1 = this;
-
-    wxBoxSizer* itemBoxSizer2 = new wxBoxSizer( wxVERTICAL );
-    itemDialog1->SetSizer( itemBoxSizer2 );
-
-//      Create the ScrollBox list of available com ports in a labeled static box
-    wxStaticBox* comm_box = new wxStaticBox( this, wxID_ANY, _("GPS/Plotter Port") );
-
-    wxStaticBoxSizer* comm_box_sizer = new wxStaticBoxSizer( comm_box, wxVERTICAL );
-    itemBoxSizer2->Add( comm_box_sizer, 0, wxEXPAND | wxALL, 5 );
-
-    wxArrayString *pSerialArray = EnumerateSerialPorts();
-
-    m_itemCommListBox = new wxComboBox( this, ID_STG_CHOICE_COMM );
-
-    //    Fill in the listbox with all detected serial ports
-    for( unsigned int iPortIndex = 0; iPortIndex < pSerialArray->GetCount(); iPortIndex++ ) {
-        wxString full_port = pSerialArray->Item( iPortIndex );
-        full_port.Prepend(_T("Serial:"));
-        m_itemCommListBox->Append( full_port );
+    Route *pRoute = NULL;
+    wxRouteListNode *node1 = pRouteList->GetFirst();
+    while( node1 ) {
+        pRoute = node1->GetData();
+        
+        if( pRoute->m_GUID == guid )
+            break;
+        node1 = node1->GetNext();
     }
-    
-    delete pSerialArray;
-
-    //    Make the proper inital selection
-    if( !g_uploadConnection.IsEmpty() ) 
-        m_itemCommListBox->SetValue( g_uploadConnection );
-    else
-        m_itemCommListBox->SetSelection( 0 );
-    
-    comm_box_sizer->Add( m_itemCommListBox, 0, wxEXPAND | wxALL, 5 );
-
-    //    Add a reminder text box
-    itemBoxSizer2->AddSpacer( 20 );
-
-    wxStaticText *premtext = new wxStaticText( this, -1,
-            _("Prepare GPS for Route/Waypoint upload and press Send...") );
-    itemBoxSizer2->Add( premtext, 0, wxEXPAND | wxALL, 10 );
-
-    //    Create a progress gauge
-    wxStaticBox* prog_box = new wxStaticBox( this, wxID_ANY, _("Progress...") );
-
-    wxStaticBoxSizer* prog_box_sizer = new wxStaticBoxSizer( prog_box, wxVERTICAL );
-    itemBoxSizer2->Add( prog_box_sizer, 0, wxEXPAND | wxALL, 5 );
-
-    m_pgauge = new wxGauge( this, -1, 100 );
-    prog_box_sizer->Add( m_pgauge, 0, wxEXPAND | wxALL, 5 );
-
-    //    OK/Cancel/etc.
-    wxBoxSizer* itemBoxSizer16 = new wxBoxSizer( wxHORIZONTAL );
-    itemBoxSizer2->Add( itemBoxSizer16, 0, wxALIGN_RIGHT | wxALL, 5 );
-
-    m_CancelButton = new wxButton( itemDialog1, ID_STG_CANCEL, _("Cancel"), wxDefaultPosition,
-            wxDefaultSize, 0 );
-    itemBoxSizer16->Add( m_CancelButton, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
-
-    m_SendButton = new wxButton( itemDialog1, ID_STG_OK, _("Send"), wxDefaultPosition,
-            wxDefaultSize, 0 );
-    itemBoxSizer16->Add( m_SendButton, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
-    m_SendButton->SetDefault();
-
+ 
+    return pRoute;
 }
 
-void SendToGpsDlg::OnSendClick( wxCommandEvent& event )
-{
-    //    Get the selected comm port
-    wxString src = m_itemCommListBox->GetValue();
-    g_uploadConnection = src;                   // save for persistence
-    
-    //    And send it out
-    if( m_pRoute ) m_pRoute->SendToGPS( src, true, m_pgauge );
-    if( m_pRoutePoint ) m_pRoutePoint->SendToGPS( src, m_pgauge );
-
-    Show( false );
-    event.Skip();
-}
-
-void SendToGpsDlg::OnCancelClick( wxCommandEvent& event )
-{
-    Show( false );
-    event.Skip();
-}
 
 //--------------------------------------------------------------------------------
 //      WayPointman   Implementation
@@ -1215,7 +1076,7 @@ void WayPointman::ProcessIcons( ocpnStyle::Style* style )
     ProcessIcon( style->GetIcon( _T("activepoint") ), _T("activepoint"), _T("Active WP") );
 }
 
-void WayPointman::ProcessIcon( wxBitmap pimage, wxString key, wxString description )
+void WayPointman::ProcessIcon(wxBitmap pimage, const wxString & key, const wxString & description)
 {
     MarkIcon *pmi;
 
@@ -1298,7 +1159,43 @@ wxImageList *WayPointman::Getpmarkicon_image_list( void )
 
         pmarkicon_image_list->Add( icon_larger );
     }
+    
+    m_markicon_image_list_base_count = pmarkicon_image_list->GetImageCount(); 
 
+    // Create and add "x-ed out" icons,
+    // Being careful to preserve (some) transparency
+    for( unsigned int ii = 0; ii < m_pIconArray->GetCount(); ii++ ) {
+
+        wxImage img = pmarkicon_image_list->GetBitmap( ii ).ConvertToImage() ;
+        img.ConvertAlphaToMask( 128 );
+
+        unsigned char r,g,b;
+        img.GetOrFindMaskColour(&r, &g, &b);
+        wxColour unused_color(r,g,b);
+
+        wxBitmap bmp0( img );
+    
+        wxBitmap bmp(w, h, -1 );
+        wxMemoryDC mdc( bmp );
+        mdc.SetBackground( wxBrush( unused_color) );
+        mdc.Clear();
+        mdc.DrawBitmap( bmp0, 0, 0 );
+        wxPen red(GetGlobalColor(_T( "URED" )), 2 );
+        mdc.SetPen( red );
+        int xm = bmp.GetWidth();
+        int ym = bmp.GetHeight();
+        mdc.DrawLine( 2, 2, xm-2, ym-2 );
+        mdc.DrawLine( xm-2, 2, 2, ym-2 );
+        mdc.SelectObject( wxNullBitmap );
+        
+        wxMask *pmask = new wxMask(bmp, unused_color);
+        bmp.SetMask( pmask );
+
+        pmarkicon_image_list->Add( bmp );
+    }
+        
+        
+        
     return pmarkicon_image_list;
 }
 
@@ -1340,7 +1237,7 @@ void WayPointman::SetColorScheme( ColorScheme cs )
     }
 }
 
-bool WayPointman::DoesIconExist( const wxString icon_key )
+bool WayPointman::DoesIconExist(const wxString & icon_key) const
 {
     MarkIcon *pmi;
     unsigned int i;
@@ -1422,8 +1319,21 @@ int WayPointman::GetIconIndex( const wxBitmap *pbm )
         if( pmi->picon_bitmap == pbm ) break;
     }
 
-    return i;
+    return i;                                           // index of base icon in the image list
 
+}
+
+int WayPointman::GetXIconIndex( const wxBitmap *pbm )
+{
+    unsigned int i;
+    
+    for( i = 0; i < m_pIconArray->GetCount(); i++ ) {
+        MarkIcon *pmi = (MarkIcon *) m_pIconArray->Item( i );
+        if( pmi->picon_bitmap == pbm ) break;
+    }
+    
+    return i + m_markicon_image_list_base_count;        // index of "X-ed out" icon in the image list
+    
 }
 
 //  Create the unique identifier
@@ -1442,7 +1352,7 @@ wxString WayPointman::CreateGUID( RoutePoint *pRP )
     return GpxDocument::GetUUID();
 }
 
-RoutePoint *WayPointman::FindRoutePointByGUID( wxString &guid )
+RoutePoint *WayPointman::FindRoutePointByGUID(const wxString &guid)
 {
     wxRoutePointListNode *prpnode = pWayPointMan->m_pWayPointList->GetFirst();
     while( prpnode ) {
@@ -1477,7 +1387,7 @@ RoutePoint *WayPointman::GetNearbyWaypoint( double lat, double lon, double radiu
 }
 
 RoutePoint *WayPointman::GetOtherNearbyWaypoint( double lat, double lon, double radius_meters,
-        wxString &guid )
+        const wxString &guid )
 {
     //    Iterate on the RoutePoint list, checking distance
 

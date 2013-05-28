@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  *
  * Project:  OpenCPN
@@ -6,7 +6,7 @@
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -21,10 +21,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- */
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef _PLUGINMGR_H_
 #define _PLUGINMGR_H_
@@ -38,6 +36,7 @@
 #include "chart1.h"                 // for MyFrame
 #include "chcanv.h"                 // for ViewPort
 #include "datastream.h"             // for GenericPosDat
+#include "OCPN_Sound.h"
 
 //For widgets...
 #include "wx/hyperlink.h"
@@ -75,35 +74,35 @@ class OCPN_MsgEvent: public wxEvent
 {
 public:
     OCPN_MsgEvent( wxEventType commandType = wxEVT_NULL, int id = 0 );
-    
+
     OCPN_MsgEvent(const OCPN_MsgEvent & event)
     : wxEvent(event),
     m_MessageID(event.m_MessageID),
     m_MessageText(event.m_MessageText)
     { }
-    
+
     ~OCPN_MsgEvent( );
-    
+
     // accessors
     wxString GetID() { return m_MessageID; }
     wxString GetJSONText() { return m_MessageText; }
-    
-    void SetID(wxString &string) { m_MessageID = string; }
-    void SetJSONText(wxString &string) { m_MessageText = string; }
-    
-    
+
+    void SetID(const wxString &string) { m_MessageID = string; }
+    void SetJSONText(const wxString &string) { m_MessageText = string; }
+
+
     // required for sending with wxPostEvent()
-    wxEvent *Clone() const; 
-    
+    wxEvent *Clone() const;
+
 private:
     wxString    m_MessageID;
     wxString    m_MessageText;
-        
-        
+
+
 };
-    
+
 extern  const wxEventType wxEVT_OCPN_MSG;
-    
+
 
 //-----------------------------------------------------------------------------------------------------
 //
@@ -167,7 +166,7 @@ class PlugInToolbarToolContainer
             wxBitmap          *bitmap_dusk;
             wxBitmap          *bitmap_night;
             wxBitmap          *bitmap_Rollover;
-            
+
             wxItemKind        kind;
             wxString          shortHelp;
             wxString          longHelp;
@@ -197,7 +196,7 @@ public:
       PlugInManager(MyFrame *parent);
       virtual ~PlugInManager();
 
-      bool LoadAllPlugIns(wxString &plugin_dir);
+      bool LoadAllPlugIns(const wxString &plugin_dir);
       bool UnLoadAllPlugIns();
       bool DeactivateAllPlugIns();
       bool UpdatePlugIns();
@@ -234,11 +233,11 @@ public:
       void SetCanvasContextMenuItemViz(int item, bool viz);
       void SetCanvasContextMenuItemGrey(int item, bool grey);
 
-      void SendNMEASentenceToAllPlugIns(wxString &sentence);
+      void SendNMEASentenceToAllPlugIns(const wxString &sentence);
       void SendPositionFixToAllPlugIns(GenericPosDatEx *ppos);
-      void SendAISSentenceToAllPlugIns(wxString &sentence);
-      void SendJSONMessageToAllPlugins(wxString &message_id, wxJSONValue v);
-      void SendMessageToAllPlugins(wxString &message_id, wxString &message_body);
+      void SendAISSentenceToAllPlugIns(const wxString &sentence);
+      void SendJSONMessageToAllPlugins(const wxString &message_id, wxJSONValue v);
+      void SendMessageToAllPlugins(const wxString &message_id, const wxString &message_body);
 
       void SendResizeEventToAllPlugIns(int x, int y);
       void SetColorSchemeForAllPlugIns(ColorScheme cs);
@@ -250,7 +249,8 @@ public:
       MyFrame *GetParentFrame(){ return pParent; }
 
       void DimeWindow(wxWindow *win);
-
+      OCPN_Sound        m_plugin_sound;
+      
 private:
       bool DeactivatePlugIn(PlugInContainer *pic);
       wxBitmap *BuildDimmedToolBitmap(wxBitmap *pbmp_normal, unsigned char dim_ratio);
@@ -271,7 +271,6 @@ private:
       int               m_plugin_menu_item_id_next;
       wxBitmap          m_cached_overlay_bm;
 
- //     opencpn_plugin    *m_plugin_base;
 
 
 };
