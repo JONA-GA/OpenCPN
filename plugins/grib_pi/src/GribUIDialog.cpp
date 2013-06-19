@@ -1269,8 +1269,8 @@ wxString GribRequestSetting::WriteMail()
 {
     //some useful strings
     const wxString s[] = { wxT("GFS"), wxT("COAMPS"), wxT("RTOFS"),wxT("|"), wxT("|=\n"), wxT(":") };
-    const wxString r[][4] = { wxT("0.5,0.5"), wxT("1.0,1.0"), wxT("1.5,1.5"), wxT("2.0,2.0"),
-        wxT("0.2,0.2"), wxT("0.6,0.6"), wxT("1.2,1.2"), wxT("2.0,2.0") };
+    const wxString r[][4] = {{ wxT("0.5,0.5"), wxT("1.0,1.0"), wxT("1.5,1.5"), wxT("2.0,2.0")},
+	{wxT("0.2,0.2"), wxT("0.6,0.6"), wxT("1.2,1.2"), wxT("2.0,2.0")} };
     const wxString i[] = { wxT("0,3,6"), wxT("0,6,12"), wxT("0,12,24") };
     const wxString p[] = { wxT("..96"), wxT("..144"), wxT("..192") };
 

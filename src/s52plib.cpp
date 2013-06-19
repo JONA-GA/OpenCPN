@@ -1184,7 +1184,7 @@ char *_getParamVal( ObjRazRules *rzRules, char *str, char *buf, int bsz )
         
         wxCharBuffer buffer=value.ToUTF8();
         if(buffer.data())
-            strncpy( buf, buffer.data(), wxMin(strlen(buffer.data()), bsz-1) );
+            strncpy( buf, buffer.data(), wxMin((int)strlen(buffer.data()), bsz-1) );
         else
             *buf = 0;
     }

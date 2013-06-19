@@ -1817,7 +1817,7 @@ static void chk_fread (void *ptr, size_t size, size_t nmemb, FILE *stream) {
     ret = fread (ptr, size, nmemb, stream);
     if (ret != nmemb) {
         fprintf (stderr, "libtcd unexpected error: fread failed\n");
-        fprintf (stderr, "nmemb = %lu, got %lu\n", nmemb, ret);
+        fprintf (stderr, "nmemb = %lu, got %lu\n", (long unsigned int)nmemb,(long unsigned int) ret);
         abort();
     }
 }
@@ -1828,7 +1828,7 @@ static void chk_fwrite (const void *ptr, size_t size, size_t nmemb,
     ret = fwrite (ptr, size, nmemb, stream);
     if (ret != nmemb) {
         fprintf (stderr, "libtcd unexpected error: fwrite failed\n");
-        fprintf (stderr, "nmemb = %lu, got %lu\n", nmemb, ret);
+        fprintf (stderr, "nmemb = %lu, got %lu\n",(long unsigned int) nmemb,(long unsigned int) ret);
         fprintf (stderr, "The database is probably corrupt now.\n");
         abort();
     }
@@ -2605,7 +2605,7 @@ static void boundscheck_monologue (const NV_CHAR *string) {
         fprintf (stderr, "libtcd fatal error:  static buffer size exceeded\n");
         fprintf (stderr, "Buffer is size MONOLOGUE_LENGTH (%u)\n",
                  MONOLOGUE_LENGTH);
-        fprintf (stderr, "String is length %lu\n", strlen(string));
+        fprintf (stderr, "String is length %lu\n",(long unsigned int) strlen(string));
         fprintf (stderr, "The offending string is:\n%s\n", string);
         exit (-1);
     }
@@ -2622,7 +2622,7 @@ static void boundscheck_oneliner (const NV_CHAR *string) {
         fprintf (stderr, "libtcd fatal error:  static buffer size exceeded\n");
         fprintf (stderr, "Buffer is size ONELINER_LENGTH (%u)\n",
                  ONELINER_LENGTH);
-        fprintf (stderr, "String is length %lu\n", strlen(string));
+        fprintf (stderr, "String is length %lu\n",(long unsigned int) strlen(string));
         fprintf (stderr, "The offending string is:\n%s\n", string);
         exit (-1);
     }
