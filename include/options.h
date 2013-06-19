@@ -70,6 +70,7 @@ enum {
     ID_BUTTONADD,
     ID_BUTTONDELETE,
     ID_BUTTONFONTCHOOSE,
+    ID_BUTTONFONTCOLOR,
     ID_BUTTONGROUP,
     ID_BUTTONREBUILD,
     ID_BUTTONTCDATA,
@@ -147,6 +148,7 @@ enum {
     ID_VECTORCHECKBOX1,
     ID_ZTCCHECKBOX,
     ID_DELETECHECKBOX,
+    ID_NATIONALTEXTCHECKBOX,
     xID_OK
 };
 
@@ -237,6 +239,9 @@ public:
     void OnXidOkClick( wxCommandEvent& event );
     void OnCancelClick( wxCommandEvent& event );
     void OnChooseFont( wxCommandEvent& event );
+#ifdef __WXGTK__
+    void OnChooseFontColor( wxCommandEvent& event );
+#endif
     void OnDisplayCategoryRadioButton( wxCommandEvent& event );
     void OnButtonClearClick( wxCommandEvent& event );
     void OnButtonSelectClick( wxCommandEvent& event );
@@ -387,6 +392,7 @@ public:
     wxCheckBox              *pCheck_LDISTEXT;
     wxCheckBox              *pCheck_XLSECTTEXT;
     wxCheckBox              *pCheck_DECLTEXT;
+    wxCheckBox              *pCheck_NATIONALTEXT;
     wxTextCtrl              *m_ShallowCtl;
     wxTextCtrl              *m_SafetyCtl;
     wxTextCtrl              *m_DeepCtl;

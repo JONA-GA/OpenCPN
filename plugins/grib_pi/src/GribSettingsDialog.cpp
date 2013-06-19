@@ -71,7 +71,7 @@ void GribOverlaySettings::Read()
         wxString Name=name_from_index[i];
 
         int units;
-        pConf->Read ( Name + _T ( "Units" ), &units);
+        pConf->Read ( Name + _T ( "Units" ), &units,0);
         Settings[i].m_Units = (SettingsType)units;
 
         pConf->Read ( Name + _T ( "BarbedArrows" ), &Settings[i].m_bBarbedArrows, i==WIND);
@@ -149,7 +149,7 @@ double GribOverlaySettings::CalibrationFactor(int settings)
         } break;
     case 1: switch(Settings[settings].m_Units) {
         case MILLIBARS: return 1 / 100.;
-        case MMHG: return 1 / 100. * 1.33;
+        case MMHG: return 1 / (100. * 1.33);
         } break;
     case 2: switch(Settings[settings].m_Units) {
         case METERS: return 1;
@@ -167,6 +167,38 @@ double GribOverlaySettings::CalibrationFactor(int settings)
     }
         
     return 1;
+}
+
+wxString GribOverlaySettings::GetUnitSymbol(int settings)
+{
+    switch(unittype[settings]) {
+        case 0: switch(Settings[settings].m_Units) {
+            case KNOTS:  return _T("kt");
+            case M_S:    return _T("m/s");
+            case MPH:    return _T("mph");
+            case KPH:    return _T("kmh");
+        } break;
+        case 1: switch(Settings[settings].m_Units) {
+            case MILLIBARS: return _T("hPa");
+            case MMHG: return _T("mmHg");
+        } break;
+        case 2: switch(Settings[settings].m_Units) {
+            case METERS: return _T("m");
+            case FEET:   return _T("ft");
+        } break;
+        case 3: switch(Settings[settings].m_Units) {
+            case CELCIUS:     return _T("\u00B0C");
+            case FAHRENHEIT: return _T("\u00B0F");
+        } break;
+        case 4: switch(Settings[settings].m_Units) {
+            case MILLIMETERS: return _T("mm");
+            case INCHES:      return _T("in");
+        } break;
+        case 5: switch(Settings[settings].m_Units) {
+            case PERCENTAGE:  return _T("%");
+        } break;
+    }
+    return _T("");
 }
 
 double GribOverlaySettings::GetMin(int settings)
@@ -208,9 +240,9 @@ GribSettingsDialog::GribSettingsDialog(GRIBUIDialog &parent, GribOverlaySettings
     m_sUpdatesPerSecond->SetValue(m_Settings.m_UpdatesPerSecond);
     m_sHourDivider->SetValue(m_Settings.m_HourDivider);
     if(!m_cInterpolate->IsChecked() ) {              //hide no suiting parameters
-        m_staticText5->Hide();
+        m_tSlicesPerUpdate->Hide();
         m_sSlicesPerUpdate->Hide();
-        m_staticText9->Hide();
+        m_tHourDivider->Hide();
         m_sHourDivider->Hide();
     }
 
@@ -220,6 +252,7 @@ GribSettingsDialog::GribSettingsDialog(GRIBUIDialog &parent, GribOverlaySettings
     m_cDataType->SetSelection(m_lastdatatype);
     PopulateUnits(m_lastdatatype);
     ReadDataTypeSettings(m_lastdatatype);
+    Fit();
 }
 
 /* set settings to the dialog controls */
@@ -300,14 +333,14 @@ void GribSettingsDialog::OnApply( wxCommandEvent& event )
 void GribSettingsDialog::OnIntepolateChange( wxCommandEvent& event )
 {
     if( m_cInterpolate->IsChecked() ) {
-        m_staticText5->Show();
+        m_tSlicesPerUpdate->Show();
         m_sSlicesPerUpdate->Show();
-        m_staticText9->Show();
+        m_tHourDivider->Show();
         m_sHourDivider->Show();
     } else {                                        //hide no suiting parameters 
-        m_staticText5->Hide();
+        m_tSlicesPerUpdate->Hide();
         m_sSlicesPerUpdate->Hide();
-        m_staticText9->Hide();
+        m_tHourDivider->Hide();
         m_sHourDivider->Hide();
     }
     this->Fit();

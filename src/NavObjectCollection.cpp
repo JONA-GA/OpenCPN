@@ -179,7 +179,7 @@ RoutePoint * GPXLoadWaypoint1( pugi::xml_node &wpt_node,
 
     pWP = new RoutePoint( rlat, rlon, SymString, NameString, GuidString, false ); // do not add to global WP list yet...
     pWP->m_MarkDescription = DescString;
-    pWP->m_bIsolatedMark = true;      // This is an isolated mark
+    pWP->m_bIsolatedMark = bshared;      // This is an isolated mark
     
 
     if( b_propvizname )
@@ -248,6 +248,7 @@ Track *GPXLoadTrack1( pugi::xml_node &trk_node, bool b_fullviz,
                     wxString tpChildName = wxString::FromUTF8( tpchild.name() );
                     if( tpChildName == _T("trkpt") ) {
                         pWp = ::GPXLoadWaypoint1(tpchild, _T("empty"), _T("noGUID"), false, b_layer, b_layerviz, layer_id);
+                        pWp->m_bIsolatedMark = false;
                         pTentTrack->AddPoint( pWp, false, true );          // defer BBox calculation
                         pWp->m_bIsInRoute = false;                      // Hack
                         pWp->m_bIsInTrack = true;
@@ -363,10 +364,14 @@ Route *GPXLoadRoute1( pugi::xml_node &wpt_node, bool b_fullviz,
 
             if( ChildName == _T ( "rtept" ) ) {
                     pWp = ::GPXLoadWaypoint1(  tschild, _T("square"), _T(""), b_fullviz, b_layer, b_layerviz, layer_id);
+                    RoutePoint *erp = ::WaypointExists( pWp->m_GUID );
+                    if( erp != NULL )
+                        pWp = erp;
                     pTentRoute->AddPoint( pWp, false, true );          // defer BBox calculation
                     pWp->m_bIsInRoute = true;                      // Hack
                     pWp->m_bIsInTrack = false;
-                    pWayPointMan->m_pWayPointList->Append( pWp );
+                    if( erp == NULL )
+                        pWayPointMan->m_pWayPointList->Append( pWp );
             }
             else
             if( ChildName == _T ( "name" ) ) {
@@ -732,8 +737,8 @@ void InsertRouteA( Route *pTentRoute )
                         if( ip )
                             pSelect->AddSelectableRouteSegment( prev_rlat, prev_rlon, prp->m_lat,
                                                                 prp->m_lon, prev_pConfPoint, prp, pTentRoute );
-                            
-                            prev_rlat = prp->m_lat;
+                        pSelect->AddSelectableRoutePoint(prp->m_lat, prp->m_lon, prp);
+                        prev_rlat = prp->m_lat;
                         prev_rlon = prp->m_lon;
                         prev_pConfPoint = prp;
                         
@@ -1012,7 +1017,7 @@ bool NavObjectCollection1::LoadAllGPXObjects()
     for (pugi::xml_node object = objects.first_child(); object; object = object.next_sibling())
     {
         if( !strcmp(object.name(), "wpt") ) {
-            RoutePoint *pWp = ::GPXLoadWaypoint1( object, _T("circle"), _T(""), true, false, false, 0 );
+            RoutePoint *pWp = ::GPXLoadWaypoint1( object, _T("circle"), _T(""), false, false, false, 0 );
             pWp->m_bIsolatedMark = true;      // This is an isolated mark
             
             if(pWp) {
@@ -1033,7 +1038,7 @@ bool NavObjectCollection1::LoadAllGPXObjects()
             }
             else
                 if( !strcmp(object.name(), "rte") ) {
-                    Route *pRoute = GPXLoadRoute1( object, true, false, false, 0 );
+                    Route *pRoute = GPXLoadRoute1( object, false, false, false, 0 );
                     InsertRouteA( pRoute );
                 }
                 
@@ -1155,7 +1160,7 @@ bool NavObjectChanges::ApplyChanges(void)
     for (pugi::xml_node object = objects.first_child(); object; object = object.next_sibling())
     {
         if( !strcmp(object.name(), "wpt") ) {
-            RoutePoint *pWp = ::GPXLoadWaypoint1( object, _T("circle"), _T(""), true, false, false, 0 );
+            RoutePoint *pWp = ::GPXLoadWaypoint1( object, _T("circle"), _T(""), false, false, false, 0 );
             
             if(pWp && pWayPointMan) {
                 pWp->m_bIsolatedMark = true;

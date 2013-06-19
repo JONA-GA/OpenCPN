@@ -206,7 +206,7 @@ void grib_pi::ShowPreferencesDialog( wxWindow* parent )
     Pref->m_rbTimeFormat->SetSelection( m_bTimeZone );
     Pref->m_rbStartOptions->SetSelection( m_bLoadLastOpenFile );
 
-    // TODO: update m_bMailAdresse
+    // TODO: update m_bMailAddresses
 
      if( Pref->ShowModal() == wxID_OK ) {
          m_bGRIBUseHiDef= Pref->m_cbUseHiDef->GetValue();
@@ -256,7 +256,9 @@ void grib_pi::OnToolbarToolCallback(int id)
     if(!m_pGribDialog)
     {
         m_pGribDialog = new GRIBUIDialog(m_parent_window, this);
-        m_pGribDialog->Move(wxPoint(m_grib_dialog_x, m_grib_dialog_y));
+        wxPoint p = wxPoint(m_grib_dialog_x, m_grib_dialog_y);
+        m_pGribDialog->Move(0,0);        // workaround for gtk autocentre dialog behavior
+        m_pGribDialog->Move(p);
 
         // Create the drawing factory
         m_pGRIBOverlayFactory = new GRIBOverlayFactory( *m_pGribDialog );
@@ -319,27 +321,25 @@ void grib_pi::OnToolbarToolCallback(int id)
       // Toggle is handled by the toolbar but we must keep plugin manager b_toggle updated
       // to actual status to ensure correct status upon toolbar rebuild
       SetToolbarItemState( m_leftclick_tool_id, m_bShowGrib );
-
+/*
       wxPoint p = m_pGribDialog->GetPosition();
       m_pGribDialog->Move(0,0);        // workaround for gtk autocentre dialog behavior
       m_pGribDialog->Move(p);
-
+*/
       RequestRefresh(m_parent_window); // refresh mainn window
 }
 
 void grib_pi::OnGribDialogClose()
 {
-    SetToolbarItemState( m_leftclick_tool_id, false );
+    m_bShowGrib = false;
+    SetToolbarItemState( m_leftclick_tool_id, m_bShowGrib );
 
-    if(m_pGribDialog)
-        m_pGribDialog->Hide();
+    m_pGribDialog->Hide();
 
     SaveConfig();
-//      m_pGribDialog->SetGribRecordSet( NULL );          //clear the screen
+     
+    RequestRefresh(m_parent_window); // refresh mainn window
 
-      m_bShowGrib = false;
-
-      SaveConfig();
 }
 
 bool grib_pi::RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp)
@@ -433,13 +433,15 @@ bool grib_pi::LoadConfig(void)
     pConf->Read ( _T( "GRIBTimeZone" ), &m_bTimeZone, 1 );
     pConf->Read ( _T( "CopyFirstCumulativeRecord" ), &m_bCopyFirstCumRec, 1 );
     pConf->Read ( _T( "CopyMissingWaveRecord" ), &m_bCopyMissWaveRec, 1 );
-    pConf->Read ( _T( "MailRequestConfig" ), &m_RequestConfig, _T( "000220XX......" ) );
-    pConf->Read ( _T( "MailRequestAdesse" ), &m_bMailAdresse, _T("query@saildocs.com") );
+    pConf->Read ( _T( "MailRequestConfig" ), &m_RequestConfig, _T( "000220XX......." ) );
+    pConf->Read ( _T( "MailRequestAddresses" ), &m_bMailAddresses, _T("query@saildocs.com;gribauto@zygrib.org") );
+    pConf->Read ( _T( "ZyGribLogin" ), &m_ZyGribLogin, _T("") );
+    pConf->Read ( _T( "ZyGribCode" ), &m_ZyGribCode, _T("") );
 
 
     //if GriDataConfig has been corrupted , take the standard one to fix a crash
-    if( m_RequestConfig.Len() != wxString (_T( "000220XX......" ) ).Len() )
-        m_RequestConfig = _T( "000220XX......" );
+    if( m_RequestConfig.Len() != wxString (_T( "000220XX......." ) ).Len() )
+        m_RequestConfig = _T( "000220XX......." );
 
     m_grib_dialog_sx = pConf->Read ( _T ( "GRIBDialogSizeX" ), 300L );
     m_grib_dialog_sy = pConf->Read ( _T ( "GRIBDialogSizeY" ), 540L );
@@ -466,7 +468,9 @@ bool grib_pi::SaveConfig(void)
     pConf->Write ( _T ( "CopyFirstCumulativeRecord" ), m_bCopyFirstCumRec );
     pConf->Write ( _T ( "CopyMissingWaveRecord" ), m_bCopyMissWaveRec );
     pConf->Write ( _T ( "MailRequestConfig" ), m_RequestConfig );
-    pConf->Write ( _T( "MailRequestAdesse" ), m_bMailAdresse );
+    pConf->Write ( _T( "MailRequestAddresses" ), m_bMailAddresses );
+    pConf->Write ( _T( "ZyGribLogin" ), m_ZyGribLogin );
+    pConf->Write ( _T( "ZyGribCode" ), m_ZyGribCode );
 
 
     pConf->Write ( _T ( "GRIBDialogSizeX" ),  m_grib_dialog_sx );

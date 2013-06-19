@@ -281,6 +281,32 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir)
         return false;
 }
 
+bool PlugInManager::CallLateInit(void)
+{
+    bool bret = true;
+
+    for(unsigned int i = 0 ; i < plugin_array.GetCount() ; i++)
+    {
+        PlugInContainer *pic = plugin_array.Item(i);
+
+        switch(pic->m_api_version)
+        {
+            case 110:
+                if(pic->m_cap_flag & WANTS_LATE_INIT) {
+                    wxString msg(_T("PlugInManager: Calling LateInit PlugIn: "));
+                    msg += pic->m_plugin_file;
+                    wxLogMessage(msg);
+
+                    opencpn_plugin_110* ppi = dynamic_cast<opencpn_plugin_110*>(pic->m_pplugin);
+                    ppi->LateInit();
+                    }
+                break;
+        }
+    }
+
+    return bret;
+}
+
 bool PlugInManager::UpdatePlugIns()
 {
     bool bret = false;
@@ -564,6 +590,10 @@ PlugInContainer *PlugInManager::LoadPlugIn(wxString plugin_file)
         pic->m_pplugin = dynamic_cast<opencpn_plugin_19*>(plug_in);
         break;
 
+    case 110:
+        pic->m_pplugin = dynamic_cast<opencpn_plugin_110*>(plug_in);
+        break;
+        
     default:
         break;
     }
@@ -621,6 +651,7 @@ bool PlugInManager::RenderAllCanvasOverlayPlugIns( ocpnDC &dc, const ViewPort &v
                     }
                     case 108:
                     case 109:
+                    case 110:
                     {
                         opencpn_plugin_18 *ppi = dynamic_cast<opencpn_plugin_18 *>(pic->m_pplugin);
                         if(ppi)
@@ -669,6 +700,7 @@ bool PlugInManager::RenderAllCanvasOverlayPlugIns( ocpnDC &dc, const ViewPort &v
                     }
                     case 108:
                     case 109:
+                    case 110:
                     {
                         opencpn_plugin_18 *ppi = dynamic_cast<opencpn_plugin_18 *>(pic->m_pplugin);
                         if(ppi)
@@ -727,6 +759,7 @@ bool PlugInManager::RenderAllGLCanvasOverlayPlugIns( wxGLContext *pcontext, cons
 
                 case 108:
                 case 109:
+                case 110:
                 {
                     opencpn_plugin_18 *ppi = dynamic_cast<opencpn_plugin_18 *>(pic->m_pplugin);
                     if(ppi)
@@ -782,6 +815,7 @@ void NotifySetupOptionsPlugin( PlugInContainer *pic )
             switch(pic->m_api_version)
             {
             case 109:
+            case 110:
             {
                 opencpn_plugin_19 *ppi = dynamic_cast<opencpn_plugin_19 *>(pic->m_pplugin);
                 if(ppi) {
@@ -941,6 +975,7 @@ void PlugInManager::SendMessageToAllPlugins(const wxString &message_id, const wx
                 }
                 case 108:
                 case 109:
+                case 110:
                 {
                     opencpn_plugin_18 *ppi = dynamic_cast<opencpn_plugin_18 *>(pic->m_pplugin);
                     if(ppi)
@@ -1015,6 +1050,7 @@ void PlugInManager::SendPositionFixToAllPlugIns(GenericPosDatEx *ppos)
                 {
                 case 108:
                 case 109:
+                case 110:
                 {
                     opencpn_plugin_18 *ppi = dynamic_cast<opencpn_plugin_18 *>(pic->m_pplugin);
                     if(ppi)
@@ -2393,6 +2429,21 @@ opencpn_plugin_19::~opencpn_plugin_19(void)
 void opencpn_plugin_19::OnSetupOptions(void)
 {
 }
+
+//    Opencpn_Plugin_110 Implementation
+opencpn_plugin_110::opencpn_plugin_110(void *pmgr)
+: opencpn_plugin_19(pmgr)
+{
+}
+
+opencpn_plugin_110::~opencpn_plugin_110(void)
+{
+}
+
+void opencpn_plugin_110::LateInit(void)
+{
+}
+
 
 
 //          Helper and interface classes

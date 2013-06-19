@@ -42,6 +42,9 @@
 #if wxCHECK_VERSION(2,9,4) /* does this work in 2.8 too.. do we need a test? */
 #include <wx/renderer.h>
 #endif
+#ifdef __WXGTK__
+#include <wx/colordlg.h>
+#endif
 
 #include "dychart.h"
 #include "chart1.h"
@@ -239,6 +242,9 @@ BEGIN_EVENT_TABLE( options, wxDialog )
     EVT_BUTTON( xID_OK, options::OnXidOkClick )
     EVT_BUTTON( wxID_CANCEL, options::OnCancelClick )
     EVT_BUTTON( ID_BUTTONFONTCHOOSE, options::OnChooseFont )
+#ifdef __WXGTK__
+    EVT_BUTTON( ID_BUTTONFONTCOLOR, options::OnChooseFontColor )
+#endif
     EVT_RADIOBOX(ID_RADARDISTUNIT, options::OnDisplayCategoryRadioButton )
     EVT_BUTTON( ID_CLEARLIST, options::OnButtonClearClick )
     EVT_BUTTON( ID_SELECTLIST, options::OnButtonSelectClick )
@@ -1113,6 +1119,10 @@ void options::CreatePanel_VectorCharts( size_t parent, int border_size, int grou
     pCheck_DECLTEXT->SetValue( FALSE );
     catSizer->Add( pCheck_DECLTEXT, 1, wxALL | wxEXPAND, group_item_spacing );
 
+    pCheck_NATIONALTEXT = new wxCheckBox( ps57Ctl, ID_NATIONALTEXTCHECKBOX, _("National text on chart") );
+    pCheck_NATIONALTEXT->SetValue( FALSE );
+    catSizer->Add( pCheck_NATIONALTEXT, 1, wxALL | wxEXPAND, group_item_spacing );
+
     wxBoxSizer* styleSizer = new wxBoxSizer( wxVERTICAL );
     vectorPanel->Add( styleSizer, 1, wxALL | wxEXPAND, 0 );
 
@@ -1625,7 +1635,11 @@ void options::CreatePanel_UI( size_t parent, int border_size, int group_item_spa
     wxButton* itemFontChooseButton = new wxButton( itemPanelFont, ID_BUTTONFONTCHOOSE,
             _("Choose Font..."), wxDefaultPosition, wxDefaultSize, 0 );
     itemFontStaticBoxSizer->Add( itemFontChooseButton, 0, wxALL, border_size );
-
+#ifdef __WXGTK__
+    wxButton* itemFontColorButton = new wxButton( itemPanelFont, ID_BUTTONFONTCOLOR,
+            _("Choose Font Color..."), wxDefaultPosition, wxDefaultSize, 0 );
+    itemFontStaticBoxSizer->Add( itemFontColorButton, 0, wxALL, border_size );
+#endif
     wxStaticBox* itemStyleStaticBox = new wxStaticBox( itemPanelFont, wxID_ANY,
             _("Toolbar and Window Style") );
     wxStaticBoxSizer* itemStyleStaticBoxSizer = new wxStaticBoxSizer( itemStyleStaticBox,
@@ -2100,6 +2114,7 @@ void options::SetInitialSettings()
         pCheck_LDISTEXT->SetValue( ps52plib->m_bShowLdisText );
         pCheck_XLSECTTEXT->SetValue( ps52plib->m_bExtendLightSectors );
         pCheck_DECLTEXT->SetValue( ps52plib->m_bDeClutterText );
+        pCheck_NATIONALTEXT->SetValue( ps52plib->m_bShowNationalTexts );
 
         // Chart Display Style
         if( ps52plib->m_nSymbolStyle == PAPER_CHART ) pPointStyle->SetSelection( 0 );
@@ -2679,6 +2694,7 @@ void options::OnApplyClick( wxCommandEvent& event )
         ps52plib->m_bShowLdisText = pCheck_LDISTEXT->GetValue();
         ps52plib->m_bExtendLightSectors = pCheck_XLSECTTEXT->GetValue();
         ps52plib->m_bDeClutterText = pCheck_DECLTEXT->GetValue();
+        ps52plib->m_bShowNationalTexts = pCheck_NATIONALTEXT->GetValue();
 
         if( 0 == pPointStyle->GetSelection() ) ps52plib->m_nSymbolStyle = PAPER_CHART;
         else
@@ -2892,6 +2908,35 @@ void options::OnChooseFont( wxCommandEvent& event )
 
     event.Skip();
 }
+
+#ifdef __WXGTK__
+void options::OnChooseFontColor( wxCommandEvent& event )
+{
+    wxString sel_text_element = m_itemFontElementListBox->GetStringSelection();
+
+    wxColourData colour_data;
+
+    wxFont *pif = FontMgr::Get().GetFont( sel_text_element );
+    wxColour init_color = FontMgr::Get().GetFontColor( sel_text_element );
+
+    wxColourData init_colour_data;
+    init_colour_data.SetColour( init_color );
+
+    wxColourDialog dg( pParent, &init_colour_data );
+
+    int retval = dg.ShowModal();
+    if( wxID_CANCEL != retval ) {
+        colour_data = dg.GetColourData();
+
+        wxColor color = colour_data.GetColour();
+        FontMgr::Get().SetFont( sel_text_element, pif, color );
+
+        pParent->UpdateAllFonts();
+    }
+
+    event.Skip();
+}
+#endif
 
 void options::OnChartsPageChange( wxListbookEvent& event )
 {

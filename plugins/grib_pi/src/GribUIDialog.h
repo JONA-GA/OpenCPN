@@ -142,6 +142,7 @@ private:
 
     wxString         m_file_name;   /* selected file */
     wxString         m_grib_dir;
+    wxBitmap         *m_bPlay;
 };
 
 //----------------------------------------------------------------------------------------------------------
@@ -183,25 +184,38 @@ private:
     int m_nGribRecords;
 };
 
+//----------------------------------------------------------------------------------------------------------
+//    Request setting Specification
+//----------------------------------------------------------------------------------------------------------
 class GribRequestSetting : public GribRequestSettingBase
 {
 public:
-      GribRequestSetting( wxWindow *parent, wxString config, wxString zone, wxString adress )
+      GribRequestSetting( wxWindow *parent, wxString config, int latmax, int latmin, int lonmin,
+          int lonmax, wxString address, wxString login, wxString code)
           : GribRequestSettingBase(parent)
-      {m_RequestConfigBase = config; m_RequestZoneBase = zone; m_MailAdressBase = adress; InitRequestConfig();}
+      {m_RequestConfigBase = config; m_LatmaxBase = latmax;  m_LatminBase = latmin;  m_LonminBase = lonmin;  m_LonmaxBase = lonmax; 
+          m_MailAddressBase = address; m_pLogin->ChangeValue(login); m_pCode->ChangeValue(code); InitRequestConfig();}
 
       ~GribRequestSetting() {}
+      wxString m_RequestConfigBase;
+      wxString m_MailAddressBase;
+      int m_LatmaxBase;
+      int m_LatminBase;
+      int m_LonminBase;
+      int m_LonmaxBase;
       
 private:
       void InitRequestConfig();
       void ApplyRequestConfig( int sel1, int sel2 );
       wxString WriteMail();
+      bool EstimateFileSize();
 
-      void OnModelChange(wxCommandEvent &event);
+      void OnTopChange(wxCommandEvent &event);
       void OnAnyChange( wxCommandEvent& event );
       void OnSendMaiL( wxCommandEvent& event );
-};
+      void OnSaveMail( wxCommandEvent& event ) { this->EndModal(wxID_APPLY); }
 
+};
 
 #endif
 

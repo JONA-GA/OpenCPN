@@ -298,6 +298,9 @@ int gamma_state;
 bool g_brightness_init;
 int   last_brightness;
 
+int                      g_cog_predictor_width;
+int                      g_ais_cog_predictor_width;
+
 // "Curtain" mode parameters
 wxDialog                *g_pcurtain;
 
@@ -1841,6 +1844,18 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
             break;
         }
 
+        case 14:             // Ctrl N - Activate next waypoint in a route
+        {
+            if( Route * r = g_pRouteMan->GetpActiveRoute() ) {
+                int indexActive = r->GetIndexOf( r->m_pRouteActivePoint );
+                if( ( indexActive + 1 ) <= r->GetnPoints() ) {
+                    g_pRouteMan->ActivateNextPoint( r, true );
+                    Refresh( false );
+                }
+            }
+            break;
+        }
+
         case 32:             // Space                      //    Drop Marker at boat's position;
         {
             RoutePoint *pWP = new RoutePoint( gLat, gLon, g_default_wp_icon, wxEmptyString,
@@ -3276,22 +3291,23 @@ void ChartCanvas::ShipDraw( ocpnDC& dc )
         //            if( wxIsNaN(gCog) )
         //                pred_colour = GetGlobalColor( _T ( "GREY1" ) );
 
-                wxPen ppPen2( pred_colour, 3, wxUSER_DASH );
+                wxPen ppPen2( pred_colour, g_cog_predictor_width, wxUSER_DASH );
                 ppPen2.SetDashes( 2, dash_long );
                 dc.SetPen( ppPen2 );
                 dc.StrokeLine( lGPSPoint.x + GPSOffsetPixels.x, lGPSPoint.y + GPSOffsetPixels.y,
                                 lPredPoint.x + GPSOffsetPixels.x, lPredPoint.y + GPSOffsetPixels.y );
 
                 wxDash dash_long3[2];
-                dash_long3[0] = 3 * dash_long[0];
-                dash_long3[1] = 3 * dash_long[1];
+                dash_long3[0] = g_cog_predictor_width * dash_long[0];
+                dash_long3[1] = g_cog_predictor_width * dash_long[1];
 
-                wxPen ppPen3( GetGlobalColor( _T ( "UBLCK" ) ), 1, wxUSER_DASH );
-                ppPen3.SetDashes( 2, dash_long3 );
-                dc.SetPen( ppPen3 );
-                dc.StrokeLine( lGPSPoint.x + GPSOffsetPixels.x, lGPSPoint.y + GPSOffsetPixels.y,
-                                lPredPoint.x + GPSOffsetPixels.x, lPredPoint.y + GPSOffsetPixels.y );
-
+                if( g_cog_predictor_width > 1 ) {
+                    wxPen ppPen3( GetGlobalColor( _T ( "UBLCK" ) ), 1, wxUSER_DASH );
+                    ppPen3.SetDashes( 2, dash_long3 );
+                    dc.SetPen( ppPen3 );
+                    dc.StrokeLine( lGPSPoint.x + GPSOffsetPixels.x, lGPSPoint.y + GPSOffsetPixels.y,
+                                    lPredPoint.x + GPSOffsetPixels.x, lPredPoint.y + GPSOffsetPixels.y );
+                }
                 wxPen ppPen1( GetGlobalColor( _T ( "UBLCK" ) ), 1, wxSOLID );
                 dc.SetPen( ppPen1 );
                 dc.SetBrush( wxBrush( pred_colour ) ); //*wxWHITE_BRUSH);
@@ -3996,9 +4012,9 @@ void ChartCanvas::AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
             GetCanvasPointPix( ocpa_lat, ocpa_lon, &oCPAPoint );
             GetCanvasPointPix( tcpa_lat, tcpa_lon, &tCPAPoint );
 
-            //        Save a copy of these
-            wxPoint oCPAPoint_sav = oCPAPoint;
-            wxPoint tCPAPoint_sav = tCPAPoint;
+            //        Save a copy of these unclipped points
+            wxPoint oCPAPoint_unclipped = oCPAPoint;
+            wxPoint tCPAPoint_unclipped = tCPAPoint;
 
             //  Draw a line from target CPA point to ownship CPA point
             ClipResult ores = cohen_sutherland_line_clip_i( &tCPAPoint.x, &tCPAPoint.y,
@@ -4020,14 +4036,18 @@ void ChartCanvas::AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                 dc.SetPen( wxPen( GetGlobalColor( _T ( "UBLK" ) ) ) );
 
                 //  Using the true ends, not the clipped ends
-                dc.StrokeCircle( tCPAPoint_sav.x, tCPAPoint_sav.y, 5 );
-                dc.StrokeCircle( oCPAPoint_sav.x, oCPAPoint_sav.y, 5 );
+                dc.StrokeCircle( tCPAPoint_unclipped.x, tCPAPoint_unclipped.y, 5 );
+                dc.StrokeCircle( oCPAPoint_unclipped.x, oCPAPoint_unclipped.y, 5 );
             }
 
             // Draw the intercept line from ownship
             wxPoint oShipPoint;
             GetCanvasPointPix ( gLat, gLon, &oShipPoint );
-            ClipResult ownres = cohen_sutherland_line_clip_i ( &oShipPoint.x, &oShipPoint.y, &oCPAPoint.x, &oCPAPoint.y, 0, GetVP().pix_width, 0, GetVP().pix_height );
+            oCPAPoint = oCPAPoint_unclipped;    // recover the unclipped point
+            
+            ClipResult ownres = cohen_sutherland_line_clip_i ( &oShipPoint.x, &oShipPoint.y,
+                                                               &oCPAPoint.x, &oCPAPoint.y,
+                                                               0, GetVP().pix_width, 0, GetVP().pix_height );
 
             if ( ownres != Invisible ) {
                 wxPen ppPen2 ( GetGlobalColor ( _T ( "URED" )), 2, wxUSER_DASH );
@@ -4072,15 +4092,17 @@ void ChartCanvas::AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                                  GetVP().pix_width, 0, GetVP().pix_height );
 
                 if( ( res != Invisible ) && ( td->b_active ) ) {
-                    //    Draw a 3 pixel wide line
-                    wxPen wide_pen( target_brush.GetColour(), 3 );
+                    //    Draw a wider coloured line
+                    wxPen wide_pen( target_brush.GetColour(), g_ais_cog_predictor_width );
                     dc.SetPen( wide_pen );
                     dc.StrokeLine( pixx, pixy, pixx1, pixy1 );
 
-                    //    Draw a 1 pixel wide black line
-                    wxPen narrow_pen( GetGlobalColor( _T ( "UBLCK" ) ), 1 );
-                    dc.SetPen( narrow_pen );
-                    dc.StrokeLine( pixx, pixy, pixx1, pixy1 );
+                    if( g_ais_cog_predictor_width > 1 ) {
+                        //    Draw a 1 pixel wide black line
+                        wxPen narrow_pen( GetGlobalColor( _T ( "UBLCK" ) ), 1 );
+                        dc.SetPen( narrow_pen );
+                        dc.StrokeLine( pixx, pixy, pixx1, pixy1 );
+                    }
 
                     dc.SetBrush( target_brush );
                     dc.StrokeCircle( PredPoint.x, PredPoint.y, 5 );
@@ -4318,7 +4340,7 @@ void ChartCanvas::AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
 
                 if ( tgt_name != wxEmptyString ) {
                     dc.SetFont( *FontMgr::Get().GetFont( _( "AIS Target Name" ), 12 ) );
-                    dc.SetTextForeground( FontMgr::Get().GetFontColor( _T( "AIS Target Name" ) ) );
+                    dc.SetTextForeground( FontMgr::Get().GetFontColor( _( "AIS Target Name" ) ) );
 
                     int w, h;
                     dc.GetTextExtent( tgt_name, &w, &h );
@@ -6570,9 +6592,10 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
         }
 
         wxColor bg = g_pObjectQueryDialog->GetBackgroundColour();
+        wxColor fg = FontMgr::Get().GetFontColor( _("ObjectQuery") );
 
-        objText.Printf( _T("<html><body bgcolor=#%02x%02x%02x><font face="), bg.Red(), bg.Blue(),
-                        bg.Green() );
+        objText.Printf( _T("<html><body bgcolor=#%02x%02x%02x><font color=#%02x%02x%02x face="), bg.Red(), bg.Blue(),
+                        bg.Green(), fg.Red(), fg.Blue(), fg.Green() );
         objText += _T("\"");
         objText += face;
         objText += _T("\">");
@@ -9268,7 +9291,7 @@ void ChartCanvas::DrawAllTidesInBBox( ocpnDC& dc, LLBBox& BBox, bool bRebuildSel
     wxBrush *brc_2 = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T ( "YELO1" ) ), wxSOLID );
 
     wxFont *dFont = FontMgr::Get().GetFont( _("ExtendedTideIcon"), 12 );
-    dc.SetTextForeground( FontMgr::Get().GetFontColor( _T("ExtendedTideIcon") ) );
+    dc.SetTextForeground( FontMgr::Get().GetFontColor( _("ExtendedTideIcon") ) );
     int font_size = wxMax(8, dFont->GetPointSize());
     wxFont *plabelFont = wxTheFontList->FindOrCreateFont( font_size, dFont->GetFamily(),
                          dFont->GetStyle(), dFont->GetWeight() );

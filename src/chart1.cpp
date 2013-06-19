@@ -1642,7 +1642,7 @@ if( 0 == g_memCacheLimit )
 
 
     g_StartTime = wxInvalidDateTime;
-    g_StartTimeTZ = 1;				// start with local times
+    g_StartTimeTZ = 1;                // start with local times
     gpIDX = NULL;
     gpIDXn = 0;
 
@@ -2021,11 +2021,11 @@ if( 0 == g_memCacheLimit )
 //        gFrame->MemFootTimer.Start(1000, wxTIMER_CONTINUOUS);
 
     // Import Layer-wise any .gpx files from /Layers directory
-    wxString layerdir = g_PrivateDataDir; 
+    wxString layerdir = g_PrivateDataDir;
     appendOSDirSlash( &layerdir );
     layerdir.Append( _T("layers") );
 
-#if 0    
+#if 0
     wxArrayString file_array;
     g_LayerIdx = 0;
 
@@ -2057,7 +2057,7 @@ if( 0 == g_memCacheLimit )
         wxString laymsg;
         laymsg.Printf( wxT("Getting .gpx layer files from: %s"), layerdir.c_str() );
         wxLogMessage( laymsg );
-        
+
         pConfig->LoadLayers(layerdir);
     }
 
@@ -2090,6 +2090,9 @@ if( 0 == g_memCacheLimit )
             gFrame->m_bdefer_resize = true;
         }
     }
+
+    g_pi_manager->CallLateInit();
+
     return TRUE;
 }
 
@@ -3649,6 +3652,11 @@ void MyFrame::ActivateMOB( void )
 
         if( g_pRouteMan->GetpActiveRoute() ) g_pRouteMan->DeactivateRoute();
         g_pRouteMan->ActivateRoute( temp_route, pWP_MOB );
+
+        wxJSONValue v;
+        v[_T("GUID")] = temp_route->m_GUID;
+        wxString msg_id( _T("OCPN_MAN_OVERBOARD") );
+        g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
     }
 
     if( pRouteManagerDialog && pRouteManagerDialog->IsShown() ) {
@@ -3676,33 +3684,63 @@ void MyFrame::TrackOn( void )
     pRouteList->Append( g_pActiveTrack );
     g_pActiveTrack->Start();
 
-    if( g_toolbar ) g_toolbar->ToggleTool( ID_TRACK, g_bTrackActive );
+    if( g_toolbar )
+        g_toolbar->ToggleTool( ID_TRACK, g_bTrackActive );
 
+    if( pRouteManagerDialog && pRouteManagerDialog->IsShown() )
+    {
+        pRouteManagerDialog->UpdateTrkListCtrl();
+        pRouteManagerDialog->UpdateRouteListCtrl();
+    }
+
+    wxJSONValue v;
+    wxDateTime now;
+    now = now.Now().ToUTC();
+    wxString name = g_pActiveTrack->m_RouteNameString;
+    if(name.IsEmpty())
+    {
+        RoutePoint *rp = g_pActiveTrack->GetPoint( 1 );
+        if( rp && rp->GetCreateTime().IsValid() )
+            name = rp->GetCreateTime().FormatISODate() + _T(" ") + rp->GetCreateTime().FormatISOTime();   
+        else
+            name = _("(Unnamed Track)");
+    }
+    v[_T("Name")] = name;
+    v[_T("GUID")] = g_pActiveTrack->m_GUID;
+    wxString msg_id( _T("OCPN_TRK_ACTIVATED") );
+    g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
 }
 
 void MyFrame::TrackOff( bool do_add_point )
 {
-    if( g_pActiveTrack ) {
+    if( g_pActiveTrack )
+    {
+        wxJSONValue v;
+        wxString msg_id( _T("OCPN_TRK_DEACTIVATED") );
+        v[_T("GUID")] = g_pActiveTrack->m_GUID;
+        g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+
         g_pActiveTrack->Stop( do_add_point );
 
-        if( g_pActiveTrack->GetnPoints() < 2 ) g_pRouteMan->DeleteRoute( g_pActiveTrack );
+        if( g_pActiveTrack->GetnPoints() < 2 )
+            g_pRouteMan->DeleteRoute( g_pActiveTrack );
         else
-            if( g_bTrackDaily ) {
-                if( g_pActiveTrack->DoExtendDaily() ) g_pRouteMan->DeleteRoute( g_pActiveTrack );
-            }
-
+            if( g_bTrackDaily && g_pActiveTrack->DoExtendDaily() )
+                g_pRouteMan->DeleteRoute( g_pActiveTrack );
     }
 
     g_pActiveTrack = NULL;
 
     g_bTrackActive = false;
 
-    if( pRouteManagerDialog && pRouteManagerDialog->IsShown() ) {
+    if( pRouteManagerDialog && pRouteManagerDialog->IsShown() )
+    {
         pRouteManagerDialog->UpdateTrkListCtrl();
         pRouteManagerDialog->UpdateRouteListCtrl();
     }
 
-    if( g_toolbar ) g_toolbar->ToggleTool( ID_TRACK, g_bTrackActive );
+    if( g_toolbar )
+        g_toolbar->ToggleTool( ID_TRACK, g_bTrackActive );
 }
 
 void MyFrame::TrackMidnightRestart( void )
@@ -6458,8 +6496,10 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
 
     //  We can possibly use the estimated magnetic variation if WMM_pi is present and active
     //  and we have no other source of Variation
-    if(!g_bVAR_Rx) {
-        if(message_ID == _T("WMM_VARIATION_BOAT")) {
+    if(!g_bVAR_Rx) 
+    {
+        if(message_ID == _T("WMM_VARIATION_BOAT"))
+        {
 
         // construct the JSON root object
             wxJSONValue  root;
@@ -6480,6 +6520,192 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
             decl.ToDouble(&decl_val);
 
             gVar = decl_val;
+        }
+    }
+
+    if(message_ID == _T("OCPN_TRACK_REQUEST"))
+    {
+        wxJSONValue  root;
+        wxJSONReader reader;
+        wxString trk_id = wxEmptyString;
+
+        int numErrors = reader.Parse( message_JSONText, &root );
+        if ( numErrors > 0 )
+            return;
+
+        if(root.HasMember(_T("Track_ID")))
+            trk_id = root[_T("Track_ID")].AsString();
+
+        for(RouteList::iterator it = pRouteList->begin(); it != pRouteList->end(); it++)
+        {
+            wxString name = wxEmptyString;
+            if((*it)->IsTrack() && (*it)->m_GUID == trk_id)
+            {
+                name = (*it)->m_RouteNameString;
+                if(name.IsEmpty())
+                {
+                    RoutePoint *rp = (*it)->GetPoint( 1 );
+                    if( rp && rp->GetCreateTime().IsValid() )
+                        name = rp->GetCreateTime().FormatISODate() + _T(" ") + rp->GetCreateTime().FormatISOTime();   
+                    else
+                        name = _("(Unnamed Track)");
+                }
+
+/*                Tracks can be huge e.g merged tracks. On Compüters with small memory this can produce a crash by insufficient memory !!
+
+                wxJSONValue v; unsigned long i = 0;
+                for(RoutePointList::iterator itp = (*it)->pRoutePointList->begin(); itp != (*it)->pRoutePointList->end(); itp++)
+                {
+                    v[i][0] = (*itp)->m_lat;
+                    v[i][1] = (*itp)->m_lon;
+                    i++;                    
+                }
+                    wxString msg_id( _T("OCPN_TRACKPOINTS_COORDS") );
+                    g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+            }
+*/
+/*                To avoid memory problems send a single trackpoint. It's up to the plugin to collect the data. */
+                int i = 1;     wxJSONValue v;
+                for(RoutePointList::iterator itp = (*it)->pRoutePointList->begin(); itp != (*it)->pRoutePointList->end(); itp++)
+                {
+                    v[_T("lat")] = (*itp)->m_lat;
+                    v[_T("lon")] = (*itp)->m_lon;
+                    v[_T("TotalNodes")] = (*it)->pRoutePointList->GetCount();
+                    v[_T("NodeNr")] = i;
+                    v[_T("error")] = false;
+                    i++;
+                    wxString msg_id( _T("OCPN_TRACKPOINTS_COORDS") );
+                    g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+                }
+            }
+            else
+            {
+                wxJSONValue v;
+                v[_T("error")] = true;
+
+                wxString msg_id( _T("OCPN_TRACKPOINTS_COORDS") );
+                g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+            }
+        }
+    }
+    else if(message_ID == _T("OCPN_ROUTE_REQUEST"))
+    {
+        wxJSONValue  root;
+        wxJSONReader reader;
+        wxString route_id = wxEmptyString;
+
+        int numErrors = reader.Parse( message_JSONText, &root );
+        if ( numErrors > 0 )  {
+            return;
+        }
+
+        if(root.HasMember(_T("Route_ID")))
+            route_id = root[_T("Route_ID")].AsString();
+
+        for(RouteList::iterator it = pRouteList->begin(); it != pRouteList->end(); it++)
+        {
+            wxString name = wxEmptyString;
+            wxJSONValue v;
+
+            if(!(*it)->IsTrack() && (*it)->m_GUID == route_id)
+            {
+                name = (*it)->m_RouteNameString;
+                if(name.IsEmpty())
+                    name = _("(Unnamed Route)");
+
+                v[_T("Name")] = name;
+
+                wxJSONValue v; int i = 0;
+                for(RoutePointList::iterator itp = (*it)->pRoutePointList->begin(); itp != (*it)->pRoutePointList->end(); itp++)
+                {
+                    v[i][_T("error")] = false;
+                    v[i][_T("lat")] = (*itp)->m_lat;
+                    v[i][_T("lon")] = (*itp)->m_lon;
+                    v[i][_T("WPName")] = (*itp)->GetName();
+                    v[i][_T("WPDescription")] = (*itp)->GetDescription();
+                    wxHyperlinkListNode *node = (*itp)->m_HyperlinkList->GetFirst();
+                    if(node)
+                    {
+                        int n = 1;
+                        while(node)
+                        {
+                            Hyperlink *httpLink = node->GetData();
+                            v[i][_T("WPLink")+wxString::Format(_T("%d"),n)] = httpLink->Link;
+                            v[i][_T("WPLinkDesciption")+wxString::Format(_T("%d"),n++)] = httpLink->DescrText;
+                            node = node->GetNext();
+                        }
+                    }
+                    i++;                    
+                }
+                wxString msg_id( _T("OCPN_ROUTE_RESPONSE") );
+                g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+            }
+            else
+            {
+                wxJSONValue v;
+                v[0][_T("error")] = true;
+
+                wxString msg_id( _T("OCPN_ROUTE_RESPONSE") );
+                g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+            }
+        }
+    }
+    else if(message_ID == _T("OCPN_ROUTELIST_REQUEST"))
+    {
+        wxJSONValue  root;
+        wxJSONReader reader;
+        bool mode = true, error = false;
+
+        int numErrors = reader.Parse( message_JSONText, &root );
+        if ( numErrors > 0 )
+            return;
+
+        if(root.HasMember(_T("mode")))
+        {
+            wxString str = root[_T("mode")].AsString();
+            if( str == _T("Track")) mode = false;
+
+            wxJSONValue v; int i = 1;
+            for(RouteList::iterator it = pRouteList->begin(); it != pRouteList->end(); it++)
+            {
+                if((*it)->IsTrack())
+                    if(mode == true) continue;
+                if(!(*it)->IsTrack())
+                    if(mode == false) continue;
+                v[0][_T("isTrack")] = !mode;
+                
+                wxString name = (*it)->m_RouteNameString;
+                if(name.IsEmpty() && !mode)
+                {
+                    RoutePoint *rp = (*it)->GetPoint( 1 );
+                    if( rp && rp->GetCreateTime().IsValid() ) name = rp->GetCreateTime().FormatISODate() + _T(" ")
+                        + rp->GetCreateTime().FormatISOTime();
+                    else
+                        name = _("(Unnamed Track)");
+                }
+                else if(name.IsEmpty() && mode)
+                    name = _("(Unnamed Route)");
+                    
+
+                v[i][_T("error")] = false;
+                v[i][_T("name")] = name;
+                v[i][_T("GUID")] = (*it)->m_GUID;
+                bool l = (*it)->IsTrack();
+                if(g_pActiveTrack == (*it) && !mode)
+                    v[i][_T("active")] = true;
+                else
+                    v[i][_T("active")] = (*it)->IsActive();
+                i++;
+            }
+            wxString msg_id( _T("OCPN_ROUTELIST_RESPONSE") );
+            g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
+        }
+        else
+        {
+            wxJSONValue v;
+            v[0][_T("error")] = true;
+            wxString msg_id( _T("OCPN_ROUTELIST_RESPONSE") );
+            g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
         }
     }
 }
@@ -6519,7 +6745,8 @@ bool MyFrame::EvalPriority(const wxString & message, DataStream *pDS )
 
     //  If the message has been seen before, and the priority is greater than or equal to current priority,
     //  then simply update the record
-    if( stream_priority >= pcontainer->current_priority ) {
+    if( stream_priority >= pcontainer->current_priority )
+    {
         pcontainer->receipt_time = wxDateTime::Now();
         pcontainer-> current_priority = stream_priority;
         pcontainer->stream_name = stream_name;
@@ -6531,8 +6758,10 @@ bool MyFrame::EvalPriority(const wxString & message, DataStream *pDS )
     //  then if the time since the last recorded message is greater than GPS_TIMEOUT_SECONDS
     //  then update the record with the new priority and stream.
     //  Otherwise, ignore the message as too low a priority
-    else {
-        if( (wxDateTime::Now().GetTicks() - pcontainer->receipt_time.GetTicks()) > GPS_TIMEOUT_SECONDS ) {
+    else
+    {
+        if( (wxDateTime::Now().GetTicks() - pcontainer->receipt_time.GetTicks()) > GPS_TIMEOUT_SECONDS )
+        {
             pcontainer->receipt_time = wxDateTime::Now();
             pcontainer-> current_priority = stream_priority;
             pcontainer->stream_name = stream_name;
@@ -6546,14 +6775,16 @@ bool MyFrame::EvalPriority(const wxString & message, DataStream *pDS )
     wxString new_port = pcontainer->stream_name;
 
     //  If the data source or priority has changed for this message type, emit a log entry
-    if (pcontainer->current_priority != old_priority || new_port != old_port ) {
+    if (pcontainer->current_priority != old_priority || new_port != old_port )
+    {
          wxString logmsg = wxString::Format(_T("Changing NMEA Datasource for %s to %s (Priority: %i)"),
                                             msg_type.c_str(),
                                             new_port.c_str(),
                                             pcontainer->current_priority);
          wxLogMessage(logmsg );
 
-         if (NMEALogWindow::Get().Active()) {
+         if (NMEALogWindow::Get().Active())
+         {
              wxDateTime now = wxDateTime::Now();
              wxString ss = now.FormatISOTime();
              ss.Append( _T(" ") );
@@ -6576,7 +6807,8 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
 
     wxString str_buf = wxString(event.GetNMEAString().c_str(), wxConvUTF8);
 
-    if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
+    if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) )
+    {
         g_total_NMEAerror_messages++;
         wxString msg( _T("MEH.NMEA Sentence received...") );
         msg.Append( str_buf );
@@ -6587,9 +6819,12 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
     if( (str_buf[0] != '$')  &&  (str_buf[0] != '!') )
         return;
 
-    if( event.GetStream() ) {
-        if(!event.GetStream()->ChecksumOK(str_buf) ){
-            if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
+    if( event.GetStream() )
+    {
+        if(!event.GetStream()->ChecksumOK(str_buf) )
+        {
+            if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) )
+            {
                 g_total_NMEAerror_messages++;
                 wxString msg( _T(">>>>>>NMEA Sentence Checksum Bad...") );
                 msg.Append( str_buf );
@@ -6602,11 +6837,16 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
     bool b_accept = EvalPriority( str_buf, event.GetStream() );
     if( b_accept ) {
         m_NMEA0183 << str_buf;
-        if( m_NMEA0183.PreParse() ) {
-            if( m_NMEA0183.LastSentenceIDReceived == _T("RMC") ) {
-                if( m_NMEA0183.Parse() ) {
-                    if( m_NMEA0183.Rmc.IsDataValid == NTrue ) {
-                        if( !wxIsNaN(m_NMEA0183.Rmc.Position.Latitude.Latitude) ) {
+        if( m_NMEA0183.PreParse() )
+        {
+            if( m_NMEA0183.LastSentenceIDReceived == _T("RMC") )
+            {
+                if( m_NMEA0183.Parse() )
+                {
+                    if( m_NMEA0183.Rmc.IsDataValid == NTrue )
+                    {
+                        if( !wxIsNaN(m_NMEA0183.Rmc.Position.Latitude.Latitude) )
+                        {
                             double llt = m_NMEA0183.Rmc.Position.Latitude.Latitude;
                             int lat_deg_int = (int) ( llt / 100 );
                             double lat_deg = lat_deg_int;
@@ -6617,13 +6857,15 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                         else
                             ll_valid = false;
 
-                        if( !wxIsNaN(m_NMEA0183.Rmc.Position.Longitude.Longitude) ) {
+                        if( !wxIsNaN(m_NMEA0183.Rmc.Position.Longitude.Longitude) )
+                        {
                             double lln = m_NMEA0183.Rmc.Position.Longitude.Longitude;
                             int lon_deg_int = (int) ( lln / 100 );
                             double lon_deg = lon_deg_int;
                             double lon_min = lln - ( lon_deg * 100 );
                             gLon = lon_deg + ( lon_min / 60. );
-                            if( m_NMEA0183.Rmc.Position.Longitude.Easting == West ) gLon = -gLon;
+                            if( m_NMEA0183.Rmc.Position.Longitude.Easting == West )
+                                gLon = -gLon;
                         }
                         else
                             ll_valid = false;
@@ -6631,60 +6873,67 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                         gSog = m_NMEA0183.Rmc.SpeedOverGroundKnots;
                         gCog = m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue;
 
-                        if( !wxIsNaN(m_NMEA0183.Rmc.MagneticVariation) ) {
-                            if( m_NMEA0183.Rmc.MagneticVariationDirection == East ) gVar =
-                                    m_NMEA0183.Rmc.MagneticVariation;
+                        if( !wxIsNaN(m_NMEA0183.Rmc.MagneticVariation) )
+                        {
+                            if( m_NMEA0183.Rmc.MagneticVariationDirection == East )
+                                gVar = m_NMEA0183.Rmc.MagneticVariation;
                             else
-                                if( m_NMEA0183.Rmc.MagneticVariationDirection == West ) gVar =
-                                        -m_NMEA0183.Rmc.MagneticVariation;
+                                if( m_NMEA0183.Rmc.MagneticVariationDirection == West )
+                                    gVar = -m_NMEA0183.Rmc.MagneticVariation;
 
                             g_bVAR_Rx = true;
                             gVAR_Watchdog = gps_watchdog_timeout_ticks;
-
                         }
 
                         sfixtime = m_NMEA0183.Rmc.UTCTime;
 
-                        if(ll_valid ) {
+                        if(ll_valid )
+                        {
                             gGPS_Watchdog = gps_watchdog_timeout_ticks;
                             wxDateTime now = wxDateTime::Now();
                             m_fixtime = now.GetTicks();
                         }
                         pos_valid = ll_valid;
                     }
-                } else
-                    if( g_nNMEADebug ) {
+                }
+                else
+                    if( g_nNMEADebug )
+                    {
                         wxString msg( _T("   ") );
                         msg.Append( m_NMEA0183.ErrorMessage );
                         msg.Append( _T(" : ") );
                         msg.Append( str_buf );
                         wxLogMessage( msg );
                     }
-
             }
 
             else
-                if( m_NMEA0183.LastSentenceIDReceived == _T("HDT") ) {
-                    if( m_NMEA0183.Parse() ) {
+                if( m_NMEA0183.LastSentenceIDReceived == _T("HDT") )
+                {
+                    if( m_NMEA0183.Parse() )
+                    {
                         gHdt = m_NMEA0183.Hdt.DegreesTrue;
-                        if( !wxIsNaN(m_NMEA0183.Hdt.DegreesTrue) ) {
+                        if( !wxIsNaN(m_NMEA0183.Hdt.DegreesTrue) )
+                        {
                             g_bHDT_Rx = true;
                             gHDT_Watchdog = gps_watchdog_timeout_ticks;
                         }
-                    } else
-                        if( g_nNMEADebug ) {
+                    }
+                    else
+                        if( g_nNMEADebug )
+                        {
                             wxString msg( _T("   ") );
                             msg.Append( m_NMEA0183.ErrorMessage );
                             msg.Append( _T(" : ") );
                             msg.Append( str_buf );
                             wxLogMessage( msg );
                         }
-
                 }
-
                 else
-                    if( m_NMEA0183.LastSentenceIDReceived == _T("HDG") ) {
-                        if( m_NMEA0183.Parse() ) {
+                    if( m_NMEA0183.LastSentenceIDReceived == _T("HDG") )
+                    {
+                        if( m_NMEA0183.Parse() )
+                        {
                             gHdm = m_NMEA0183.Hdg.MagneticSensorHeadingDegrees;
                             if( !wxIsNaN(m_NMEA0183.Hdg.MagneticSensorHeadingDegrees) )
                                 gHDx_Watchdog = gps_watchdog_timeout_ticks;
@@ -6694,14 +6943,16 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                             else if( m_NMEA0183.Hdg.MagneticVariationDirection == West )
                                 gVar = -m_NMEA0183.Hdg.MagneticVariationDegrees;
 
-                            if( !wxIsNaN(m_NMEA0183.Hdg.MagneticVariationDegrees) ) {
-                                    g_bVAR_Rx = true;
-                                    gVAR_Watchdog = gps_watchdog_timeout_ticks;
+                            if( !wxIsNaN(m_NMEA0183.Hdg.MagneticVariationDegrees) )
+                            {
+                                g_bVAR_Rx = true;
+                                gVAR_Watchdog = gps_watchdog_timeout_ticks;
                             }
 
 
                         } else
-                            if( g_nNMEADebug ) {
+                            if( g_nNMEADebug )
+                            {
                                 wxString msg( _T("   ") );
                                 msg.Append( m_NMEA0183.ErrorMessage );
                                 msg.Append( _T(" : ") );
@@ -6710,35 +6961,38 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                             }
 
                     }
-
                     else
-                        if( m_NMEA0183.LastSentenceIDReceived == _T("HDM") ) {
-                            if( m_NMEA0183.Parse() ) {
+                        if( m_NMEA0183.LastSentenceIDReceived == _T("HDM") )
+                        {
+                            if( m_NMEA0183.Parse() )
+                            {
                                 gHdm = m_NMEA0183.Hdm.DegreesMagnetic;
-                                if( !wxIsNaN(m_NMEA0183.Hdm.DegreesMagnetic) ) {
+                                if( !wxIsNaN(m_NMEA0183.Hdm.DegreesMagnetic) )
                                     gHDx_Watchdog = gps_watchdog_timeout_ticks;
-                                }
-                            } else
-                                if( g_nNMEADebug ) {
+                            } 
+                            else
+                                if( g_nNMEADebug )
+                                {
                                     wxString msg( _T("   ") );
                                     msg.Append( m_NMEA0183.ErrorMessage );
                                     msg.Append( _T(" : ") );
                                     msg.Append( str_buf );
                                     wxLogMessage( msg );
                                 }
-
                         }
-
                         else
-                            if( m_NMEA0183.LastSentenceIDReceived == _T("VTG") ) {
-                                if( m_NMEA0183.Parse() ) {
+                            if( m_NMEA0183.LastSentenceIDReceived == _T("VTG") )
+                            {
+                                if( m_NMEA0183.Parse() )
+                                {
                                     gSog = m_NMEA0183.Vtg.SpeedKnots;
                                     gCog = m_NMEA0183.Vtg.TrackDegreesTrue;
                                     if( !wxIsNaN(m_NMEA0183.Vtg.SpeedKnots) && !wxIsNaN(m_NMEA0183.Vtg.TrackDegreesTrue) )
                                         gGPS_Watchdog = gps_watchdog_timeout_ticks;
-
-                                } else
-                                    if( g_nNMEADebug ) {
+                                }
+                                else
+                                    if( g_nNMEADebug )
+                                    {
                                         wxString msg( _T("   ") );
                                         msg.Append( m_NMEA0183.ErrorMessage );
                                         msg.Append( _T(" : ") );
@@ -6746,16 +7000,18 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                         wxLogMessage( msg );
                                     }
                             }
-
                             else
-                                if( m_NMEA0183.LastSentenceIDReceived == _T("GSV") ) {
-                                    if( m_NMEA0183.Parse() ) {
+                                if( m_NMEA0183.LastSentenceIDReceived == _T("GSV") )
+                                {
+                                    if( m_NMEA0183.Parse() )
+                                    {
                                         g_SatsInView = m_NMEA0183.Gsv.SatsInView;
                                         gSAT_Watchdog = sat_watchdog_timeout_ticks;
                                         g_bSatValid = true;
-
-                                    } else
-                                        if( g_nNMEADebug ) {
+                                    }
+                                    else
+                                        if( g_nNMEADebug )
+                                        {
                                             wxString msg( _T("   ") );
                                             msg.Append( m_NMEA0183.ErrorMessage );
                                             msg.Append( _T(" : ") );
@@ -6763,14 +7019,16 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                             wxLogMessage( msg );
                                         }
                                 }
-
                                 else
-                                    if( g_bUseGLL && m_NMEA0183.LastSentenceIDReceived == _T("GLL") ) {
-                                        if( m_NMEA0183.Parse() ) {
-                                            if( m_NMEA0183.Gll.IsDataValid == NTrue ) {
-                                                if( !wxIsNaN(m_NMEA0183.Gll.Position.Latitude.Latitude) ) {
-                                                    double llt =
-                                                            m_NMEA0183.Gll.Position.Latitude.Latitude;
+                                    if( g_bUseGLL && m_NMEA0183.LastSentenceIDReceived == _T("GLL") )
+                                    {
+                                        if( m_NMEA0183.Parse() )
+                                        {
+                                            if( m_NMEA0183.Gll.IsDataValid == NTrue )
+                                            {
+                                                if( !wxIsNaN(m_NMEA0183.Gll.Position.Latitude.Latitude) )
+                                                {
+                                                    double llt = m_NMEA0183.Gll.Position.Latitude.Latitude;
                                                     int lat_deg_int = (int) ( llt / 100 );
                                                     double lat_deg = lat_deg_int;
                                                     double lat_min = llt - ( lat_deg * 100 );
@@ -6781,22 +7039,23 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                 else
                                                     ll_valid = false;
 
-                                                if( !wxIsNaN(m_NMEA0183.Gll.Position.Longitude.Longitude) ) {
-                                                    double lln =
-                                                            m_NMEA0183.Gll.Position.Longitude.Longitude;
+                                                if( !wxIsNaN(m_NMEA0183.Gll.Position.Longitude.Longitude) )
+                                                {
+                                                    double lln = m_NMEA0183.Gll.Position.Longitude.Longitude;
                                                     int lon_deg_int = (int) ( lln / 100 );
                                                     double lon_deg = lon_deg_int;
                                                     double lon_min = lln - ( lon_deg * 100 );
                                                     gLon = lon_deg + ( lon_min / 60. );
-                                                    if( m_NMEA0183.Gll.Position.Longitude.Easting
-                                                            == West ) gLon = -gLon;
+                                                    if( m_NMEA0183.Gll.Position.Longitude.Easting == West )
+                                                        gLon = -gLon;
                                                 }
                                                 else
                                                     ll_valid = false;
 
                                                 sfixtime = m_NMEA0183.Gll.UTCTime;
 
-                                                if(ll_valid) {
+                                                if(ll_valid)
+                                                {
                                                     gGPS_Watchdog = gps_watchdog_timeout_ticks;
                                                     wxDateTime now = wxDateTime::Now();
                                                     m_fixtime = now.GetTicks();
@@ -6804,7 +7063,8 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                 pos_valid = ll_valid;
                                             }
                                         } else
-                                            if( g_nNMEADebug ) {
+                                            if( g_nNMEADebug )
+                                            {
                                                 wxString msg( _T("   ") );
                                                 msg.Append( m_NMEA0183.ErrorMessage );
                                                 msg.Append( _T(" : ") );
@@ -6812,27 +7072,29 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                                 wxLogMessage( msg );
                                             }
                                     }
-
                                     else
-                                        if( m_NMEA0183.LastSentenceIDReceived == _T("GGA") ) {
-                                            if( m_NMEA0183.Parse() ) {
-                                                if( m_NMEA0183.Gga.GPSQuality > 0 ) {
-                                                    if( !wxIsNaN(m_NMEA0183.Gll.Position.Latitude.Latitude) ) {
-                                                        double llt =
-                                                                m_NMEA0183.Gga.Position.Latitude.Latitude;
+                                        if( m_NMEA0183.LastSentenceIDReceived == _T("GGA") )
+                                        {
+                                            if( m_NMEA0183.Parse() )
+                                            {
+                                                if( m_NMEA0183.Gga.GPSQuality > 0 )
+                                                {
+                                                    if( !wxIsNaN(m_NMEA0183.Gll.Position.Latitude.Latitude) )
+                                                    {
+                                                        double llt = m_NMEA0183.Gga.Position.Latitude.Latitude;
                                                         int lat_deg_int = (int) ( llt / 100 );
                                                         double lat_deg = lat_deg_int;
                                                         double lat_min = llt - ( lat_deg * 100 );
                                                         gLat = lat_deg + ( lat_min / 60. );
-                                                        if( m_NMEA0183.Gga.Position.Latitude.Northing
-                                                                == South ) gLat = -gLat;
+                                                        if( m_NMEA0183.Gga.Position.Latitude.Northing == South )
+                                                            gLat = -gLat;
                                                     }
                                                     else
                                                         ll_valid = false;
 
-                                                    if( !wxIsNaN(m_NMEA0183.Gga.Position.Longitude.Longitude) ) {
-                                                        double lln =
-                                                                m_NMEA0183.Gga.Position.Longitude.Longitude;
+                                                    if( !wxIsNaN(m_NMEA0183.Gga.Position.Longitude.Longitude) )
+                                                    {
+                                                        double lln = m_NMEA0183.Gga.Position.Longitude.Longitude;
                                                         int lon_deg_int = (int) ( lln / 100 );
                                                         double lon_deg = lon_deg_int;
                                                         double lon_min = lln - ( lon_deg * 100 );
@@ -6845,21 +7107,22 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
 
                                                     sfixtime = m_NMEA0183.Gga.UTCTime;
 
-                                                    if(ll_valid) {
+                                                    if(ll_valid)
+                                                    {
                                                         gGPS_Watchdog = gps_watchdog_timeout_ticks;
                                                         wxDateTime now = wxDateTime::Now();
                                                         m_fixtime = now.GetTicks();
                                                     }
                                                     pos_valid = ll_valid;
 
-                                                    g_SatsInView =
-                                                            m_NMEA0183.Gga.NumberOfSatellitesInUse;
+                                                    g_SatsInView = m_NMEA0183.Gga.NumberOfSatellitesInUse;
                                                     gSAT_Watchdog = sat_watchdog_timeout_ticks;
                                                     g_bSatValid = true;
 
                                                 }
                                             } else
-                                                if( g_nNMEADebug ) {
+                                                if( g_nNMEADebug )
+                                                {
                                                     wxString msg( _T("   ") );
                                                     msg.Append( m_NMEA0183.ErrorMessage );
                                                     msg.Append( _T(" : ") );
@@ -6869,13 +7132,15 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                                         }
         }
         //      Process ownship (AIVDO) messages from any source
-        else if(str_buf.Mid( 1, 5 ).IsSameAs( _T("AIVDO") ) ) {
+        else if(str_buf.Mid( 1, 5 ).IsSameAs( _T("AIVDO") ) )
+        {
             GenericPosDatEx gpd;
             AIS_Error nerr = AIS_GENERIC_ERROR;
             if(g_pAIS)
                 nerr = g_pAIS->DecodeSingleVDO(str_buf, &gpd, &m_VDO_accumulator);
 
-            if(nerr == AIS_NoError){
+            if(nerr == AIS_NoError)
+            {
                 if( !wxIsNaN(gpd.kLat) )
                     gLat = gpd.kLat;
                 if( !wxIsNaN(gpd.kLon) )
@@ -6885,22 +7150,25 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                 gSog = gpd.kSog;
 
                 gHdt = gpd.kHdt;
-                if( !wxIsNaN(gpd.kHdt) ) {
+                if( !wxIsNaN(gpd.kHdt) )
+                {
                     g_bHDT_Rx = true;
                     gHDT_Watchdog = gps_watchdog_timeout_ticks;
                 }
 
-                if( !wxIsNaN(gpd.kLat) && !wxIsNaN(gpd.kLon) ) {
+                if( !wxIsNaN(gpd.kLat) && !wxIsNaN(gpd.kLon) )
+                {
                     gGPS_Watchdog = gps_watchdog_timeout_ticks;
                     wxDateTime now = wxDateTime::Now();
                     m_fixtime = now.GetTicks();
                     pos_valid = true;
                     
                 }
-
             }
-            else {
-                if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
+            else 
+            {
+                if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) )
+                {
                     g_total_NMEAerror_messages++;
                     wxString msg( _T("   Invalid AIVDO Sentence...") );
                     msg.Append( str_buf );
@@ -6908,10 +7176,11 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                 }
             }
         }
-
-        else {
+        else
+        {
             bis_recognized_sentence = false;
-            if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) ) {
+            if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) )
+            {
                 g_total_NMEAerror_messages++;
                 wxString msg( _T("   Unrecognized NMEA Sentence...") );
                 msg.Append( str_buf );
@@ -7358,7 +7627,7 @@ void MyPrintout::DrawPageOne( wxDC *dc )
 
 //---------------------------------------------------------------------------------------
 //
-//		GPS Positioning Device Detection
+//        GPS Positioning Device Detection
 //
 //---------------------------------------------------------------------------------------
 
@@ -7705,13 +7974,15 @@ wxArrayString *EnumerateSerialPorts( void )
 
     //    Method 1:  Use GetDefaultCommConfig()
     // Try first {g_nCOMPortCheck} possible COM ports, check for a default configuration
+    //  This method will not find some Bluetooth SPP ports
     for( int i = 1; i < g_nCOMPortCheck; i++ ) {
         wxString s;
         s.Printf( _T("COM%d"), i );
 
         COMMCONFIG cc;
         DWORD dwSize = sizeof(COMMCONFIG);
-        if( GetDefaultCommConfig( s.fn_str(), &cc, &dwSize ) ) preturn->Add( wxString( s ) );
+        if( GetDefaultCommConfig( s.fn_str(), &cc, &dwSize ) )
+            preturn->Add( wxString( s ) );
     }
 
 #if 0
@@ -7750,6 +8021,93 @@ wxArrayString *EnumerateSerialPorts( void )
         preturn->Add(wxString(s));
     }
 #endif
+
+    // Method 3:  WDM-Setupapi
+    //  This method may not find XPort virtual ports,
+    //  but does find Bluetooth SPP ports
+
+    GUID *guidDev = (GUID*) &GUID_CLASS_COMPORT;
+
+    HDEVINFO hDevInfo = INVALID_HANDLE_VALUE;
+
+    hDevInfo = SetupDiGetClassDevs( guidDev,
+                                     NULL,
+                                     NULL,
+                                     DIGCF_PRESENT | DIGCF_DEVICEINTERFACE );
+
+    if(hDevInfo != INVALID_HANDLE_VALUE) {
+
+        BOOL bOk = TRUE;
+        SP_DEVICE_INTERFACE_DATA ifcData;
+
+        ifcData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+        for (DWORD ii=0; bOk; ii++) {
+            bOk = SetupDiEnumDeviceInterfaces(hDevInfo, NULL, guidDev, ii, &ifcData);
+            if (bOk) {
+            // Got a device. Get the details.
+
+                SP_DEVINFO_DATA devdata = {sizeof(SP_DEVINFO_DATA)};
+                bOk = SetupDiGetDeviceInterfaceDetail(hDevInfo,
+                                                      &ifcData, NULL, 0, NULL, &devdata);
+
+                //      We really only need devdata
+                if( !bOk ) {
+                    if( GetLastError() == 122)  //ERROR_INSUFFICIENT_BUFFER, OK in this case
+                        bOk = true;
+                }
+#if 0
+                //      We could get friendly name and/or description here
+                if (bOk) {
+                    TCHAR fname[256];
+                    TCHAR desc[256];
+                    BOOL bSuccess = SetupDiGetDeviceRegistryProperty(
+                        hDevInfo, &devdata, SPDRP_FRIENDLYNAME, NULL,
+                        (PBYTE)fname, sizeof(fname), NULL);
+
+                    bSuccess = bSuccess && SetupDiGetDeviceRegistryProperty(
+                        hDevInfo, &devdata, SPDRP_DEVICEDESC, NULL,
+                        (PBYTE)desc, sizeof(desc), NULL);
+                }
+#endif
+                //  Get the "COMn string from the registry key
+                if(bOk) {
+                    bool bFoundCom = false;
+                    TCHAR dname[256];
+                    HKEY hDeviceRegistryKey = SetupDiOpenDevRegKey(hDevInfo, &devdata,
+                                                                   DICS_FLAG_GLOBAL, 0,
+                                                                   DIREG_DEV, KEY_QUERY_VALUE);
+                    if(INVALID_HANDLE_VALUE != hDeviceRegistryKey) {
+                            DWORD RegKeyType;
+                            wchar_t    wport[80];
+                            LPCWSTR cstr = wport;
+                            MultiByteToWideChar( 0, 0, "PortName", -1, wport, 80);
+                            DWORD len = sizeof(dname);
+
+                            int result = RegQueryValueEx(hDeviceRegistryKey, cstr,
+                                                        0, &RegKeyType, (PBYTE)dname, &len );
+                            if( result == 0 )
+                                bFoundCom = true;
+                    }
+
+                    if( bFoundCom ) {
+                        wxString port( dname, wxConvUTF8 );
+                        bool b_dupl = false;
+
+                        //      Add it to the return set if it has not already been found
+                        for( unsigned int n=0 ; n < preturn->GetCount() ; n++ ) {
+                            if((preturn->Item(n)).IsSameAs(port)){
+                                b_dupl = true;
+                                break;
+                            }
+                        }
+                        if(!b_dupl)
+                            preturn->Add( port );
+                    }
+                }
+            }
+        }//for
+    }// if
+
 
 //    Search for Garmin device driver on Windows platforms
 
@@ -8306,6 +8664,421 @@ void RedirectIOToConsole()
 //#endif
 #endif
 
+#if 0
+/*************************************************************************
+ * Serial port enumeration routines
+ *
+ * The EnumSerialPort function will populate an array of SSerInfo structs,
+ * each of which contains information about one serial port present in
+ * the system. Note that this code must be linked with setupapi.lib,
+ * which is included with the Win32 SDK.
+ *
+ * by Zach Gorman <gormanjz@hotmail.com>
+ *
+ * Copyright (c) 2002 Archetype Auction Software, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following condition is
+ * met: Redistributions of source code must retain the above copyright
+ * notice, this condition and the following disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESSED OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL ARCHETYPE AUCTION SOFTWARE OR ITS
+ * AFFILIATES BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ ************************************************************************/
+
+// For MFC
+#include <stdafx.h>
+
+// The next 3 includes are needed for serial port enumeration
+#include <objbase.h>
+#include <initguid.h>
+#include <Setupapi.h>
+
+#include "EnumSerial.h"
+
+// The following define is from ntddser.h in the DDK. It is also
+// needed for serial port enumeration.
+#ifndef GUID_CLASS_COMPORT
+DEFINE_GUID(GUID_CLASS_COMPORT, 0x86e0d1e0L, 0x8089, 0x11d0, 0x9c, 0xe4, \
+0x08, 0x00, 0x3e, 0x30, 0x1f, 0x73);
+#endif
+
+
+struct SSerInfo {
+    SSerInfo() : bUsbDevice(FALSE) {}
+    CString strDevPath;          // Device path for use with CreateFile()
+    CString strPortName;         // Simple name (i.e. COM1)
+    CString strFriendlyName;     // Full name to be displayed to a user
+    BOOL bUsbDevice;             // Provided through a USB connection?
+    CString strPortDesc;         // friendly name without the COMx
+};
+
+//---------------------------------------------------------------
+// Helpers for enumerating the available serial ports.
+// These throw a CString on failure, describing the nature of
+// the error that occurred.
+
+void EnumPortsWdm(CArray<SSerInfo,SSerInfo&> &asi);
+void EnumPortsWNt4(CArray<SSerInfo,SSerInfo&> &asi);
+void EnumPortsW9x(CArray<SSerInfo,SSerInfo&> &asi);
+void SearchPnpKeyW9x(HKEY hkPnp, BOOL bUsbDevice,
+                     CArray<SSerInfo,SSerInfo&> &asi);
+
+
+//---------------------------------------------------------------
+// Routine for enumerating the available serial ports.
+// Throws a CString on failure, describing the error that
+// occurred. If bIgnoreBusyPorts is TRUE, ports that can't
+// be opened for read/write access are not included.
+
+void EnumSerialPorts(CArray<SSerInfo,SSerInfo&> &asi, BOOL bIgnoreBusyPorts)
+{
+    // Clear the output array
+    asi.RemoveAll();
+
+    // Use different techniques to enumerate the available serial
+    // ports, depending on the OS we're using
+    OSVERSIONINFO vi;
+    vi.dwOSVersionInfoSize = sizeof(vi);
+    if (!::GetVersionEx(&vi)) {
+        CString str;
+        str.Format("Could not get OS version. (err=%lx)",
+                   GetLastError());
+        throw str;
+    }
+    // Handle windows 9x and NT4 specially
+    if (vi.dwMajorVersion < 5) {
+        if (vi.dwPlatformId == VER_PLATFORM_WIN32_NT)
+            EnumPortsWNt4(asi);
+        else
+            EnumPortsW9x(asi);
+    }
+    else {
+        // Win2k and later support a standard API for
+        // enumerating hardware devices.
+        EnumPortsWdm(asi);
+    }
+
+    for (int ii=0; ii<asi.GetSize(); ii++)
+    {
+        SSerInfo& rsi = asi[ii];
+        if (bIgnoreBusyPorts) {
+            // Only display ports that can be opened for read/write
+            HANDLE hCom = CreateFile(rsi.strDevPath,
+                                     GENERIC_READ | GENERIC_WRITE,
+                                     0,    /* comm devices must be opened w/exclusive-access */
+                                     NULL, /* no security attrs */
+                                     OPEN_EXISTING, /* comm devices must use OPEN_EXISTING */
+                                     0,    /* not overlapped I/O */
+                                     NULL  /* hTemplate must be NULL for comm devices */
+            );
+            if (hCom == INVALID_HANDLE_VALUE) {
+                // It can't be opened; remove it.
+                asi.RemoveAt(ii);
+                ii--;
+                continue;
+            }
+            else {
+                // It can be opened! Close it and add it to the list
+                ::CloseHandle(hCom);
+            }
+        }
+
+        // Come up with a name for the device.
+        // If there is no friendly name, use the port name.
+        if (rsi.strFriendlyName.IsEmpty())
+            rsi.strFriendlyName = rsi.strPortName;
+
+        // If there is no description, try to make one up from
+            // the friendly name.
+            if (rsi.strPortDesc.IsEmpty()) {
+                // If the port name is of the form "ACME Port (COM3)"
+                // then strip off the " (COM3)"
+                rsi.strPortDesc = rsi.strFriendlyName;
+                int startdex = rsi.strPortDesc.Find(" (");
+                int enddex = rsi.strPortDesc.Find(")");
+                if (startdex > 0 && enddex ==
+                    (rsi.strPortDesc.GetLength()-1))
+                    rsi.strPortDesc = rsi.strPortDesc.Left(startdex);
+            }
+    }
+}
+
+// Helpers for EnumSerialPorts
+
+void EnumPortsWdm(CArray<SSerInfo,SSerInfo&> &asi)
+{
+    CString strErr;
+    // Create a device information set that will be the container for
+    // the device interfaces.
+    GUID *guidDev = (GUID*) &GUID_CLASS_COMPORT;
+
+    HDEVINFO hDevInfo = INVALID_HANDLE_VALUE;
+    SP_DEVICE_INTERFACE_DETAIL_DATA *pDetData = NULL;
+
+    try {
+        hDevInfo = SetupDiGetClassDevs( guidDev,
+                                        NULL,
+                                        NULL,
+                                        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE
+        );
+
+        if(hDevInfo == INVALID_HANDLE_VALUE)
+        {
+            strErr.Format("SetupDiGetClassDevs failed. (err=%lx)",
+                          GetLastError());
+            throw strErr;
+        }
+
+        // Enumerate the serial ports
+        BOOL bOk = TRUE;
+        SP_DEVICE_INTERFACE_DATA ifcData;
+        DWORD dwDetDataSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA) + 256;
+        pDetData = (SP_DEVICE_INTERFACE_DETAIL_DATA*) new char[dwDetDataSize];
+        // This is required, according to the documentation. Yes,
+        // it's weird.
+        ifcData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+        pDetData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
+        for (DWORD ii=0; bOk; ii++) {
+            bOk = SetupDiEnumDeviceInterfaces(hDevInfo,
+                                              NULL, guidDev, ii, &ifcData);
+            if (bOk) {
+                // Got a device. Get the details.
+                SP_DEVINFO_DATA devdata = {sizeof(SP_DEVINFO_DATA)};
+                bOk = SetupDiGetDeviceInterfaceDetail(hDevInfo,
+                                                      &ifcData, pDetData, dwDetDataSize, NULL, &devdata);
+                if (bOk) {
+                    CString strDevPath(pDetData->DevicePath);
+                    // Got a path to the device. Try to get some more info.
+                    TCHAR fname[256];
+                    TCHAR desc[256];
+                    BOOL bSuccess = SetupDiGetDeviceRegistryProperty(
+                        hDevInfo, &devdata, SPDRP_FRIENDLYNAME, NULL,
+                        (PBYTE)fname, sizeof(fname), NULL);
+                    bSuccess = bSuccess && SetupDiGetDeviceRegistryProperty(
+                        hDevInfo, &devdata, SPDRP_DEVICEDESC, NULL,
+                        (PBYTE)desc, sizeof(desc), NULL);
+                    BOOL bUsbDevice = FALSE;
+                    TCHAR locinfo[256];
+                    if (SetupDiGetDeviceRegistryProperty(
+                        hDevInfo, &devdata, SPDRP_LOCATION_INFORMATION, NULL,
+                        (PBYTE)locinfo, sizeof(locinfo), NULL))
+                    {
+                        // Just check the first three characters to determine
+                        // if the port is connected to the USB bus. This isn't
+                        // an infallible method; it would be better to use the
+                        // BUS GUID. Currently, Windows doesn't let you query
+                        // that though (SPDRP_BUSTYPEGUID seems to exist in
+                        // documentation only).
+                        bUsbDevice = (strncmp(locinfo, "USB", 3)==0);
+                    }
+                    if (bSuccess) {
+                        // Add an entry to the array
+                        SSerInfo si;
+                        si.strDevPath = strDevPath;
+                        si.strFriendlyName = fname;
+                        si.strPortDesc = desc;
+                        si.bUsbDevice = bUsbDevice;
+                        asi.Add(si);
+                    }
+
+                }
+                else {
+                    strErr.Format("SetupDiGetDeviceInterfaceDetail failed. (err=%lx)",
+                                  GetLastError());
+                    throw strErr;
+                }
+            }
+            else {
+                DWORD err = GetLastError();
+                if (err != ERROR_NO_MORE_ITEMS) {
+                    strErr.Format("SetupDiEnumDeviceInterfaces failed. (err=%lx)", err);
+                    throw strErr;
+                }
+            }
+        }
+    }
+    catch (CString strCatchErr) {
+        strErr = strCatchErr;
+    }
+
+    if (pDetData != NULL)
+        delete [] (char*)pDetData;
+    if (hDevInfo != INVALID_HANDLE_VALUE)
+        SetupDiDestroyDeviceInfoList(hDevInfo);
+
+    if (!strErr.IsEmpty())
+        throw strErr;
+}
+
+void EnumPortsWNt4(CArray<SSerInfo,SSerInfo&> &asi)
+{
+    // NT4's driver model is totally different, and not that
+    // many people use NT4 anymore. Just try all the COM ports
+    // between 1 and 16
+    SSerInfo si;
+    for (int ii=1; ii<=16; ii++) {
+        CString strPort;
+        strPort.Format("COM%d",ii);
+        si.strDevPath = CString("\\\\.\\") + strPort;
+        si.strPortName = strPort;
+        asi.Add(si);
+    }
+}
+
+void EnumPortsW9x(CArray<SSerInfo,SSerInfo&> &asi)
+{
+    // Look at all keys in HKLM\Enum, searching for subkeys named
+    // *PNP0500 and *PNP0501. Within these subkeys, search for
+    // sub-subkeys containing value entries with the name "PORTNAME"
+    // Search all subkeys of HKLM\Enum\USBPORTS for PORTNAME entries.
+
+    // First, open HKLM\Enum
+    HKEY hkEnum = NULL;
+    HKEY hkSubEnum = NULL;
+    HKEY hkSubSubEnum = NULL;
+
+    try {
+        if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, "Enum", 0, KEY_READ,
+            &hkEnum) != ERROR_SUCCESS)
+            throw CString("Could not read from HKLM\\Enum");
+
+        // Enumerate the subkeys of HKLM\Enum
+            char acSubEnum[128];
+            DWORD dwSubEnumIndex = 0;
+            DWORD dwSize = sizeof(acSubEnum);
+            while (RegEnumKeyEx(hkEnum, dwSubEnumIndex++, acSubEnum, &dwSize,
+                NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
+            {
+                HKEY hkSubEnum = NULL;
+                if (RegOpenKeyEx(hkEnum, acSubEnum, 0, KEY_READ,
+                    &hkSubEnum) != ERROR_SUCCESS)
+                    throw CString("Could not read from HKLM\\Enum\\")+acSubEnum;
+
+                // Enumerate the subkeys of HKLM\Enum\*\, looking for keys
+                    // named *PNP0500 and *PNP0501 (or anything in USBPORTS)
+                    BOOL bUsbDevice = (strcmp(acSubEnum,"USBPORTS")==0);
+                    char acSubSubEnum[128];
+                    dwSize = sizeof(acSubSubEnum);  // set the buffer size
+                    DWORD dwSubSubEnumIndex = 0;
+                    while (RegEnumKeyEx(hkSubEnum, dwSubSubEnumIndex++, acSubSubEnum,
+                        &dwSize, NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
+                    {
+                        BOOL bMatch = (strcmp(acSubSubEnum,"*PNP0500")==0 ||
+                        strcmp(acSubSubEnum,"*PNP0501")==0 ||
+                        bUsbDevice);
+                        if (bMatch) {
+                            HKEY hkSubSubEnum = NULL;
+                            if (RegOpenKeyEx(hkSubEnum, acSubSubEnum, 0, KEY_READ,
+                                &hkSubSubEnum) != ERROR_SUCCESS)
+                                throw CString("Could not read from HKLM\\Enum\\") +
+                                acSubEnum + "\\" + acSubSubEnum;
+                            SearchPnpKeyW9x(hkSubSubEnum, bUsbDevice, asi);
+                            RegCloseKey(hkSubSubEnum);
+                            hkSubSubEnum = NULL;
+                        }
+
+                        dwSize = sizeof(acSubSubEnum);  // restore the buffer size
+                    }
+
+                    RegCloseKey(hkSubEnum);
+                    hkSubEnum = NULL;
+                    dwSize = sizeof(acSubEnum); // restore the buffer size
+            }
+    }
+    catch (CString strError) {
+        if (hkEnum != NULL)
+            RegCloseKey(hkEnum);
+        if (hkSubEnum != NULL)
+            RegCloseKey(hkSubEnum);
+        if (hkSubSubEnum != NULL)
+            RegCloseKey(hkSubSubEnum);
+        throw strError;
+    }
+
+    RegCloseKey(hkEnum);
+}
+
+void SearchPnpKeyW9x(HKEY hkPnp, BOOL bUsbDevice,
+                     CArray<SSerInfo,SSerInfo&> &asi)
+{
+    // Enumerate the subkeys of the given PNP key, looking for values with
+    // the name "PORTNAME"
+    // First, open HKLM\Enum
+    HKEY hkSubPnp = NULL;
+
+    try {
+        // Enumerate the subkeys of HKLM\Enum\*\PNP050[01]
+        char acSubPnp[128];
+        DWORD dwSubPnpIndex = 0;
+        DWORD dwSize = sizeof(acSubPnp);
+        while (RegEnumKeyEx(hkPnp, dwSubPnpIndex++, acSubPnp, &dwSize,
+            NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
+        {
+            HKEY hkSubPnp = NULL;
+            if (RegOpenKeyEx(hkPnp, acSubPnp, 0, KEY_READ,
+                &hkSubPnp) != ERROR_SUCCESS)
+                throw CString("Could not read from HKLM\\Enum\\...\\")
+                + acSubPnp;
+
+            // Look for the PORTNAME value
+                char acValue[128];
+                dwSize = sizeof(acValue);
+                if (RegQueryValueEx(hkSubPnp, "PORTNAME", NULL, NULL, (BYTE*)acValue,
+                    &dwSize) == ERROR_SUCCESS)
+                {
+                    CString strPortName(acValue);
+
+                    // Got the portname value. Look for a friendly name.
+                    CString strFriendlyName;
+                    dwSize = sizeof(acValue);
+                    if (RegQueryValueEx(hkSubPnp, "FRIENDLYNAME", NULL, NULL, (BYTE*)acValue,
+                        &dwSize) == ERROR_SUCCESS)
+                        strFriendlyName = acValue;
+
+                    // Prepare an entry for the output array.
+                        SSerInfo si;
+                        si.strDevPath = CString("\\\\.\\") + strPortName;
+                        si.strPortName = strPortName;
+                        si.strFriendlyName = strFriendlyName;
+                        si.bUsbDevice = bUsbDevice;
+
+                        // Overwrite duplicates.
+                        BOOL bDup = FALSE;
+                        for (int ii=0; ii<asi.GetSize() && !bDup; ii++)
+                        {
+                            if (asi[ii].strPortName == strPortName) {
+                                bDup = TRUE;
+                                asi[ii] = si;
+                            }
+                        }
+                        if (!bDup) {
+                            // Add an entry to the array
+                            asi.Add(si);
+                        }
+                }
+
+                RegCloseKey(hkSubPnp);
+                hkSubPnp = NULL;
+                dwSize = sizeof(acSubPnp);  // restore the buffer size
+        }
+    }
+    catch (CString strError) {
+        if (hkSubPnp != NULL)
+            RegCloseKey(hkSubPnp);
+        throw strError;
+    }
+}
 
 
 
+#endif
