@@ -1337,6 +1337,7 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
 
     }
 
+    m_pBrightPopup = NULL;
     m_pQuilt = new Quilt();
 }
 
@@ -1362,6 +1363,7 @@ ChartCanvas::~ChartCanvas()
 
     delete m_pRolloverWin;
     delete m_pAISRolloverWin;
+    delete m_pBrightPopup;
 
     delete m_pCIWin;
 
@@ -1651,12 +1653,11 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
         }
 
         SetScreenBrightness( g_nbrightness );
-
-        gFrame->ShowBrightnessLevelTimedDialog( g_nbrightness / 10, 1, 10 );
+        ShowBrightnessLevelTimedPopup( g_nbrightness / 10, 1, 10 );
 
         SetFocus();             // just in case the external program steals it....
         gFrame->Raise();        // And reactivate the application main
-
+        
         break;
     }
 
@@ -2093,6 +2094,56 @@ wxBitmap ChartCanvas::CreateDimBitmap( wxBitmap &Bitmap, double factor )
     return ret;
 
 }
+
+void ChartCanvas::ShowBrightnessLevelTimedPopup( int brightness, int min, int max )
+{
+    wxFont *pfont = wxTheFontList->FindOrCreateFont( 40, wxDEFAULT, wxNORMAL, wxBOLD );
+    
+    if( !m_pBrightPopup ) {
+        //    Calculate size
+        int x, y;
+        GetTextExtent( _T("MAX"), &x, &y, NULL, NULL, pfont );
+        
+        m_pBrightPopup = new TimedPopupWin( this, 3);
+        
+        m_pBrightPopup->SetSize(x, y);
+        m_pBrightPopup->Move(120,120);
+    }
+    
+    int bmpsx = m_pBrightPopup->GetSize().x;
+    int bmpsy = m_pBrightPopup->GetSize().y;
+    
+    wxBitmap bmp( bmpsx, bmpsx );
+    wxMemoryDC mdc( bmp );
+    
+    mdc.SetTextForeground( GetGlobalColor( _T("GREEN4") ) );
+    mdc.SetBackground( wxBrush( GetGlobalColor( _T("UINFD") ) ) );
+    mdc.SetPen( wxPen( wxColour( 0, 0, 0 ) ) );
+    mdc.SetBrush( wxBrush( GetGlobalColor( _T("UINFD") ) ) );
+    mdc.Clear();
+    
+    mdc.DrawRectangle( 0, 0, bmpsx, bmpsy );
+    
+    mdc.SetFont( *pfont );
+    wxString val;
+    
+    if( brightness == max ) val = _T("MAX");
+    else
+        if( brightness == min ) val = _T("MIN");
+        else
+            val.Printf( _T("%3d"), brightness );
+        
+    mdc.DrawText( val, 0, 0 );
+    
+    mdc.SelectObject( wxNullBitmap );
+    
+    m_pBrightPopup->SetBitmap( bmp );
+    m_pBrightPopup->Show();
+ //   m_pBrightPopup->Refresh();
+    
+    
+}
+
 
 void ChartCanvas::RotateTimerEvent( wxTimerEvent& event )
 {
@@ -8605,12 +8656,13 @@ void ChartCanvas::EmbossCanvas( ocpnDC &dc, emboss_data *pemboss, int x, int y )
         snip_dc.SelectObject( snip_bmp );
 
         snip_dc.Blit( 0, 0, pemboss->width, pemboss->height, pmdc, x, y );
-
+        snip_dc.SelectObject( wxNullBitmap );
+        
         wxImage snip_img = snip_bmp.ConvertToImage();
 
         //  Apply Emboss map to the snip image
         unsigned char* pdata = snip_img.GetData();
-        {
+        if( pdata ) {
             for( int y = 0; y < pemboss->height; y++ ) {
                 int map_index = ( y * pemboss->width );
                 for( int x = 0; x < pemboss->width; x++ ) {
@@ -8644,7 +8696,6 @@ void ChartCanvas::EmbossCanvas( ocpnDC &dc, emboss_data *pemboss, int x, int y )
         pmdc->Blit( x, y, pemboss->width, pemboss->height, &result_dc, 0, 0 );
 
         result_dc.SelectObject( wxNullBitmap );
-        snip_dc.SelectObject( wxNullBitmap );
     }
 #ifndef __WXMSW__
     else if(0/*b_useTexRect*/)
