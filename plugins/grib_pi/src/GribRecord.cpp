@@ -928,7 +928,7 @@ double GribRecord::getInterpolatedValue(double px, double py, bool numericalInte
     int j0 = (int) pj;
 
     int i1 = pi+1, j1 = pj+1;
-    if(i1 >= Ni)
+    if(i1 >= (int)Ni)
         i1 -= Ni;
 
     bool h00,h01,h10,h11;

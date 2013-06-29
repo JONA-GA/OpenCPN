@@ -36,6 +36,33 @@
 #endif //precompiled headers
 
 #include "wx/string.h"
+#include "OCP_DataStreamInput_Thread.h"
+
+//class OCP_DataStreamInput_Thread;
+
+class OCP_StkDataStreamInput_Thread: public OCP_DataStreamInput_Thread
+
+{
+	public:
+	OCP_StkDataStreamInput_Thread(DataStream *Launcher,
+								wxEvtHandler *MessageTarget,
+								const wxString& PortName,
+								const wxString& strBaudRate,
+								wxMutex *pout_mutex,
+								dsPortType io_select);
+							
+	~OCP_StkDataStreamInput_Thread(void);
+	
+	bool getParity(unsigned int n);
+	bool seatalk(unsigned char d, bool cde);
+	unsigned char buftmp[255];
+	wxString recu;
+	
+	};
+//
+//
+//
+//
 
 class StkToNmea 
 {

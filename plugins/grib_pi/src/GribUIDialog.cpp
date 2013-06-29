@@ -1196,8 +1196,8 @@ void GribRequestSetting::InitRequestConfig()
 void GribRequestSetting::ApplyRequestConfig( int sel1, int sel2 )
 {
     //some useful  strings
-    const wxString res[][3] = { _("0.5"), _("1"), _("2"),
-        _("0.2"), _("0.8"), _("1.6") };
+    const wxString res[][3] = { {_("0.5"), _("1"), _("2")},
+        {_("0.2"), _("0.8"), _("1.6") }};
 
     bool IsZYGRIB = false, IsGFS = false, IsRTOFS = false;
 
@@ -1303,8 +1303,8 @@ wxString GribRequestSetting::WriteMail()
     //some useful strings
 
     const wxString s[] = { _T(","), _T(" ") };        //separators
-    const wxString p[][6] = { _T("APCP"), _T("TCDC"), _T("AIRTMP"), _T("WAVES"), _T("SEATMP"), _T(""), //parameters
-        _T("PRECIP"), _T("CLOUD"), _T("TEMP"), _T("WVSIG WVWIND"), _T(""), _T("GUST") };
+    const wxString p[][6] = { {_T("APCP"), _T("TCDC"), _T("AIRTMP"), _T("WAVES"), _T("SEATMP"), _T("")}, //parameters
+        {_T("PRECIP"), _T("CLOUD"), _T("TEMP"), _T("WVSIG WVWIND"), _T(""), _T("GUST")} };
 
     wxString r_topmess,r_parameters,r_zone;
     //write the top part of the mail

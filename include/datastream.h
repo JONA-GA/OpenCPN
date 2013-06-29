@@ -126,6 +126,7 @@ typedef struct {
 
 // Class declarations
 class OCP_DataStreamInput_Thread;
+class OCP_StkDataStreamInput_Thread;
 class DataStream;
 class GarminProtocolHandler;
 class StkToNmea;

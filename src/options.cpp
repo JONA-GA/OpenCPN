@@ -650,7 +650,7 @@ void options::CreatePanel_NMEA( size_t parent, int border_size, int group_item_s
     int m_choiceSerialProtocolNChoices = sizeof( m_choiceSerialProtocolChoices ) / sizeof( wxString );
     m_choiceSerialProtocol = new wxChoice( m_pNMEAForm, wxID_ANY, wxDefaultPosition, wxDefaultSize, m_choiceSerialProtocolNChoices, m_choiceSerialProtocolChoices, 0 );
     m_choiceSerialProtocol->SetSelection( 0 );
-    m_choiceSerialProtocol->Enable( false );
+    m_choiceSerialProtocol->Enable( true );
 
     fgSizer1->Add( m_choiceSerialProtocol, 1, wxEXPAND|wxTOP, 5 );
 

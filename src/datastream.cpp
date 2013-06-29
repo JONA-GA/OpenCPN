@@ -48,6 +48,7 @@
 #include "OCPN_DataStreamEvent.h"
 #include "OCP_DataStreamInput_Thread.h"
 #include "garmin/jeeps/garmin_wrapper.h"
+#include "Seatalk.h"
 
 #include <vector>
 
@@ -165,6 +166,22 @@ void DataStream::Open(void)
                     CloseHandle(hSerialComm);
 #endif
         //    Kick off the DataSource RX thread
+		switch (GetDataProtocol())
+            {
+			case PROTO_NMEA2000 :
+				break;
+				
+			case PROTO_SEATALK	:
+				m_pSecondary_Thread = new OCP_StkDataStreamInput_Thread(this,
+                                                                     m_consumer,
+                                                                     comx, m_BaudRate,
+                                                                     &m_output_mutex, m_io_select);
+                m_Thread_run_flag = 1;
+                m_pSecondary_Thread->Run();
+
+                m_bok = true;
+				break;
+			case PROTO_NMEA0183:
                 m_pSecondary_Thread = new OCP_DataStreamInput_Thread(this,
                                                                      m_consumer,
                                                                      comx, m_BaudRate,
@@ -173,6 +190,7 @@ void DataStream::Open(void)
                 m_pSecondary_Thread->Run();
 
                 m_bok = true;
+			}
             }
         }
         else if(m_portstring.Contains(_T("GPSD"))){

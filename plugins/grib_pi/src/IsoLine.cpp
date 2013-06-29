@@ -31,9 +31,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "IsoLine.h"
 #include "GribSettingsDialog.h"
 #include "GribOverlayFactory.h"
-
+/*
 static void GenerateSpline(int n, wxPoint points[]);
 static void ClearSplineList();
+*/
 wxList ocpn_wx_spline_point_list;
 
 #include <wx/listimpl.cpp>
@@ -901,7 +902,7 @@ void GenSpline( wxList *points )
 
 }
 
-
+/*
 static void GenerateSpline(int n, wxPoint points[])
 {
       wxList list;
@@ -925,3 +926,4 @@ static void ClearSplineList()
       }
 }
 
+*/
