@@ -65,7 +65,7 @@ public:
     bool SetOutMsg(const wxString & msg);
     void OnExit(void);
 
-private:
+protected:
     void ThreadMessage(const wxString &msg);
     void Parse_And_Send_Posn(const char *s);
     int OpenComPortPhysical(const wxString &com_name, int baud_rate);

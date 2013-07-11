@@ -31,7 +31,7 @@ WX_DEFINE_OBJARRAY( wxJSONInternalArray );
 
 
 // the trace mask used in wxLogTrace() function
-// static const wxChar* traceMask = _T("jsonval");
+//static const wxChar* traceMask = _T("jsonval");
 static const wxChar* traceMask = _T("jsonval");
 static const wxChar* compareTraceMask = _T("sameas");
 static const wxChar* cowTraceMask = _T("traceCOW" );
@@ -3047,17 +3047,17 @@ wxJSONValue::CreateRefData() const
  If the referenced data is shared acrosss other wxJSONValue instances,
  the \c UnShare() function makes a private copy of the shared data.
 */
-wxJSONRefData*
-wxJSONValue::COW()
+wxJSONRefData* wxJSONValue::COW()
 {
-    wxJSONRefData* data = GetRefData();
-    wxLogTrace( cowTraceMask, _T("(%s) COW() START data=%p data->m_count=%d"),
-             __PRETTY_FUNCTION__, data, data->GetRefCount());
+    wxJSONRefData* data ;
+	
+	data = GetRefData();
+    wxLogTrace( cowTraceMask, _T( "(%s) COW() START data=%p data->m_count=%d" ), __PRETTY_FUNCTION__ , data, data->GetRefCount());
     UnShare();
     data = GetRefData();
-    wxLogTrace( cowTraceMask, _T("(%s) COW() END data=%p data->m_count=%d"),
-             __PRETTY_FUNCTION__, data, data->GetRefCount());
-    return GetRefData();
+    wxLogTrace( cowTraceMask, _T("(%s) COW() END data=%p data->m_count=%d"),  __PRETTY_FUNCTION__, data, data->GetRefCount());
+    data = GetRefData();
+	return data;
 }
 
 //! Makes a private copy of the referenced data

@@ -6,12 +6,20 @@
 #endif //precompiled headers
 
 
-
+#include "dychart.h"
 #include "nmea0183/nmea0183.h"
-
+#include "datastream.h"
+#include "OCP_DataStreamInput_Thread.h"
+#include "OCPN_DataStreamEvent.h"
 #include "Seatalk.h"
 
-#ifdef POSIX
+
+#define DS_RX_BUFFER_SIZE 4096
+
+
+#ifdef __POSIX__
+#include <sys/termios.h>
+#endif
 
 OCP_StkDataStreamInput_Thread::OCP_StkDataStreamInput_Thread(DataStream *Launcher,
 								wxEvtHandler *MessageTarget,
@@ -25,19 +33,22 @@ OCP_StkDataStreamInput_Thread::OCP_StkDataStreamInput_Thread(DataStream *Launche
 							strBaudRate,
 							pout_mutex,
 							io_select){}
-								
+							
+OCP_StkDataStreamInput_Thread::~OCP_StkDataStreamInput_Thread(void)	{}
+							
 void *OCP_StkDataStreamInput_Thread::Entry()
 {
 
     bool not_done = true;
     bool nl_found;
     wxString msg;
-
-
+	StkToNmea* s2n = new StkToNmea() ;
+	wxString tempo;
+	b=false;
     //    Request the com port from the comm manager
     if ((m_gps_fd = OpenComPortPhysical(m_PortName, m_baud)) < 0)
     {
-        wxString msg(_T("NMEA input device open failed: "));
+       wxString msg(_T("NMEA input device open failed: "));
         msg.Append(m_PortName);
         ThreadMessage(msg);
         goto thread_exit;
@@ -114,52 +125,61 @@ void *OCP_StkDataStreamInput_Thread::Entry()
             *put_ptr++ = next_byte;
             if((put_ptr - rx_buffer) > DS_RX_BUFFER_SIZE)
             put_ptr = rx_buffer;
-
-            if(0x0a == next_byte)
-            nl_found = true;
-
-
-            //    Found a NL char, thus end of message?
-            if(nl_found)
-            {
-                char *tptr;
-                char *ptmpbuf;
-
-                //    Copy the message into a temporary _buffer
-
-                tptr = tak_ptr;
-                ptmpbuf = temp_buf;
-
-                while((*tptr != 0x0a) && (tptr != put_ptr))
-                {
-                    *ptmpbuf++ = *tptr++;
-
-                    if((tptr - rx_buffer) > DS_RX_BUFFER_SIZE)
-                    tptr = rx_buffer;
-
-                    wxASSERT_MSG((ptmpbuf - temp_buf) < DS_RX_BUFFER_SIZE, (const wxChar *)"temp_buf overrun1");
-
-                }
-                if((*tptr == 0x0a) && (tptr != put_ptr))    // well formed sentence
-                {
-                    *ptmpbuf++ = *tptr++;
-                    if((tptr - rx_buffer) > DS_RX_BUFFER_SIZE)
-                    tptr = rx_buffer;
-
-                    wxASSERT_MSG((ptmpbuf - temp_buf) < DS_RX_BUFFER_SIZE, (const wxChar *)"temp_buf overrun2");
-
-                    *ptmpbuf = 0;
-
-                    tak_ptr = tptr;
-
-                //    Message is ready to parse and send out
-                    wxString str_temp_buf(temp_buf, wxConvUTF8);
-                    Parse_And_Send_Posn(temp_buf);
-                }
-
-            }                   //if nl
-        }                       // if newdata > 0
-
+// this is working only with POSIX Linux serial driver
+				bool complete ;
+				switch ((unsigned char)next_byte)
+				{
+					case 0xff:
+					if (ind==0)
+					{
+						ind= 1;
+						break;
+						}
+					
+					case 0x00:
+					if (ind==1)
+					{
+						ind= 2;
+						break;
+						}
+					
+					
+					default:
+					if (ind ==2 ) /*  erreur parity impaire */
+					{
+						if ( getParity(next_byte) )
+						{ // even cde
+						complete = seatalk(next_byte,1);
+						}else 
+						{ //odd data
+						complete = seatalk(next_byte,0);
+						}
+					}else
+					{
+						if ( getParity(next_byte) )
+						{ // even data
+						complete = seatalk(next_byte,0);
+						}else 
+						{ //odd cde
+						complete = seatalk(next_byte,1);
+						}
+					}						
+					ind =0 ;
+					if (complete)
+					{
+					wxLogMessage(recu);
+					
+					tempo = s2n->Decode(buftmp);
+					Parse_And_Send_Posn(tempo.mb_str());
+					}
+					if(s2n->AWupdated) 
+						{
+							tempo= s2n->TrueWind();
+							Parse_And_Send_Posn(tempo.mb_str());
+						}
+					break;
+				}
+		}
         //      Check for any pending output message
 
         if( m_pout_mutex && (wxMUTEX_NO_ERROR == m_pout_mutex->TryLock()) ){
@@ -214,7 +234,7 @@ thread_exit:
     return 0;
 }
 
-
+#ifdef __POSIX__
 
 int OCP_StkDataStreamInput_Thread::OpenComPortPhysical(const wxString &com_name, int baud_rate)
 {
@@ -273,14 +293,14 @@ int OCP_StkDataStreamInput_Thread::OpenComPortPhysical(const wxString &com_name,
         ttyset.c_iflag = ttyset.c_oflag = ttyset.c_lflag = (tcflag_t) 0;
 
         int stopbits = 1;
-        char parity = 'N';
+        char parity = 'E';
         ttyset.c_iflag &=~ (PARMRK | INPCK);
         ttyset.c_cflag &=~ (CSIZE | CSTOPB | PARENB | PARODD);
         ttyset.c_cflag |= (stopbits==2 ? CS7|CSTOPB : CS8);
         switch (parity)
         {
             case 'E':
-                ttyset.c_iflag |= INPCK;
+                ttyset.c_iflag |= (PARMRK | INPCK);
                 ttyset.c_cflag |= PARENB;
                 break;
             case 'O':
@@ -300,21 +320,17 @@ int OCP_StkDataStreamInput_Thread::OpenComPortPhysical(const wxString &com_name,
 }
 
 
-#endif          //__POSIX__
 
 
 bool OCP_StkDataStreamInput_Thread::seatalk(unsigned char d, bool cde) 
 {
-	static unsigned int cpt;
-	static int len ;
 	int i;
-	static bool b=false ;
-	bool status;	
 	status= false;
 	if (cde)
 	{ 
 		cpt = 255;
 		buftmp[0]= d;
+		wxLogMessage(wxT("cde:  " )+ wxString::Format(_T("%2x"),d));
 		b= true ;
 		
 	}else
@@ -354,6 +370,7 @@ bool OCP_StkDataStreamInput_Thread::getParity(unsigned int n)
     return !parity;
 }
 
+#endif     // posix
 
 //*********************************************
 //
@@ -372,8 +389,8 @@ StkToNmea::~StkToNmea()
 wxString StkToNmea::Decode(unsigned char tre[255])
 {
 	NMEA0183 cm_nmea ;
-	float t;
 	int r;
+	float t;
 	SENTENCE snt ;
 	wxString unit;
 	wxString tk;
@@ -394,19 +411,20 @@ switch (tre[0])
 			break;
 			
 		case 0x10 : // ApW direction
-			vent =  ((unsigned long)(tre[2]*256 +(unsigned long) tre[3]))/2 ;
+			VentAngle =  ((unsigned long)(tre[2]*256 +(unsigned long) tre[3]))/2 ;
 		break;
 		case 0x11 : // ApW direction
 		//(XX & 0x7F) + Y/10 Knots
-			t =  ((float)(tre[2]& 0x7F) +( (float) tre[3]/10)) ;
+			VentVitesse =  ((float)(tre[2]& 0x7F) +( (float) tre[3]/10)) ;
 			cm_nmea.Mwv.Empty();
-			cm_nmea.Mwv.WindAngle= vent;
+			cm_nmea.Mwv.WindAngle= VentAngle;
 			unit = wxT("R");
 			cm_nmea.Mwv.Reference = unit;
-			cm_nmea.Mwv.WindSpeed= t;
+			cm_nmea.Mwv.WindSpeed= VentVitesse;
 			if ((tre[2]& 0x80) ==0)cm_nmea.Mwv.WindSpeedUnits= wxT("K");
 			cm_nmea.Mwv.IsDataValid = NTrue;
 			cm_nmea.Mwv.Write(snt);
+			AWupdated=true;
 			break;
 		
 		case 0x00 : // depth
@@ -465,4 +483,24 @@ switch (tre[0])
 		
 } // end switch
 return snt.Sentence ;
+}
+
+wxString StkToNmea::TrueWind()
+{
+	NMEA0183 cm_nmea ;
+	int r;
+	SENTENCE snt ;
+	wxString unit;
+	wxString tk;
+	
+			// true wind calculation
+			cm_nmea.Mwv.Empty();
+			cm_nmea.Mwv.WindAngle= VentAngle;
+			unit = wxT("T");
+			cm_nmea.Mwv.Reference = unit;
+			cm_nmea.Mwv.WindSpeed= VentVitesse;
+			cm_nmea.Mwv.WindSpeedUnits= wxT("K");
+			cm_nmea.Mwv.IsDataValid = NTrue;
+			cm_nmea.Mwv.Write(snt);
+			return snt.Sentence ;
 }

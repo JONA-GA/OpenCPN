@@ -56,8 +56,8 @@ typedef enum
 typedef enum
 {
     PROTO_NMEA0183 = 0,
-    PROTO_SEATALK = 1,
-    PROTO_NMEA2000 = 2
+    PROTO_SEATALK = 2,
+    PROTO_NMEA2000 = 1
 } DataProtocol;
 
 class ConnectionParams

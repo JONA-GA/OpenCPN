@@ -39,7 +39,8 @@
 #include "OCP_DataStreamInput_Thread.h"
 
 //class OCP_DataStreamInput_Thread;
-
+//class DataStream;
+class StkToNmea ;
 class OCP_StkDataStreamInput_Thread: public OCP_DataStreamInput_Thread
 
 {
@@ -52,11 +53,17 @@ class OCP_StkDataStreamInput_Thread: public OCP_DataStreamInput_Thread
 								dsPortType io_select);
 							
 	~OCP_StkDataStreamInput_Thread(void);
-	
+	void *Entry();
+	int OpenComPortPhysical(const wxString &com_name, int baud_rate);
 	bool getParity(unsigned int n);
 	bool seatalk(unsigned char d, bool cde);
 	unsigned char buftmp[255];
 	wxString recu;
+	unsigned int cpt;
+	int len ;
+	bool b ;
+	bool status;
+	uint ind;
 	
 	};
 //
@@ -71,12 +78,13 @@ public:
 	~StkToNmea();
 	
 	wxString Decode(unsigned char tre[255]);
-	
-	unsigned long vent ;
+	wxString TrueWind();
+	bool AWupdated;
+	unsigned long VentAngle ;
 	float HeadingMag;
 	float Cog;
 	float Sow;
-	
+	float VentVitesse;
 };
 
 #endif
