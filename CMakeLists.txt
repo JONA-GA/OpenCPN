@@ -424,13 +424,14 @@ SET(HDRS
 		include/compasswin.h
 		include/geodesic.h
 		include/datastream.h
-                include/multiplexer.h
-		include/Seatalk.h
+                include/Seatalk.h
 		include/OCPN_DataStreamEvent.h
 		include/ConnectionParams.h
 		include/OCP_DataStreamInput_Thread.h
 		include/dsPortType.h
-        
+                include/multiplexer.h
+                include/OCPNRegion.h
+
 )
 
 SET(SRCS
@@ -517,8 +518,9 @@ SET(SRCS
 		src/OCPN_DataStreamEvent.cpp
 		src/ConnectionParams.cpp
 		src/OCP_DataStreamInput_Thread.cpp
+                src/multiplexer.cpp
                 src/pugixml.cpp
-
+                src/OCPNRegion.cpp
     )
 
 IF(wx_Version MATCHES "2.9")
@@ -799,7 +801,7 @@ ENDIF(APPLE)
 
 #  Mac has trouble finding libgobject-2.0.dylib
 #  We look for it explicitely
-IF(APPLE)
+IF(xAPPLE)
 #       Assume pkg-config is available.
     INCLUDE( FindPkgConfig )
     PKG_SEARCH_MODULE( GOBJECT REQUIRED gobject-2.0 )
@@ -807,7 +809,7 @@ IF(APPLE)
 
     SET(EXTRA_LIBS ${EXTRA_LIBS} ${GOBJECT_LDFLAGS})
     SET(EXTRA_LIBS ${EXTRA_LIBS} "iconv")
-ENDIF(APPLE)
+ENDIF(xAPPLE)
 
 IF(WIN32)
     IF(MSVC)
