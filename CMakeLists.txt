@@ -297,14 +297,15 @@ SET(SRC_NMEA0183
 		src/nmea0183/GPwpl.hpp
 		src/nmea0183/mtw.hpp
 		src/nmea0183/mtw.cpp
-                src/nmea0183/apb.cpp
-                src/nmea0183/apb.hpp
 		src/nmea0183/mwv.hpp
 		src/nmea0183/mwv.cpp
 		src/nmea0183/dpt.hpp
 		src/nmea0183/dpt.cpp
 		src/nmea0183/vhw.hpp
 		src/nmea0183/vhw.cpp
+		src/nmea0183/apb.cpp
+        	src/nmea0183/apb.hpp
+
 	)
 ADD_LIBRARY(NMEA0183 ${SRC_NMEA0183})
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/nmea0183)
@@ -334,8 +335,8 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/nmea0183)
 
 
 SET(HDRS
-        include/ocpn_types.h
-        include/ocpndc.h
+                include/ocpn_types.h
+                include/ocpndc.h
 		include/chart1.h
 		include/bbox.h
 		include/ocpn_pixel.h
@@ -431,14 +432,15 @@ SET(HDRS
 		include/dsPortType.h
                 include/multiplexer.h
                 include/OCPNRegion.h
-
+                include/TrackPropDlg.h
+                include/LinkPropDlg.h
 )
 
 SET(SRCS
 		src/chart1.cpp
 		src/bbox.cpp
 		src/ocpn_pixel.cpp
-        	src/ocpndc.cpp
+                src/ocpndc.cpp
 		src/chartdb.cpp
 		src/chartdbs.cpp
 		src/chartimg.cpp
@@ -521,6 +523,8 @@ SET(SRCS
                 src/multiplexer.cpp
                 src/pugixml.cpp
                 src/OCPNRegion.cpp
+                src/TrackPropDlg.cpp
+                src/LinkPropDlg.cpp
     )
 
 IF(wx_Version MATCHES "2.9")
@@ -650,9 +654,9 @@ IF (USE_GARMINHOST)
                   src/garmin/jeeps/gpscom.c
                   src/garmin/jeeps/gpsmath.c
                   src/garmin/jeeps/gpsmem.c
-	              src/garmin/jeeps/gpsprot.c
+	          src/garmin/jeeps/gpsprot.c
                   src/garmin/jeeps/gpsread.c
-	              src/garmin/jeeps/gpsdevice.c
+	          src/garmin/jeeps/gpsdevice.c
                   src/garmin/jeeps/gpsdevice_ser.c
                   src/garmin/jeeps/gpsdevice_usb.c
                   src/garmin/jeeps/gpsrqst.c

@@ -99,6 +99,7 @@
 #include "AISTargetAlertDialog.h"
 #include "AIS_Decoder.h"
 #include "OCP_DataStreamInput_Thread.h"
+#include "TrackPropDlg.h"
 
 #include "cutil.h"
 #include "routemanagerdialog.h"
@@ -187,6 +188,7 @@ Routeman                  *g_pRouteMan;
 WayPointman               *pWayPointMan;
 MarkInfoImpl              *pMarkPropDialog;
 RouteProp                 *pRoutePropDialog;
+TrackPropDlg              *pTrackPropDialog;
 MarkInfoImpl              *pMarkInfoDialog;
 RouteManagerDialog        *pRouteManagerDialog;
 GoToPositionDialog        *pGoToPositionDialog;
@@ -660,7 +662,7 @@ DEFINE_EVENT_TYPE(EVT_THREADMSG)
 //              Local constants
 //------------------------------------------------------------------------------
 enum {
-    ID_PIANO_DISABLE_QUILT_CHART = 50000, ID_PIANO_ENABLE_QUILT_CHART
+    ID_PIANO_DISABLE_QUILT_CHART = 32000, ID_PIANO_ENABLE_QUILT_CHART
 };
 
 //------------------------------------------------------------------------------
@@ -919,6 +921,12 @@ bool MyApp::OnInit()
 
 #endif
 #endif
+
+    //  Seed the random number generator
+    wxDateTime x = wxDateTime::UNow();
+    long seed = x.GetMillisecond();
+    seed *= x.GetTicks();
+    srand(seed);
 
     g_pPlatform = new wxPlatformInfo;
 
