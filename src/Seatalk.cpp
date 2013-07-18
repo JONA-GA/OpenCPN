@@ -167,7 +167,7 @@ void *OCP_StkDataStreamInput_Thread::Entry()
 					ind =0 ;
 					if (complete)
 					{
-					wxLogMessage(recu);
+					//wxLogMessage(recu);
 					
 					tempo = s2n->Decode(buftmp);
 					Parse_And_Send_Posn(tempo.mb_str());
@@ -176,6 +176,7 @@ void *OCP_StkDataStreamInput_Thread::Entry()
 						{
 							tempo= s2n->TrueWind();
 							Parse_And_Send_Posn(tempo.mb_str());
+							s2n->AWupdated=false;
 						}
 					break;
 				}
@@ -330,7 +331,7 @@ bool OCP_StkDataStreamInput_Thread::seatalk(unsigned char d, bool cde)
 	{ 
 		cpt = 255;
 		buftmp[0]= d;
-		wxLogMessage(wxT("cde:  " )+ wxString::Format(_T("%2x"),d));
+		//wxLogMessage(wxT("cde:  " )+ wxString::Format(_T("%2x"),d));
 		b= true ;
 		
 	}else
@@ -493,6 +494,8 @@ wxString StkToNmea::TrueWind()
 	wxString unit;
 	wxString tk;
 	
+			tk = wxT("EC");
+			cm_nmea.TalkerID= tk ;
 			// true wind calculation
 			cm_nmea.Mwv.Empty();
 			cm_nmea.Mwv.WindAngle= VentAngle;
