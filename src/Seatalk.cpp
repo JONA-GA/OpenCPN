@@ -493,12 +493,15 @@ wxString StkToNmea::TrueWind()
 	SENTENCE snt ;
 	wxString unit;
 	wxString tk;
+	double VentAngle1;
 	
 			tk = wxT("EC");
 			cm_nmea.TalkerID= tk ;
 			// true wind calculation
 			cm_nmea.Mwv.Empty();
-			cm_nmea.Mwv.WindAngle= VentAngle;
+			VentAngle1=VentAngle;
+			if (VentAngle > 180.0) VentAngle1= VentAngle -360.0 ;
+			cm_nmea.Mwv.WindAngle= VentAngle1;
 			unit = wxT("T");
 			cm_nmea.Mwv.Reference = unit;
 			cm_nmea.Mwv.WindSpeed= VentVitesse;
