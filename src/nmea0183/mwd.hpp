@@ -40,7 +40,7 @@
 ** You can use it any way you like.
 */
 
-class MWD : public CRESPONSE
+class MWD : public RESPONSE
 {
 //   DECLARE_DYNAMIC( MWD )
 

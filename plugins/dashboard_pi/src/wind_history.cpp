@@ -100,9 +100,9 @@ void DashboardInstrument_WindDirHistory::SetData(int st, double data, wxString u
       m_WindSpd = data;
       if(m_SpdRecCnt++<=5) m_SpdStartVal+=data;
     }
-    if ( m_SpdRecCnt == 5 && m_DirRecCnt == 5) {
-      m_WindSpd=  m_SpdStartVal/5;
-      m_WindDir = m_DirStartVal/5;
+    if ( m_SpdRecCnt >= 5 && m_DirRecCnt >= 5) {
+      m_WindSpd=  m_SpdStartVal/m_SpdRecCnt;
+      m_WindDir = m_DirStartVal/m_DirRecCnt;
       m_oldDirVal=m_WindDir; // make sure we don't get a diff > or <180 in the initial run
     }
     //start working after we collected 5 records each, as start values for the smoothed curves

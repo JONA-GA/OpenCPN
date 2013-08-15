@@ -78,7 +78,9 @@ public:
 	~StkToNmea();
 	
 	wxString Decode(unsigned char tre[255]);
-	wxString TrueWind();
+	wxString TrueWindMWV();
+	wxString TrueWindMWD();
+	NMEA0183 cm_nmea ;
 	bool AWupdated;
 	unsigned long VentAngle ;
 	float HeadingMag;

@@ -104,7 +104,7 @@ bool MWD::Write( SENTENCE& sentence )
    ** Let the parent do its thing
    */
    
-   CRESPONSE::Write( sentence );
+   RESPONSE::Write( sentence );
 
    sentence += WindAngleTrue;
    sentence += _T("T");

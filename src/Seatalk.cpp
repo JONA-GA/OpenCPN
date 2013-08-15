@@ -172,9 +172,11 @@ void *OCP_StkDataStreamInput_Thread::Entry()
 					tempo = s2n->Decode(buftmp);
 					Parse_And_Send_Posn(tempo.mb_str());
 					}
-					if(s2n->AWupdated) 
+					if(s2n->AWupdated) // TrueWind
 						{
-							tempo= s2n->TrueWind();
+							tempo= s2n->TrueWindMWV();
+							Parse_And_Send_Posn(tempo.mb_str());
+							tempo= s2n->TrueWindMWD();
 							Parse_And_Send_Posn(tempo.mb_str());
 							s2n->AWupdated=false;
 						}
@@ -389,7 +391,7 @@ StkToNmea::~StkToNmea()
 
 wxString StkToNmea::Decode(unsigned char tre[255])
 {
-	NMEA0183 cm_nmea ;
+	
 	int r;
 	float t;
 	SENTENCE snt ;
@@ -486,9 +488,9 @@ switch (tre[0])
 return snt.Sentence ;
 }
 
-wxString StkToNmea::TrueWind()
+wxString StkToNmea::TrueWindMWV()
 {
-	NMEA0183 cm_nmea ;
+	
 	int r;
 	SENTENCE snt ;
 	wxString unit;
@@ -500,13 +502,55 @@ wxString StkToNmea::TrueWind()
 			// true wind calculation
 			cm_nmea.Mwv.Empty();
 			VentAngle1=VentAngle;
-			if (VentAngle > 180.0) VentAngle1= VentAngle -360.0 ;
+			if (VentAngle1 > 180)
+				{ VentAngle1= VentAngle1 -360;
+				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+			}else
+				{
+				VentAngle1= VentAngle1 ;
+				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+			
+			}
 			cm_nmea.Mwv.WindAngle= VentAngle1;
 			unit = wxT("T");
 			cm_nmea.Mwv.Reference = unit;
-			cm_nmea.Mwv.WindSpeed= VentVitesse;
+			cm_nmea.Mwv.WindSpeed= sqrt((VentVitesse * VentVitesse)+(Sow *Sow)-(2 * VentVitesse * Sow * cos(VentAngle * 3.14/180)));
 			cm_nmea.Mwv.WindSpeedUnits= wxT("K");
 			cm_nmea.Mwv.IsDataValid = NTrue;
 			cm_nmea.Mwv.Write(snt);
+			return snt.Sentence ;
+}
+
+wxString StkToNmea::TrueWindMWD()
+{
+	
+	int r;
+	SENTENCE snt ;
+	wxString unit;
+	wxString tk;
+	double VentAngle1;
+	//		WindAngleTrue   = 0.0;
+	//		WindAngleMagnetic   = 0.0;
+	//		WindSpeedKnots   = 0.0;
+	//		WindSpeedms   = 0.0;
+			tk = wxT("EC");
+			cm_nmea.TalkerID= tk ;
+			// true wind calculation
+			cm_nmea.Mwd.Empty();
+			VentAngle1=VentAngle;
+			if (VentAngle1 > 180)
+				{ VentAngle1= VentAngle1 -360;
+				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+			}else
+				{
+				VentAngle1= VentAngle1 ;
+				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+			
+			}
+			cm_nmea.Mwd.WindAngleTrue= VentAngle1;
+			cm_nmea.Mwd.WindAngleMagnetic= VentAngle1;
+			cm_nmea.Mwd.WindSpeedKnots= sqrt((VentVitesse * VentVitesse)+(Sow *Sow)-(2 * VentVitesse * Sow * cos(VentAngle * 3.14*180)));
+			cm_nmea.Mwd.WindSpeedms= cm_nmea.Mwd.WindSpeedKnots * 0.51;
+			cm_nmea.Mwd.Write(snt);
 			return snt.Sentence ;
 }

@@ -86,6 +86,7 @@
 #include "RMA.hpp"
 */
 #include "dpt.hpp"
+#include "mwd.hpp"
 #include "mwv.hpp"
 #include "hdm.hpp"
 #include "hdg.hpp"
@@ -184,6 +185,7 @@ class NMEA0183
       RMA Rma;
 */
 	   DPT Dpt;
+	   MWD Mwd;
 	   MWV Mwv;
        MTW Mtw;
 	   HDM Hdm;
