@@ -5184,6 +5184,8 @@ int s52plib::RenderToGLAC( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
 
 int s52plib::RenderToGLAP( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
 {
+    if( rules->razRule == NULL )
+        return 0;
 
     int obj_xmin = 10000;
     int obj_xmax = -10000;
@@ -5728,6 +5730,9 @@ int s52plib::RenderToBufferAP( ObjRazRules *rzRules, Rules *rules, ViewPort *vp,
 {
     wxImage Image;
 
+    if( rules->razRule == NULL )
+        return 0;
+    
     if( ( rules->razRule->pixelPtr == NULL ) || ( rules->razRule->parm1 != m_colortable_index )
             || ( rules->razRule->parm0 != ID_RGB_PATT_SPEC ) ) {
         render_canvas_parms *patt_spec = CreatePatternBufferSpec( rzRules, rules, vp, true );

@@ -135,7 +135,8 @@ typedef struct {
     double sector1, sector2;
     double range;
     wxColor color;
-    bool fillSector;
+    bool iswhite;
+    bool isleading;
 } s57Sector_t;
 
 

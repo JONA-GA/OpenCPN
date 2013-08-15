@@ -1038,6 +1038,10 @@ s57chart::s57chart()
 
     ref_lat = 0.0;
     ref_lon = 0.0;
+    
+    m_b2pointLUPS = false;
+    m_b2lineLUPS = false;
+    
 }
 
 s57chart::~s57chart()
@@ -1199,7 +1203,8 @@ void s57chart::FreeObjectsAndRules()
             top = razRules[i][j];
             while( top != NULL ) {
                 top->obj->nRef--;
-                if( 0 == top->obj->nRef ) delete top->obj;
+                if( 0 == top->obj->nRef )
+                    delete top->obj;
 
                 if( top->child ) {
                     ObjRazRules *ctop = top->child;
@@ -1530,7 +1535,7 @@ bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& V
     if( Region != m_last_Region ) force_new_view = true;
 
     ps52plib->PrepareForRender();
-
+    
     if( m_plib_state_hash != ps52plib->GetStateHash() ) {
         m_bLinePrioritySet = false;                     // need to reset line priorities
         UpdateLUPs( this );                               // and update the LUPs
@@ -4666,10 +4671,10 @@ void s57chart::UpdateLUPs( s57chart *pOwner )
     ObjRazRules *top;
     ObjRazRules *nxx;
     LUPrec *LUP;
-
     for( int i = 0; i < PRIO_NUM; ++i ) {
         //  SIMPLIFIED is set, PAPER_CHART is bare
         if( ( razRules[i][0] ) && ( NULL == razRules[i][1] ) ) {
+            m_b2pointLUPS = true;
             top = razRules[i][0];
 
             while( top != NULL ) {
@@ -4691,6 +4696,7 @@ void s57chart::UpdateLUPs( s57chart *pOwner )
 
         //  PAPER_CHART is set, SIMPLIFIED is bare
         if( ( razRules[i][1] ) && ( NULL == razRules[i][0] ) ) {
+            m_b2pointLUPS = true;
             top = razRules[i][1];
 
             while( top != NULL ) {
@@ -4710,6 +4716,7 @@ void s57chart::UpdateLUPs( s57chart *pOwner )
 
         //  PLAIN_BOUNDARIES is set, SYMBOLIZED_BOUNDARIES is bare
         if( ( razRules[i][3] ) && ( NULL == razRules[i][4] ) ) {
+            m_b2lineLUPS = true;
             top = razRules[i][3];
 
             while( top != NULL ) {
@@ -4728,6 +4735,7 @@ void s57chart::UpdateLUPs( s57chart *pOwner )
 
         //  SYMBOLIZED_BOUNDARIES is set, PLAIN_BOUNDARIES is bare
         if( ( razRules[i][4] ) && ( NULL == razRules[i][3] ) ) {
+            m_b2lineLUPS = true;
             top = razRules[i][4];
 
             while( top != NULL ) {
@@ -6724,7 +6732,7 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
             narc++;
             step = ( angle2 - angle1 ) / (double)narc;
 
-            if( angle2 - angle1 < 15 && sectorlegs[i].fillSector ) {
+            if( sectorlegs[i].isleading/* && (angle2 - angle1 < 15) */ ) {
                 wxPoint yellowCone[3];
                 yellowCone[0] = lightPos;
                 yellowCone[1] = end1;
@@ -6755,19 +6763,25 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
 
             bool haveAngle1 = false;
             bool haveAngle2 = false;
+            int sec1 = (int)sectorlegs[i].sector1;
+            int sec2 = (int)sectorlegs[i].sector2;
+            if(sec1 > 360) sec1 -= 360;
+            if(sec2 > 360) sec2 -= 360;
+            
             for( unsigned int j=0; j<sectorangles.size(); j++ ) {
-                if( sectorangles[j] == (int)sectorlegs[i].sector1 ) haveAngle1 = true;
-                if( sectorangles[j] == (int)sectorlegs[i].sector2 ) haveAngle2 = true;
+                
+                if( sectorangles[j] == sec1 ) haveAngle1 = true;
+                if( sectorangles[j] == sec2 ) haveAngle2 = true;
             }
 
             if( ! haveAngle1 ) {
                 dc.StrokeLine( lightPos, end1 );
-                sectorangles.push_back( (int) sectorlegs[i].sector1 );
+                sectorangles.push_back( sec1 );
             }
 
             if( ! haveAngle2 ) {
                 dc.StrokeLine( lightPos, end2 );
-                sectorangles.push_back( (int) sectorlegs[i].sector2 );
+                sectorangles.push_back( sec2 );
             }
         }
     }
@@ -6790,6 +6804,15 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
     ChartBase *targetchart = cc1->GetChartAtCursor();
     s57chart *chart = dynamic_cast<s57chart*>( targetchart );
 
+    bool bhas_red_green = false;
+    bool bleading_attribute = false;
+    
+    int opacity = 100;
+    if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_DUSK ) opacity = 50;
+    if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_NIGHT) opacity = 20;
+    
+    int yOpacity = (float)opacity*1.3; // Matched perception of white/yellow with red/green
+    
     if( chart ) {
         sectorlegs.clear();
 
@@ -6814,7 +6837,6 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
                 wxPoint2DDouble objPos( light->m_lat, light->m_lon );
                 if( lightPosD.m_x == 0 && lightPosD.m_y == 0.0 )
                     lightPosD = objPos;
-                
                 if( lightPosD == objPos ) {
                     char *curr_att0 = NULL;
                     wxCharBuffer buffer=light->attList->ToUTF8();
@@ -6823,6 +6845,7 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
                         curr_att0 = (char *) calloc( len + 1, 1 );
                         strncpy( curr_att0, buffer.data(), len );
                     }
+                    
                     if( curr_att0 ) {
                         char *curr_att = curr_att0;
                         bool bviz = true;
@@ -6832,6 +6855,8 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
                         bool inDepthRange = false;
                         s57Sector_t sector;
 
+                        bleading_attribute = false;
+                        
                         while( *curr_att ) {
                             curAttrName.Clear();
                             noAttr++;
@@ -6843,11 +6868,6 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
                             if( *curr_att == '\037' ) curr_att++;
 
                             wxString value = chart->GetObjectAttributeValueAsString( light, attrCounter, curAttrName );
-                            int opacity = 100;
-                            if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_DUSK ) opacity = 50;
-                            if( cc1->GetColorScheme() == GLOBAL_COLOR_SCHEME_NIGHT) opacity = 20;
-
-                            int yOpacity = (float)opacity*1.3; // Matched perception with red/green
 
                             if( curAttrName == _T("LITVIS") ){
                                 if(value.StartsWith(_T("obsc")) )
@@ -6857,39 +6877,64 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
                             if( curAttrName == _T("SECTR2") ) value.ToDouble( &sectr2 );
                             if( curAttrName == _T("VALNMR") ) value.ToDouble( &valnmr );
                             if( curAttrName == _T("COLOUR") ) {
-                                sector.fillSector = true;
-                                color = wxColor( 255, 255, 0, yOpacity );
                                 if( value == _T("red(3)") ) {
                                     color = wxColor( 255, 0, 0, opacity );
-                                    sector.fillSector = false;
+                                    sector.iswhite = false;
+                                    bhas_red_green = true;
                                 }
                                 if( value == _T("green(4)") ) {
                                     color = wxColor( 0, 255, 0, opacity );
-                                    sector.fillSector = false;
+                                    sector.iswhite = false;
+                                    bhas_red_green = true;
                                 }
                             }
                             if( curAttrName == _T("EXCLIT") ) {
                                 if( value.Find( _T("(3)") ) ) valnmr = 1.0;  // Fog lights.
                             }
+                            if( curAttrName == _T("CATLIT") ){
+                                if( value.Upper().StartsWith( _T("DIRECT")) ||
+                                    value.Upper().StartsWith(_T("LEAD")) )
+                                    bleading_attribute = true;
+                            }
+                                
                             attrCounter++;
                         }
 
                         free(curr_att0);
 
                         if( ( sectr1 >= 0 ) && ( sectr2 >= 0 ) ) {
+                            if( sectr1 > sectr2 ) {             // normalize
+                                sectr2 += 360.0;
+                            }
+                            
                             sector.pos.m_x = light->m_lon;
                             sector.pos.m_y = light->m_lat;
 
                             sector.range = (valnmr > 0.0) ? valnmr : 2.5; // Short default range.
                             sector.sector1 = sectr1;
                             sector.sector2 = sectr2;
+                            
+                            if(!color.IsOk()){
+                                color = wxColor( 255, 255, 0, yOpacity );
+                                sector.iswhite = true;
+                            }
                             sector.color = color;
+                            sector.isleading = false;           // tentative judgment, check below
 
+                            if( bleading_attribute )
+                                sector.isleading = true;
+                            
                             bool newsector = true;
                             for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
                                 if( sectorlegs[i].pos == sector.pos &&
                                     sectorlegs[i].sector1 == sector.sector1 &&
-                                    sectorlegs[i].sector2 == sector.sector2 ) newsector = false;
+                                    sectorlegs[i].sector2 == sector.sector2 ) {
+                                        newsector = false;
+                                        //  In the case of duplicate sectors, choose the instance with largest range.
+                                        //  This applies to the case where day and night VALNMR are different, and so
+                                        //  makes the vector result independent of the order of day/night light features.
+                                        sectorlegs[i].range = wxMax(sectorlegs[i].range, sector.range);
+                                }
                             }
                             if(!bviz)
                                 newsector = false;
@@ -6907,5 +6952,52 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
         rule_list->Clear();
         delete rule_list;
     }
+
+#if 0    
+    //  Work with the sector legs vector to identify  and mark "Leading Lights"
+    int ns = sectorlegs.size();
+    if( sectorlegs.size() > 0 ) {
+        for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
+            if( fabs( sectorlegs[i].sector1 - sectorlegs[i].sector2 ) < 0.5 )
+                continue;
+            
+            if(((sectorlegs[i].sector2 - sectorlegs[i].sector1) < 15)  && sectorlegs[i].iswhite ) {
+                //      Check to see if this sector has a visible range greater than any other white light
+                
+                if( sectorlegs.size() > 1 ) {
+                    bool bleading = true;
+                    for( unsigned int j=0; j<sectorlegs.size(); j++ ) {
+                        if(i == j)
+                            continue;
+                        if((sectorlegs[j].iswhite) && (sectorlegs[i].range <= sectorlegs[j].range) ){
+                            if((sectorlegs[j].sector2 - sectorlegs[j].sector1) >= 15){  // test sector should not be a leading light
+                                bleading = false;    // cannot be a sector, since its range is <= another white light
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if(bleading)
+                        sectorlegs[i].isleading = true;
+                }
+            }
+            else
+                sectorlegs[i].isleading = false;
+                
+        }
+    }
+#endif    
+
+//  Work with the sector legs vector to identify  and mark "Leading Lights"
+//  Sectors with CATLIT "Leading" or "Directional" attribute set have already been marked
+    for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
+ 
+        if(((sectorlegs[i].sector2 - sectorlegs[i].sector1) < 15) ) {
+            if( sectorlegs[i].iswhite && bhas_red_green )
+                sectorlegs[i].isleading = true;
+        }
+    }
+            
+    
     return newSectorsNeedDrawing;
 }

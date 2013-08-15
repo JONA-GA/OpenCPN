@@ -852,10 +852,13 @@ AIS_Error AIS_Decoder::Decode( const wxString& str )
             pTargetData->SOG = 0;
             pTargetData->ShipType = dsc_fmt; // DSC report
             pTargetData->Class = AIS_DSC;
-            if( dsc_fmt == 12 ) strncpy( pTargetData->ShipName, "DISTRESS            ", 21 );
+            pTargetData->b_nameValid = false; // continue cheating, because position maybe incomplete
+            if( dsc_fmt == 12 ) {
+                strncpy( pTargetData->ShipName, "DISTRESS            ", 21 );
+                pTargetData->b_nameValid = true;
+            }
             else
                 strncpy( pTargetData->ShipName, "POSITION REPORT     ", 21 );
-            pTargetData->b_nameValid = false; // continue cheating, because position maybe incomplete
             pTargetData->b_active = true;
             pTargetData->b_lost = false;
 
@@ -1595,21 +1598,31 @@ void AIS_Decoder::UpdateAllAlarms( void )
                 if( td->Class == AIS_SART )
                     m_bGeneralAlert = true;
 
+                //  DSC Distress targets always alert
+                if( ( td->Class == AIS_DSC ) && ( td->ShipType == 12 ) )
+                    m_bGeneralAlert = true;
             }
 
             ais_alarm_type this_alarm = AIS_NO_ALARM;
-            if( g_bCPAWarn && td->b_active && td->b_positionOnceValid ) {
+
+            //  SART targets always alert
+            if( td->Class == AIS_SART )
+                this_alarm = AIS_ALARM_SET;
+            
+            //  DSC Distress targets always alert
+            if( ( td->Class == AIS_DSC ) && ( td->ShipType == 12 ) )
+                    this_alarm = AIS_ALARM_SET;
+            
+            if( g_bCPAWarn && td->b_active && td->b_positionOnceValid &&
+                ( td->Class != AIS_SART ) && ( td->Class != AIS_DSC ) ) {
                 //      Skip anchored/moored(interpreted as low speed) targets if requested
-                if( ( !g_bShowMoored ) && ( td->SOG <= g_ShowMoored_Kts ) )        // dsr
-                        {
+                if( ( !g_bShowMoored ) && ( td->SOG <= g_ShowMoored_Kts ) ) {       // dsr
                     td->n_alarm_state = AIS_NO_ALARM;
                     continue;
                 }
 
                 //    No Alert on moored(interpreted as low speed) targets if so requested
-                if( g_bAIS_CPA_Alert_Suppress_Moored && ( td->SOG <= g_ShowMoored_Kts ) )     // dsr
-                        {
-
+                if( g_bAIS_CPA_Alert_Suppress_Moored && ( td->SOG <= g_ShowMoored_Kts ) ) {    // dsr
                     td->n_alarm_state = AIS_NO_ALARM;
                     continue;
                 }
@@ -1630,13 +1643,11 @@ void AIS_Decoder::UpdateAllAlarms( void )
                 }
             }
 
-            //  SART targets always alert
-            if( td->Class == AIS_SART ) this_alarm = AIS_ALARM_SET;
-
+            
             //    Maintain the timer for in_ack flag
-            //  SART targets always maintain ack timeout
+            //  SART and DSC targets always maintain ack timeout
 
-            if( g_bAIS_ACK_Timeout || ( td->Class == AIS_SART ) ) {
+            if( g_bAIS_ACK_Timeout || (td->Class == AIS_SART) || ((td->Class == AIS_DSC) && (td->ShipType == 12))) {
                 if( td->b_in_ack_timeout ) {
                     wxTimeSpan delta = wxDateTime::Now() - td->m_ack_time;
                     if( delta.GetMinutes() > g_AckTimeout_Mins ) td->b_in_ack_timeout = false;
@@ -1871,22 +1882,21 @@ void AIS_Decoder::OnTimerAIS( wxTimerEvent& event )
 
     //    If the AIS Alert Dialog is not currently shown....
 
-    //    Show the Alert dialog
-    //    Which of multiple targets?
-    //    Give priority to SART targets, and among them the shortest range
-    //    Otherwise,
-    //    search the list for any targets with CPA alarms, selecting the target with shortest TCPA
-
+    //    Scan all targets, looking for SART, DSC Distress, and CPA incursions
+    //    In the case of multiple targets of the same type, select the shortest range or shortest TCPA
+    
     if( NULL == g_pais_alert_dialog_active ) {
         double tcpa_min = 1e6;             // really long
         double sart_range = 1e6;
+        double dsc_range = 1e6;
         AIS_Target_Data *palarm_target_cpa = NULL;
         AIS_Target_Data *palarm_target_sart = NULL;
-
+        AIS_Target_Data *palarm_target_dsc = NULL;
+        
         for( it = ( *current_targets ).begin(); it != ( *current_targets ).end(); ++it ) {
             AIS_Target_Data *td = it->second;
             if( td ) {
-                if( td->Class != AIS_SART ) {
+                if( (td->Class != AIS_SART) &&  (td->Class != AIS_DSC) ) {
 
                     if( g_bAIS_CPA_Alert && td->b_active ) {
                         if( ( AIS_ALARM_SET == td->n_alarm_state ) && !td->b_in_ack_timeout ) {
@@ -1896,7 +1906,16 @@ void AIS_Decoder::OnTimerAIS( wxTimerEvent& event )
                             }
                         }
                     }
-                } else {
+                }
+                else if( (td->Class == AIS_DSC ) && ( td->ShipType == 12) ){
+                    if( td->b_active ) {
+                        if( ( AIS_ALARM_SET == td->n_alarm_state ) && !td->b_in_ack_timeout ) {
+                            palarm_target_dsc = td;
+                        }
+                    }
+                }
+                                
+                else if( td->Class == AIS_SART ){
                     if( td->b_active ) {
                         if( ( AIS_ALARM_SET == td->n_alarm_state ) && !td->b_in_ack_timeout ) {
                             if( td->Range_NM < sart_range ) {
@@ -1909,22 +1928,43 @@ void AIS_Decoder::OnTimerAIS( wxTimerEvent& event )
             }
         }
 
+        //    Which of multiple targets?
+        //    Give priority to SART targets, then DSC Distress, then CPA incursion
+        
         AIS_Target_Data *palarm_target = palarm_target_cpa;
 
-        if( palarm_target_sart ) palarm_target = palarm_target_sart;
+        if( palarm_target_sart )
+            palarm_target = palarm_target_sart;
+        
+        if( palarm_target_dsc )
+            palarm_target = palarm_target_dsc;
+        
 
+        //    Show the alert
         if( palarm_target ) {
-            //    Show the alert
 
-            bool b_jumpto = palarm_target->Class == AIS_SART;
+            bool b_jumpto = (palarm_target->Class == AIS_SART) || (palarm_target->Class == AIS_DSC);
 
-            AISTargetAlertDialog *pAISAlertDialog = new AISTargetAlertDialog();
-            pAISAlertDialog->Create( palarm_target->MMSI, m_parent_frame, this, b_jumpto, -1,
+        //    Show the Alert dialog
+            
+//      See FS# 968/998
+//      If alert occurs while OCPN is iconized to taskbar, then clicking the taskbar icon
+//      only brings up the Alert dialog, and not the entire application.
+//      This is an OS specific behavior, not seen on linux or Mac.
+//      This patch will allow the audio alert to occur, and the visual alert will pop up soon
+//      after the user selects the OCPN icon from the taskbar. (on the next timer tick, probably)
+#ifdef __WXMSW__            
+            if( !gFrame->IsIconized() )
+#endif                
+            {
+                AISTargetAlertDialog *pAISAlertDialog = new AISTargetAlertDialog();
+                pAISAlertDialog->Create( palarm_target->MMSI, m_parent_frame, this, b_jumpto, -1,
                     _("AIS Alert"), wxPoint( g_ais_alert_dialog_x, g_ais_alert_dialog_y ),
                     wxSize( g_ais_alert_dialog_sx, g_ais_alert_dialog_sy ) );
 
-            g_pais_alert_dialog_active = pAISAlertDialog;
-            pAISAlertDialog->Show();                     // Show modeless, so it stays on the screen
+                g_pais_alert_dialog_active = pAISAlertDialog;
+                pAISAlertDialog->Show();                     // Show modeless, so it stays on the screen
+            }
 
             //    Audio alert if requested
             m_bAIS_Audio_Alert_On = true;             // always on when alert is first shown
