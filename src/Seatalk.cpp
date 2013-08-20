@@ -503,12 +503,12 @@ wxString StkToNmea::TrueWindMWV()
 			cm_nmea.Mwv.Empty();
 			VentAngle1=VentAngle;
 			if (VentAngle1 > 180)
-				{ VentAngle1= VentAngle1 -360;
-				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+				{ VentAngle1= VentAngle1 ;
+				VentAngle1=360 + atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
 			}else
 				{
 				VentAngle1= VentAngle1 ;
-				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+				VentAngle1=atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
 			
 			}
 			cm_nmea.Mwv.WindAngle= VentAngle1;
@@ -540,11 +540,11 @@ wxString StkToNmea::TrueWindMWD()
 			VentAngle1=VentAngle;
 			if (VentAngle1 > 180)
 				{ VentAngle1= VentAngle1 -360;
-				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+				VentAngle1= atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
 			}else
 				{
 				VentAngle1= VentAngle1 ;
-				VentAngle1=270 -atan( VentVitesse *sin((90-VentAngle1)* 3.1415/180)/(VentVitesse * cos((90-VentAngle1) * 3.1415/180)-Sow)) * 180/3.1415 ;
+				VentAngle1= atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
 			
 			}
 			cm_nmea.Mwd.WindAngleTrue= VentAngle1;
