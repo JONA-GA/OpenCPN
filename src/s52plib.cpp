@@ -412,19 +412,16 @@ LUPrec *s52plib::FindBestLUP( wxArrayOfLUPrec *LUPArray, unsigned int startIndex
     if( startIndex >= LUPArray->GetCount() )
         return NULL;
     
- //   if(!strncmp(pObj->FeatureName, "TSSLPT", 6))
- //       int yyp = 4;
-    
     // setup default return to the first LUP that matches Feature name.
     LUPrec *LUP = LUPArray->Item( startIndex );
-
-    if( pObj->att_array == NULL )
-        return LUP;       // object has no attributes to compare, so return first LUP
 
     int nATTMatch = 0;
     int countATT = 0;
     bool bmatch_found = false;
-    
+
+    if( pObj->att_array == NULL )
+        goto check_LUP;       // object has no attributes to compare, so return "best" LUP
+        
     for( unsigned int i = 0; i < count; ++i ) {
         LUPrec *LUPCandidate = LUPArray->Item( startIndex + i );
         
@@ -570,11 +567,13 @@ next_LUP_Attr:
         
     } //for loop
     
-    //  In strict mode, we require at least one attribute to match exactly
+
+check_LUP:
+//  In strict mode, we require at least one attribute to match exactly
     
     if( bStrict ) {
         if( nATTMatch == 0 ) // nothing matched
-        LUP = NULL;
+            LUP = NULL;
     } else {
         //      If no match found, return the first LUP in the list which has no attributes
         if( !bmatch_found ) {
@@ -2365,13 +2364,14 @@ int s52plib::RenderLS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
         }
     } else // OpenGL mode
     {
-        glPushAttrib( GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_HINT_BIT | GL_ENABLE_BIT ); //Save state
+        //glPushAttrib( GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_HINT_BIT | GL_ENABLE_BIT ); //Save state
 
         glColor3ub( c->R, c->G, c->B );
 
         glDisable( GL_LINE_SMOOTH );
         glDisable( GL_BLEND );
 
+        
         //    Set drawing width
         if( w > 1 ) {
             GLint parms[2];
@@ -2390,6 +2390,9 @@ int s52plib::RenderLS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
             glLineStipple( 1, 0x3333 );
             glEnable( GL_LINE_STIPPLE );
         }
+        else
+            glDisable( GL_LINE_STIPPLE );
+        
         
     }
 
@@ -2669,7 +2672,7 @@ int s52plib::RenderLS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
                     free( ptp );
                 }
 
-    if( !m_pdc ) glPopAttrib();
+//    if( !m_pdc ) glPopAttrib();
 
     if(pdotpen) {
         pdotpen->SetDashes( 1, NULL );

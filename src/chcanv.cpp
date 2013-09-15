@@ -737,6 +737,32 @@ OCPNRegion ViewPort::GetVPRegionIntersect( const OCPNRegion &Region, size_t n, f
 #endif
 }
 
+wxRect ViewPort::GetVPRectIntersect( size_t n, float *llpoints )
+{
+    //  Calculate the intersection between the currect VP screen 
+    //  and the bounding box of a polygon specified by lat/lon points.
+    
+    float *pfp = llpoints;
+
+    wxBoundingBox point_box;
+    for( unsigned int ip = 0; ip < n; ip++ ) {
+        point_box.Expand(pfp[1], pfp[0]);
+        pfp += 2;
+    }
+
+    wxPoint pul = GetPixFromLL( point_box.GetMaxY(), point_box.GetMinX() );
+    wxPoint plr = GetPixFromLL( point_box.GetMinY(), point_box.GetMaxX() );
+    
+    OCPNRegion r( pul, plr );
+    OCPNRegion rs(rv_rect);
+    
+    r.Intersect(rs);
+    
+    return r.GetBox();
+    
+ 
+}
+
 void ViewPort::SetBoxes( void )
 {
 
@@ -940,7 +966,8 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
     warp_flag = false;
     m_bzooming = false;
     m_bmouse_key_mod = false;
-
+    m_b_paint_enable = true;
+    
     pss_overlay_bmp = NULL;
     pss_overlay_mask = NULL;
     m_bChartDragging = false;
@@ -1465,6 +1492,13 @@ int ChartCanvas::FindClosestCanvasChartdbIndex( int scale )
     }
 
     return new_dbIndex;
+}
+
+void ChartCanvas::EnablePaint(bool b_enable)
+{ 
+    m_b_paint_enable = b_enable;
+    if(m_glcc)
+        m_glcc->EnablePaint(b_enable);
 }
 
 bool ChartCanvas::IsQuiltDelta()
@@ -5581,9 +5615,15 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                 if( m_pEditRouteArray ) {
                     for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
                         Route *pr = (Route *) m_pEditRouteArray->Item( ir );
-                        wxRect route_rect;
-                        pr->CalculateDCRect( m_dc_route, &route_rect, VPoint );
-                        pre_rect.Union( route_rect );
+                        //      Need to validate route pointer
+                        //      Route may be gone due to drgging close to ownship with
+                        //      "Delete On Arrival" state set, as in the case of
+                        //      navigating to an isolated waypoint on a temporary route
+                        if( g_pRouteMan->IsRouteValid(pr) ) {
+                            wxRect route_rect;
+                            pr->CalculateDCRect( m_dc_route, &route_rect, VPoint );
+                            pre_rect.Union( route_rect );
+                        }
                     }
                 }
 
@@ -5612,9 +5652,11 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                 if( m_pEditRouteArray ) {
                     for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
                         Route *pr = (Route *) m_pEditRouteArray->Item( ir );
-                        wxRect route_rect;
-                        pr->CalculateDCRect( m_dc_route, &route_rect, VPoint );
-                        post_rect.Union( route_rect );
+                        if( g_pRouteMan->IsRouteValid(pr) ) {
+                            wxRect route_rect;
+                            pr->CalculateDCRect( m_dc_route, &route_rect, VPoint );
+                            post_rect.Union( route_rect );
+                        }
                     }
                 }
 
@@ -5712,11 +5754,13 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                 if( m_pEditRouteArray ) {
                     for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
                         Route *pr = (Route *) m_pEditRouteArray->Item( ir );
-                        pr->CalculateBBox();
-                        pr->UpdateSegmentDistances();
-                        pr->m_bIsBeingEdited = false;
+                        if( g_pRouteMan->IsRouteValid(pr) ) {
+                            pr->CalculateBBox();
+                            pr->UpdateSegmentDistances();
+                            pr->m_bIsBeingEdited = false;
 
-                        pConfig->UpdateRoute( pr );
+                            pConfig->UpdateRoute( pr );
+                        }
                     }
                 }
 
@@ -5725,12 +5769,14 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                     if( m_pEditRouteArray ) {
                         for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
                             Route *pr = (Route *) m_pEditRouteArray->Item( ir );
-                            if( !pr->IsTrack() && pRoutePropDialog->m_pRoute == pr ) {
-                                pRoutePropDialog->SetRouteAndUpdate( pr );
-                                pRoutePropDialog->UpdateProperties();
-                            } else if ( ( NULL != pTrackPropDialog ) && ( pTrackPropDialog->IsShown() ) && pTrackPropDialog->m_pRoute == pr ) {
-                                pTrackPropDialog->SetTrackAndUpdate( pr );
-                                pTrackPropDialog->UpdateProperties();
+                            if( g_pRouteMan->IsRouteValid(pr) ) {
+                                if( !pr->IsTrack() && pRoutePropDialog->m_pRoute == pr ) {
+                                    pRoutePropDialog->SetRouteAndUpdate( pr );
+                                    pRoutePropDialog->UpdateProperties();
+                                } else if ( ( NULL != pTrackPropDialog ) && ( pTrackPropDialog->IsShown() ) && pTrackPropDialog->m_pRoute == pr ) {
+                                    pTrackPropDialog->SetTrackAndUpdate( pr );
+                                    pTrackPropDialog->UpdateProperties();
+                                }
                             }
                         }
                     }
@@ -8055,6 +8101,9 @@ int s_in_update;
 void ChartCanvas::OnPaint( wxPaintEvent& event )
 {
 //      CALLGRIND_START_INSTRUMENTATION
+    //  Paint updates may have been externally disabled (temporarily, to avoid Yield() recursion performance loss)
+    if(!m_b_paint_enable)
+        return;
 
     wxPaintDC dc( this );
 

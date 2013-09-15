@@ -140,6 +140,7 @@ public:
 
       void PopupMenuHandler(wxCommandEvent& event);
 
+      void EnablePaint(bool b_enable);
       virtual bool SetCursor(const wxCursor &c);
       virtual void Refresh( bool eraseBackground = true,
                             const wxRect *rect = (const wxRect *) NULL );
@@ -541,6 +542,8 @@ private:
       double      m_zoom_target_factor;
       double      m_zoom_current_factor;
       bool        m_benable_autopan;
+      bool        m_b_paint_enable;
+      
 
 DECLARE_EVENT_TABLE()
 };

@@ -1279,17 +1279,15 @@ double s57chart::GetNormalScaleMax( double canvas_scale_factor, int canvas_width
 
 void s57chart::GetPointPix( ObjRazRules *rzRules, float north, float east, wxPoint *r )
 {
-    r->x = (int) round(((east - m_easting_vp_center) * m_view_scale_ppm) + m_pixx_vp_center);
-    r->y = (int) round(m_pixy_vp_center - ((north - m_northing_vp_center) * m_view_scale_ppm));
+    r->x = roundint(((east - m_easting_vp_center) * m_view_scale_ppm) + m_pixx_vp_center);
+    r->y = roundint(m_pixy_vp_center - ((north - m_northing_vp_center) * m_view_scale_ppm));
 }
 
 void s57chart::GetPointPix( ObjRazRules *rzRules, wxPoint2DDouble *en, wxPoint *r, int nPoints )
 {
     for( int i = 0; i < nPoints; i++ ) {
-        r[i].x =
-                (int) round(((en[i].m_x - m_easting_vp_center) * m_view_scale_ppm) + m_pixx_vp_center);
-        r[i].y =
-                (int) round(m_pixy_vp_center - ((en[i].m_y - m_northing_vp_center) * m_view_scale_ppm));
+        r[i].x =  roundint(((en[i].m_x - m_easting_vp_center) * m_view_scale_ppm) + m_pixx_vp_center);
+        r[i].y =  roundint(m_pixy_vp_center - ((en[i].m_y - m_northing_vp_center) * m_view_scale_ppm));
     }
 }
 
@@ -4804,39 +4802,45 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                 const char *pType = OGRFieldDefn::GetFieldTypeName( poFDefn->GetType() );
                 const char *pAttrName = poFDefn->GetNameRef();
                 const char *pAttrVal = pFeature->GetFieldAsString( iField );
- 
-                snprintf( line, MAX_HDR_LINE - 2, "  %s (%c) = ", pAttrName, *pType);
-                wxString AttrStringPrefix = wxString( line, wxConvUTF8 );
                 
-                wxString wxAttrValue;
-                
-                if( (0 == strncmp("NOBJNM",pAttrName, 6) ) ||
-                    (0 == strncmp("NINFOM",pAttrName, 6) ) ||
-                    (0 == strncmp("NTXTDS",pAttrName, 6) ) )
-                {
-                    if( poReader->GetNall() == 2) {     // ENC is using UCS-2 / UTF-16 encoding
-                        wxMBConvUTF16 conv;
-                        wxString att_conv(pAttrVal, conv);
-                        wxAttrValue = att_conv;
+                if(strlen( pAttrVal ) ) {
+                    snprintf( line, MAX_HDR_LINE - 2, "  %s (%c) = ", pAttrName, *pType);
+                    wxString AttrStringPrefix = wxString( line, wxConvUTF8 );
+                    
+                    wxString wxAttrValue;
+                    
+                    if( (0 == strncmp("NOBJNM",pAttrName, 6) ) ||
+                        (0 == strncmp("NINFOM",pAttrName, 6) ) ||
+                        (0 == strncmp("NTXTDS",pAttrName, 6) ) )
+                    {
+                        if( poReader->GetNall() == 2) {     // ENC is using UCS-2 / UTF-16 encoding
+                            wxMBConvUTF16 conv;
+                            wxString att_conv(pAttrVal, conv);
+                            wxAttrValue = att_conv;
+                        }
                     }
-                }
+                    
+                    if( wxAttrValue.IsEmpty()) {
+        // Attempt different conversions to accomodate different language encodings in
+        // the original ENC files.
+
+                        wxAttrValue = wxString( pAttrVal, wxConvUTF8 );
+
+                        if( 0 ==wxAttrValue.Length() ) {
+                            wxMBConvUTF16 conv;
+                            wxString att_conv(pAttrVal, conv);
+                            wxAttrValue = att_conv;
+                            
+                            if( 0 ==wxAttrValue.Length() ) {
+                                wxLogError( _T("Warning: CreateSENCRecord(): Failed to convert string value to wxString.") );
+                            }
+                        }
+                    }
                 
-                if( wxAttrValue.IsEmpty()) {
-    // Attempt different conversions to accomodate different language encodings in
-    // the original ENC files.
-
-                    wxAttrValue = wxString( pAttrVal, wxConvUTF8 );
-
-                    if( wxAttrValue.Length() < strlen(pAttrVal) )
-                        wxAttrValue = wxString( pAttrVal, wxConvISO8859_1 );
-
-                    if( wxAttrValue.Length() < strlen(pAttrVal) )
-                        wxLogError( _T("Warning: CreateSENCRecord(): Failed to convert string value to wxString.") );
+                    sheader += AttrStringPrefix;
+                    sheader += wxAttrValue;
+                    sheader += '\n';
                 }
-               
-                sheader += AttrStringPrefix;
-                sheader += wxAttrValue;
-                sheader += '\n';
             }
         }
     }
