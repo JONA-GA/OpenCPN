@@ -54,7 +54,7 @@ DashboardInstrument_WindDirHistory::DashboardInstrument_WindDirHistory( wxWindow
       m_MaxWindSpd = 0;
       m_TotalMaxWindSpd = 0;
       m_WindSpd = 0;
-      m_TopLineHeight=30;
+      m_TopLineHeight=20;
       m_SpdRecCnt=0;
       m_DirRecCnt=0;
       m_SpdStartVal=-1;
@@ -385,7 +385,7 @@ void DashboardInstrument_WindDirHistory::DrawBackground(wxGCDC* dc)
   dc->SetPen(pen);
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.25), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.25));
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.75), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.75));
-  pen.SetStyle(wxSHORT_DASH);
+  pen.SetStyle(wxDOT); //GA - wxSHORT_DASH and Dashes don't work in linux
   dc->SetPen(pen);
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.5), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.5));
 }
@@ -472,10 +472,10 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
     dir=m_WindDir;
     while(dir > 360) dir-=360;
     while(dir <0 ) dir+=360;
-    WindAngle=wxString::Format(_T("TWD %3.0f"), dir)+DEGREE_SIGN;
+    WindAngle=wxString::Format(_T("TWD %3.0f"), dir)+ DEGREE_SIGN ;// + DEGREE_SIGN;
   }
-  dc->GetTextExtent(WindAngle, &degw, &degh, 0, 0, g_pFontData);
-  dc->DrawText(WindAngle, m_WindowRect.width-degw-m_RightLegend-3, m_TopLineHeight-degh);
+  dc->GetTextExtent(WindAngle, &degw, &degh, 0, 0 , g_pFontData);
+  dc->DrawText(WindAngle, m_WindowRect.width-degw-m_RightLegend, m_TopLineHeight-degh);
   pen.SetStyle(wxSOLID);
   pen.SetColour(wxColour(204,41,41 ,96)); //red, transparent
   pen.SetWidth(1);
@@ -525,7 +525,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
   dc->SetTextForeground(col);
   WindSpeed=wxString::Format(_T("TWS %3.1f  "), m_WindSpd);
   dc->GetTextExtent(WindSpeed, &degw, &degh, 0, 0, g_pFontData);
-  dc->DrawText(WindSpeed, m_LeftLegend+3, m_TopLineHeight-degh);
+  dc->DrawText(WindSpeed, m_LeftLegend, m_TopLineHeight-degh);
   dc->SetFont(*g_pFontLabel);
   //determine the time range of the available data (=oldest data value)
   int i=0;
@@ -538,7 +538,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
     min=m_ArrayRecTime[i].GetMinute();
     hour=m_ArrayRecTime[i].GetHour();
   }
-  dc->DrawText(wxString::Format(_("Max %.1f since %02d:%02d  Overall %.1f"),m_MaxWindSpd, hour,min,m_TotalMaxWindSpd), m_LeftLegend+3+2+degw, m_TopLineHeight-degh+5);
+  dc->DrawText(wxString::Format(_T(" Max %.1f since %02d:%02d  Overall %.1f"),m_MaxWindSpd, hour,min,m_TotalMaxWindSpd), m_LeftLegend+3+2+degw, m_TopLineHeight-degh+5);
   pen.SetStyle(wxSOLID);
   pen.SetColour(wxColour(61,61,204,96)); //blue, transparent
   pen.SetWidth(1);
