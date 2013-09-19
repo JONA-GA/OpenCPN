@@ -1,3 +1,31 @@
+/******************************************************************************
+* 
+*
+* Project:  OpenCPN
+* Purpose:  Seatalk Datastream
+* Author:   Gilles Audemard
+*
+***************************************************************************
+*   Copyright (C) 2012 by Gilles Audemard   *
+*   $EMAIL$   *
+*                                                                         *
+*   This program is free software; you can redistribute it and/or modify  *
+*   it under the terms of the GNU General Public License as published by  *
+*   the Free Software Foundation; either version 2 of the License, or     *
+*   (at your option) any later version.                                   *
+*                                                                         *
+*   This program is distributed in the hope that it will be useful,       *
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+*   GNU General Public License for more details.                          *
+*                                                                         *
+*   You should have received a copy of the GNU General Public License     *
+*   along with this program; if not, write to the                         *
+*   Free Software Foundation, Inc.,                                       *
+*   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+***************************************************************************
+*/
+
 
 #include "wx/wxprec.h"
 
@@ -505,6 +533,7 @@ wxString StkToNmea::TrueWindMWV()
 			if (VentAngle1 > 180)
 				{ VentAngle1= VentAngle1 ;
 				VentAngle1=360 + atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
+				if (VentAngle1>360) VentAngle1=VentAngle1-180;
 			}else
 				{
 				VentAngle1= VentAngle1 ;
@@ -539,16 +568,17 @@ wxString StkToNmea::TrueWindMWD()
 			cm_nmea.Mwd.Empty();
 			VentAngle1=VentAngle;
 			if (VentAngle1 > 180)
-				{ VentAngle1= VentAngle1 -360;
-				VentAngle1= atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
+				{ VentAngle1= VentAngle1;
+				VentAngle1= 360+atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
+			if (VentAngle1>360) VentAngle1=VentAngle1-180;
 			}else
 				{
 				VentAngle1= VentAngle1 ;
 				VentAngle1= atan( VentVitesse *sin(VentAngle1* 3.1415/180)/(VentVitesse * cos(VentAngle1 * 3.1415/180)-Sow)) * 180/3.1415 ;
 			
 			}
-			cm_nmea.Mwd.WindAngleTrue= VentAngle1;
-			cm_nmea.Mwd.WindAngleMagnetic= VentAngle1;
+			cm_nmea.Mwd.WindAngleTrue= VentAngle1+HeadingMag;
+			cm_nmea.Mwd.WindAngleMagnetic= VentAngle1+HeadingMag;
 			cm_nmea.Mwd.WindSpeedKnots= sqrt((VentVitesse * VentVitesse)+(Sow *Sow)-(2 * VentVitesse * Sow * cos(VentAngle * 3.14*180)));
 			cm_nmea.Mwd.WindSpeedms= cm_nmea.Mwd.WindSpeedKnots * 0.51;
 			cm_nmea.Mwd.Write(snt);

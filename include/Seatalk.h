@@ -2,7 +2,7 @@
 * 
 *
 * Project:  OpenCPN
-* Purpose:  Connector Plugin/Seatalk
+* Purpose:  Seatalk Datastream
 * Author:   Gilles Audemard
 *
 ***************************************************************************
