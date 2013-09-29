@@ -1482,6 +1482,10 @@ void options::CreatePanel_AIS( size_t parent, int border_size, int group_item_sp
             wxSize( -1, -1 ) );
     pCPAGrid->Add( m_pText_CPA_Warn, 0, wxALL | wxALIGN_RIGHT, group_item_spacing );
 
+    m_pCheck_CPA_Warn->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED,
+                                wxCommandEventHandler( options::OnCPAWarnClick ), NULL, this );
+    
+    
     m_pCheck_CPA_WarnT = new wxCheckBox( panelAIS, -1,
             _("...and TCPA is less than (min)") );
     pCPAGrid->Add( m_pCheck_CPA_WarnT, 0, wxALL, group_item_spacing );
@@ -2040,11 +2044,16 @@ void options::SetInitialSettings()
     s.Printf( _T("%4.1f"), g_CPAWarn_NM );
     m_pText_CPA_Warn->SetValue( s );
 
-    m_pCheck_CPA_WarnT->SetValue( g_bTCPA_Max );
-
+    if(  m_pCheck_CPA_Warn->GetValue() ) {
+        m_pCheck_CPA_WarnT->Enable();
+        m_pCheck_CPA_WarnT->SetValue( g_bTCPA_Max );
+    }
+    else
+        m_pCheck_CPA_WarnT->Disable();
+    
     s.Printf( _T("%4.0f"), g_TCPA_Max );
     m_pText_CPA_WarnT->SetValue( s );
-
+    
     //      Lost Targets
     m_pCheck_Mark_Lost->SetValue( g_bMarkLost );
 
@@ -2191,6 +2200,17 @@ void options::SetInitialSettings()
 #endif
 
 }
+
+void options::OnCPAWarnClick( wxCommandEvent& event )
+{
+    if( m_pCheck_CPA_Warn->GetValue() ) {
+        m_pCheck_CPA_WarnT->Enable();
+    } else {
+        m_pCheck_CPA_WarnT->SetValue( false );
+        m_pCheck_CPA_WarnT->Disable();
+    }
+}
+
 
 void options::OnShowGpsWindowCheckboxClick( wxCommandEvent& event )
 {
@@ -2367,7 +2387,7 @@ void options::UpdateWorkArrayFromTextCtl()
     }
 }
 
-ConnectionParams * options::SaveConnectionParams()
+ConnectionParams *options::CreateConnectionParamsFromSelectedItem()
 {
     if( !m_bNMEAParams_shown )
         return NULL;
@@ -2392,42 +2412,43 @@ ConnectionParams * options::SaveConnectionParams()
         }
     }
 
-    ConnectionParams * m_pConnectionParams = new ConnectionParams();
+    ConnectionParams * pConnectionParams = new ConnectionParams();
 
-    m_pConnectionParams->Valid = true;
+    pConnectionParams->Valid = true;
     if ( m_rbTypeSerial->GetValue() )
-        m_pConnectionParams->Type = SERIAL;
+        pConnectionParams->Type = SERIAL;
     else
-        m_pConnectionParams->Type = NETWORK;
-    m_pConnectionParams->NetworkAddress = m_tNetAddress->GetValue();
-    m_pConnectionParams->NetworkPort = wxAtoi(m_tNetPort->GetValue());
+        pConnectionParams->Type = NETWORK;
+    pConnectionParams->NetworkAddress = m_tNetAddress->GetValue();
+    pConnectionParams->NetworkPort = wxAtoi(m_tNetPort->GetValue());
     if ( m_rbNetProtoTCP->GetValue() )
-        m_pConnectionParams->NetProtocol = TCP;
+        pConnectionParams->NetProtocol = TCP;
     else if ( m_rbNetProtoUDP->GetValue() )
-        m_pConnectionParams->NetProtocol = UDP;
+        pConnectionParams->NetProtocol = UDP;
     else
-        m_pConnectionParams->NetProtocol = GPSD;
+        pConnectionParams->NetProtocol = GPSD;
 
-    m_pConnectionParams->Baudrate = wxAtoi( m_choiceBaudRate->GetStringSelection() );
-    m_pConnectionParams->Priority = wxAtoi( m_choicePriority->GetStringSelection() );
-    m_pConnectionParams->ChecksumCheck = m_cbCheckCRC->GetValue();
-    m_pConnectionParams->Garmin = m_cbGarminHost->GetValue();
-    m_pConnectionParams->InputSentenceList = wxStringTokenize( m_tcInputStc->GetValue(), _T(",") );
+    pConnectionParams->Baudrate = wxAtoi( m_choiceBaudRate->GetStringSelection() );
+    pConnectionParams->Priority = wxAtoi( m_choicePriority->GetStringSelection() );
+    pConnectionParams->ChecksumCheck = m_cbCheckCRC->GetValue();
+    pConnectionParams->Garmin = m_cbGarminHost->GetValue();
+    pConnectionParams->InputSentenceList = wxStringTokenize( m_tcInputStc->GetValue(), _T(",") );
     if ( m_rbIAccept->GetValue() )
-        m_pConnectionParams->InputSentenceListType = WHITELIST;
+        pConnectionParams->InputSentenceListType = WHITELIST;
     else
-        m_pConnectionParams->InputSentenceListType = BLACKLIST;
-    m_pConnectionParams->Output = m_cbOutput->GetValue();
-    m_pConnectionParams->OutputSentenceList = wxStringTokenize( m_tcOutputStc->GetValue(), _T(",") );
+        pConnectionParams->InputSentenceListType = BLACKLIST;
+    pConnectionParams->Output = m_cbOutput->GetValue();
+    pConnectionParams->OutputSentenceList = wxStringTokenize( m_tcOutputStc->GetValue(), _T(",") );
     if ( m_rbOAccept->GetValue() )
-        m_pConnectionParams->OutputSentenceListType = WHITELIST;
+        pConnectionParams->OutputSentenceListType = WHITELIST;
     else
         m_pConnectionParams->OutputSentenceListType = BLACKLIST;
-    m_pConnectionParams->Port = m_comboPort->GetValue();
+    m_pConnectionParams->Port = m_comboPort->GetValue().BeforeFirst(' ');
     m_pConnectionParams->Protocol = (DataProtocol)  m_choiceSerialProtocol->GetSelection()  ;
-
-    m_pConnectionParams->bEnabled = m_connection_enabled;
-    return m_pConnectionParams;
+    pConnectionParams->bEnabled = m_connection_enabled;
+    pConnectionParams->b_IsSetup = false;
+    
+    return pConnectionParams;
 }
 
 void options::OnApplyClick( wxCommandEvent& event )
@@ -2636,7 +2657,7 @@ void options::OnApplyClick( wxCommandEvent& event )
 
     if(!connectionsaved)
     {
-        ConnectionParams * cp = SaveConnectionParams();
+        ConnectionParams * cp = CreateConnectionParamsFromSelectedItem();
         if(cp != NULL)
         {
             if (itemIndex >= 0)
@@ -2657,32 +2678,41 @@ void options::OnApplyClick( wxCommandEvent& event )
         }
     }
 
-    //Recreate all the datasource connections
-    g_pMUX->ClearStreams();
+    //Recreate datastreams that are new, or have been edited
     for ( size_t i = 0; i < g_pConnectionParams->Count(); i++ )
     {
         ConnectionParams *cp = g_pConnectionParams->Item(i);
-        if( cp->bEnabled ) {
-            dsPortType port_type;
-            if (cp->Output)
-                port_type = DS_TYPE_INPUT_OUTPUT;
-            else
-                port_type = DS_TYPE_INPUT;
-            DataStream *dstr = new DataStream( g_pMUX,
-                                           cp->GetDSPort(),
-                                           wxString::Format(wxT("%i"), cp->Baudrate),
-                                           port_type,
-                                           cp->Priority,
-                                           cp->Garmin,
-										   cp->Protocol
-                                         );
-            dstr->SetInputFilter(cp->InputSentenceList);
-            dstr->SetInputFilterType(cp->InputSentenceListType);
-            dstr->SetOutputFilter(cp->OutputSentenceList);
-            dstr->SetOutputFilterType(cp->OutputSentenceListType);
-            dstr->SetChecksumCheck(cp->ChecksumCheck);
+        if( !cp->b_IsSetup ) {                  // Stream is new, or edited
 
-            g_pMUX->AddStream(dstr);
+            // Terminate and remove any existing stream with the same port name
+            DataStream *pds_existing = g_pMUX->FindStream( cp->GetDSPort() );
+            if(pds_existing) 
+                g_pMUX->StopAndRemoveStream( pds_existing );
+            
+            if( cp->bEnabled ) {
+                dsPortType port_type;
+                if (cp->Output)
+                    port_type = DS_TYPE_INPUT_OUTPUT;
+                else
+                    port_type = DS_TYPE_INPUT;
+                DataStream *dstr = new DataStream( g_pMUX,
+                                            cp->GetDSPort(),
+                                            wxString::Format(wxT("%i"), cp->Baudrate),
+                                            port_type,
+                                            cp->Priority,
+                                            cp->Garmin,
+					    cp->Protocol
+                                            );
+                dstr->SetInputFilter(cp->InputSentenceList);
+                dstr->SetInputFilterType(cp->InputSentenceListType);
+                dstr->SetOutputFilter(cp->OutputSentenceList);
+                dstr->SetOutputFilterType(cp->OutputSentenceListType);
+                dstr->SetChecksumCheck(cp->ChecksumCheck);
+
+                g_pMUX->AddStream(dstr);
+                
+                cp->b_IsSetup = true;
+            }
         }
     }
 
@@ -4035,13 +4065,31 @@ void options::SetConnectionParams(ConnectionParams *cp)
     m_connection_enabled = cp->bEnabled;
 }
 
+void options::SetDefaultConnectionParams()
+{
+    m_comboPort->Select(0);
+    m_comboPort->SetValue(_T(""));
+    m_cbCheckCRC->SetValue(true);
+    m_cbGarminHost->SetValue(false);
+    m_cbOutput->SetValue(false);
+    m_rbIAccept->SetValue(true);
+    m_rbOAccept->SetValue(true);
+    m_tcInputStc->SetValue(_T(""));
+    m_tcOutputStc->SetValue(_T(""));
+    m_choiceBaudRate->Select(m_choiceBaudRate->FindString(_T("4800")));
+//    m_choiceSerialProtocol->Select(cp->Protocol); //TODO
+    m_choicePriority->Select(m_choicePriority->FindString(_T("1")));
+    
+    m_rbTypeSerial->SetValue( true );
+    SetNMEAFormToSerial();
+    m_connection_enabled = true;
+}
+
+
 void options::OnAddDatasourceClick( wxCommandEvent& event )
 {
     connectionsaved = false;
-    ConnectionParams *cp = new ConnectionParams();
-    SetConnectionParams( cp );
-    SetNMEAFormToSerial();
-//    params_saved = false;
+    SetDefaultConnectionParams();
 
     long itemIndex = -1;
     for ( ;; )
@@ -4109,9 +4157,15 @@ void options::OnRemoveDatasourceClick( wxCommandEvent& event )
             break;
 
         int params_index = m_lcSources->GetItemData(itemIndex);
-        if( params_index != -1 )
+        if( params_index != -1 ){
+            ConnectionParams *cp = g_pConnectionParams->Item(params_index);
             g_pConnectionParams->RemoveAt( params_index );
 
+            DataStream *pds_existing = g_pMUX->FindStream( cp->GetDSPort() );
+            if(pds_existing) 
+                g_pMUX->StopAndRemoveStream( pds_existing );
+        }
+            
         //  Mark connection deleted
         m_rbTypeSerial->SetValue(true);
         m_comboPort->SetValue( _T("Deleted") );

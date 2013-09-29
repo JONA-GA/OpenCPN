@@ -240,6 +240,8 @@ public:
     void OnXidOkClick( wxCommandEvent& event );
     void OnCancelClick( wxCommandEvent& event );
     void OnChooseFont( wxCommandEvent& event );
+    void OnCPAWarnClick( wxCommandEvent& event );
+    
 #ifdef __WXGTK__
     void OnChooseFontColor( wxCommandEvent& event );
 #endif
@@ -545,9 +547,10 @@ private:
 
 
     void SetConnectionParams(ConnectionParams *cp);
+    void SetDefaultConnectionParams(void);
     void SetDSFormRWStates();
     void FillSourceList();
-    ConnectionParams *SaveConnectionParams();
+    ConnectionParams *CreateConnectionParamsFromSelectedItem();
 };
 
 class ChartGroupsUI: public wxScrolledWindow {

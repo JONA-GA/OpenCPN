@@ -1408,6 +1408,22 @@ bool MyApp::OnInit()
 
     g_config_version_string = vs;
 
+    //  Validate OpenGL functionality, if selected
+#ifdef __WXMSW__
+    if( /*g_bopengl &&*/ !g_bdisable_opengl ) {
+        wxFileName fn(std_path.GetExecutablePath());
+        bool b_test_result = TestGLCanvas(fn.GetPathWithSep() );
+        
+        if( !b_test_result )
+            wxLogMessage( _T("OpenGL disabled due to test app failure.") );
+        
+        g_bdisable_opengl = !b_test_result;
+    }
+#endif
+    
+    
+    
+    
  #ifdef USE_S57
 
 //      Set up a useable CPL library error handler for S57 stuff
@@ -2350,6 +2366,9 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
             dstr->SetOutputFilter(cp->OutputSentenceList);
             dstr->SetOutputFilterType(cp->OutputSentenceListType);
             dstr->SetChecksumCheck(cp->ChecksumCheck);
+            
+            cp->b_IsSetup = true;
+            
             g_pMUX->AddStream(dstr);
         }
     }
@@ -5311,7 +5330,10 @@ void MyFrame::UpdateGPSCompassStatusBox( bool b_force_new )
 
 int MyFrame::GetnChartStack( void )
 {
-    return pCurrentStack->nEntry;
+    if(pCurrentStack)
+        return pCurrentStack->nEntry;
+    else
+        return 0;
 }
 
 //    Application memory footprint management
@@ -5528,6 +5550,9 @@ void MyFrame::SelectQuiltRefdbChart( int db_index )
 void MyFrame::SelectChartFromStack( int index, bool bDir, ChartTypeEnum New_Type,
         ChartFamilyEnum New_Family )
 {
+    if( !pCurrentStack ) 
+        return;
+    
     if( index < pCurrentStack->nEntry ) {
 //      Open the new chart
         ChartBase *pTentative_Chart;
@@ -5578,6 +5603,9 @@ void MyFrame::SelectChartFromStack( int index, bool bDir, ChartTypeEnum New_Type
 
 void MyFrame::SelectdbChart( int dbindex )
 {
+    if( !pCurrentStack ) 
+        return;
+    
     if( dbindex >= 0 ) {
 //      Open the new chart
         ChartBase *pTentative_Chart;
@@ -6156,9 +6184,11 @@ bool MyFrame::DoChartUpdate( void )
     if( bNewPiano ) UpdateControlBar();
 
     //  Update the ownship position on thumbnail chart, if shown
-    if( pthumbwin->IsShown() ) {
-        if( pthumbwin->pThumbChart ) if( pthumbwin->pThumbChart->UpdateThumbData( gLat, gLon ) ) pthumbwin->Refresh(
-                TRUE );
+    if( pthumbwin && pthumbwin->IsShown() ) {
+        if( pthumbwin->pThumbChart ){
+            if( pthumbwin->pThumbChart->UpdateThumbData( gLat, gLon ) )
+                pthumbwin->Refresh( TRUE );
+        }
     }
 
     bFirstAuto = false;                           // Auto open on program start
@@ -6199,6 +6229,9 @@ static int menu_selected_index;
 
 void MyFrame::PianoPopupMenu( int x, int y, int selected_index, int selected_dbIndex )
 {
+    if( !pCurrentStack ) 
+        return;
+    
     //    No context menu if quilting is disabled
     if( !cc1->GetQuiltMode() ) return;
 
@@ -6261,6 +6294,9 @@ void MyFrame::OnPianoMenuEnableChart( wxCommandEvent& event )
 
 void MyFrame::OnPianoMenuDisableChart( wxCommandEvent& event )
 {
+    if( !pCurrentStack ) 
+        return;
+    
     RemoveChartFromQuilt( menu_selected_dbIndex );
 
 //      It could happen that the chart being disabled is the reference chart....
@@ -8071,11 +8107,11 @@ wxArrayString *EnumerateSerialPorts( void )
                     if( GetLastError() == 122)  //ERROR_INSUFFICIENT_BUFFER, OK in this case
                         bOk = true;
                 }
-#if 0
+//#if 0
                 //      We could get friendly name and/or description here
+                TCHAR fname[256] = {0};
+                TCHAR desc[256] ={0};
                 if (bOk) {
-                    TCHAR fname[256];
-                    TCHAR desc[256];
                     BOOL bSuccess = SetupDiGetDeviceRegistryProperty(
                         hDevInfo, &devdata, SPDRP_FRIENDLYNAME, NULL,
                         (PBYTE)fname, sizeof(fname), NULL);
@@ -8084,7 +8120,7 @@ wxArrayString *EnumerateSerialPorts( void )
                         hDevInfo, &devdata, SPDRP_DEVICEDESC, NULL,
                         (PBYTE)desc, sizeof(desc), NULL);
                 }
-#endif
+//#endif
                 //  Get the "COMn string from the registry key
                 if(bOk) {
                     bool bFoundCom = false;
@@ -8107,17 +8143,20 @@ wxArrayString *EnumerateSerialPorts( void )
 
                     if( bFoundCom ) {
                         wxString port( dname, wxConvUTF8 );
-                        bool b_dupl = false;
 
-                        //      Add it to the return set if it has not already been found
+                        //      If the port has already been found, remove the prior entry
+                        //      in favor of this entry, which will have descriptive information appended
                         for( unsigned int n=0 ; n < preturn->GetCount() ; n++ ) {
                             if((preturn->Item(n)).IsSameAs(port)){
-                                b_dupl = true;
+                                preturn->RemoveAt( n );
                                 break;
                             }
                         }
-                        if(!b_dupl)
-                            preturn->Add( port );
+                        wxString desc_name( desc, wxConvUTF8 );         // append "description"
+                        port += _T(" ");
+                        port += desc_name;
+                            
+                        preturn->Add( port );
                     }
                 }
             }
@@ -8700,6 +8739,35 @@ void RedirectIOToConsole()
 
 //#endif
 #endif
+
+
+#ifdef __WXMSW__
+bool TestGLCanvas(wxString &prog_dir)
+{
+    wxString test_app = prog_dir;
+    test_app += _T("cube.exe");
+    
+    if(::wxFileExists(test_app)){
+        long proc_return = ::wxExecute(test_app, wxEXEC_SYNC);
+        printf("OpenGL Test Process returned %0X\n", proc_return);
+        if(proc_return == 0)
+            printf("GLCanvas OK\n");
+        else
+            printf("GLCanvas failed to start, disabling OpenGL.\n");
+        
+        return (proc_return == 0);
+    }
+    else
+        return true;
+    
+    
+}
+#endif
+
+
+
+    
+
 
 #if 0
 /*************************************************************************
