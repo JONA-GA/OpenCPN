@@ -558,10 +558,6 @@ wxString StkToNmea::TrueWindMWD()
 	wxString unit;
 	wxString tk;
 	double VentAngle1;
-	//		WindAngleTrue   = 0.0;
-	//		WindAngleMagnetic   = 0.0;
-	//		WindSpeedKnots   = 0.0;
-	//		WindSpeedms   = 0.0;
 			tk = wxT("EC");
 			cm_nmea.TalkerID= tk ;
 			// true wind calculation

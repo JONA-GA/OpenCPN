@@ -2442,9 +2442,9 @@ ConnectionParams *options::CreateConnectionParamsFromSelectedItem()
     if ( m_rbOAccept->GetValue() )
         pConnectionParams->OutputSentenceListType = WHITELIST;
     else
-        m_pConnectionParams->OutputSentenceListType = BLACKLIST;
-    m_pConnectionParams->Port = m_comboPort->GetValue().BeforeFirst(' ');
-    m_pConnectionParams->Protocol = (DataProtocol)  m_choiceSerialProtocol->GetSelection()  ;
+        pConnectionParams->OutputSentenceListType = BLACKLIST;
+    pConnectionParams->Port = m_comboPort->GetValue().BeforeFirst(' ');
+    pConnectionParams->Protocol = (DataProtocol)  m_choiceSerialProtocol->GetSelection()  ;
     pConnectionParams->bEnabled = m_connection_enabled;
     pConnectionParams->b_IsSetup = false;
     
