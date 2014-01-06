@@ -37,10 +37,14 @@
 
 #include "dychart.h"
 
+#include "s52s57.h"
+
 #include "mygeom.h"
 #include "georef.h"
 
 #include "triangulate.h"
+
+#ifdef ocpnUSE_GL
 
 #ifdef USE_GLU_TESS
 #ifdef __WXOSX__
@@ -49,6 +53,8 @@
 #else
 #include <GL/gl.h>
 #include <GL/glu.h>
+#endif
+
 #endif
 
 #ifdef __WXMSW__
@@ -150,7 +156,6 @@ TriPrim               *s_pTPG_Last;
 static GLUtesselator  *GLUtessobj;
 static double         s_ref_lat;
 static double         s_ref_lon;
-static bool           s_bSENC_SM;
 
 static bool           s_bmerc_transform;
 static double         s_transform_x_rate;
@@ -162,6 +167,7 @@ wxArrayPtrVoid        *s_pCombineVertexArray;
 static const double   CM93_semimajor_axis_meters = 6378388.0;            // CM93 semimajor axis
 
 #endif
+static bool           s_bSENC_SM;
 
 static int            tess_orient;
 static wxMemoryOutputStream *ostream1;
@@ -294,15 +300,19 @@ PolyTessGeo::PolyTessGeo(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double
     m_ref_lat = ref_lat;
     m_ref_lon = ref_lon;
 
-    if(bUseInternalTess)
+    if(bUseInternalTess){
+        printf("internal tess\n");
         ErrorCode = PolyTessGeoTri(poly, bSENC_SM, ref_lat, ref_lon);
-    else
+    }
+    else {
 #ifdef USE_GLU_TESS
-        ErrorCode = PolyTessGeoGL(poly, bSENC_SM, ref_lat, ref_lon);
+printf("USE_GLU_TESS tess\n");
+ErrorCode = PolyTessGeoGL(poly, bSENC_SM, ref_lat, ref_lon);
 #else
-        ErrorCode = PolyTessGeoTri(poly, bSENC_SM, ref_lat, ref_lon);
+printf("PolyTessGeoTri tess\n");
+ErrorCode = PolyTessGeoTri(poly, bSENC_SM, ref_lat, ref_lon);
 #endif
-
+    }
 }
 
 
@@ -412,26 +422,22 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index)
             m_buf_ptr += byte_size;
 
             //  Read the triangle primitive bounding box as lat/lon
-            tp->p_bbox = new wxBoundingBox;
             double *pbb = (double *)m_buf_ptr;
             
 #ifdef ARMHF
             double abox[4];
             memcpy(&abox[0], pbb, 4 * sizeof(double));
-            double minx = abox[0];
-            double maxx = abox[1];
-            double miny = abox[2];
-            double maxy = abox[3];
+            tp->minx = abox[0];
+            tp->maxx = abox[1];
+            tp->miny = abox[2];
+            tp->maxy = abox[3];
 #else            
-            double minx = *pbb++;
-            double maxx = *pbb++;
-            double miny = *pbb++;
-            double maxy = *pbb;
+            tp->minx = *pbb++;
+            tp->maxx = *pbb++;
+            tp->miny = *pbb++;
+            tp->maxy = *pbb;
 #endif
             
-            tp->p_bbox->SetMin(minx, miny);
-            tp->p_bbox->SetMax(maxx, maxy);
-
             m_buf_ptr += 4 * sizeof(double);
 
         }
@@ -819,8 +825,6 @@ int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat,
             }
             //  Calculate bounding box as lat/lon
 
-            pTP->p_bbox = new wxBoundingBox;
-
             float sxmax = -179;                   // this poly BBox
             float sxmin = 170;
             float symax = -90;
@@ -839,8 +843,10 @@ int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat,
                 symin = fmin(yd, symin);
             }
 
-            pTP->p_bbox->SetMin(sxmin, symin);
-            pTP->p_bbox->SetMax(sxmax, symax);
+            pTP->minx = sxmin;
+            pTP->miny = symin;
+            pTP->maxx = sxmax;
+            pTP->maxy = symax;
 
         }
         pr = (polyout *)pr->poly_next;
@@ -928,14 +934,10 @@ int PolyTessGeo::Write_PolyTriGroup( FILE *ofs)
         ostream2->Write( pTP->p_vertex, pTP->nVert * 2 * sizeof(double));
 
         //  Write out the object bounding box as lat/lon
-        double minx = pTP->p_bbox->GetMinX();
-        double maxx = pTP->p_bbox->GetMaxX();
-        double miny = pTP->p_bbox->GetMinY();
-        double maxy = pTP->p_bbox->GetMaxY();
-        ostream2->Write(&minx, sizeof(double));
-        ostream2->Write(&maxx, sizeof(double));
-        ostream2->Write(&miny, sizeof(double));
-        ostream2->Write(&maxy, sizeof(double));
+        ostream2->Write(&pTP->minx, sizeof(double));
+        ostream2->Write(&pTP->maxx, sizeof(double));
+        ostream2->Write(&pTP->miny, sizeof(double));
+        ostream2->Write(&pTP->maxy, sizeof(double));
 
 
         pTP = pTP->p_next;
@@ -1027,14 +1029,10 @@ int PolyTessGeo::Write_PolyTriGroup( wxOutputStream &out_stream)
             ostream2->Write( pTP->p_vertex, pTP->nVert * 2 * sizeof(double));
 
         //  Write out the object bounding box as lat/lon
-            double minx = pTP->p_bbox->GetMinX();
-            double maxx = pTP->p_bbox->GetMaxX();
-            double miny = pTP->p_bbox->GetMinY();
-            double maxy = pTP->p_bbox->GetMaxY();
-            ostream2->Write(&minx, sizeof(double));
-            ostream2->Write(&maxx, sizeof(double));
-            ostream2->Write(&miny, sizeof(double));
-            ostream2->Write(&maxy, sizeof(double));
+            ostream2->Write(&pTP->minx, sizeof(double));
+            ostream2->Write(&pTP->maxx, sizeof(double));
+            ostream2->Write(&pTP->miny, sizeof(double));
+            ostream2->Write(&pTP->maxy, sizeof(double));
 
 
             pTP = pTP->p_next;
@@ -1120,6 +1118,15 @@ PolyTessGeo::~PolyTessGeo()
 
 }
 
+int PolyTessGeo::BuildDeferredTess(void)
+{
+#ifdef USE_GLU_TESS
+    return BuildTessGL();
+#else
+    return 0;
+#endif
+}
+
 
 
 #ifdef USE_GLU_TESS
@@ -1145,6 +1152,8 @@ void __CALL_CONVENTION combineCallback(GLdouble coords[3],
 //      Using OpenGL/GLU tesselator
 int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon)
 {
+#ifdef ocpnUSE_GL
+    
     int iir, ip;
     int *cntr;
     GLdouble *geoPt;
@@ -1537,12 +1546,15 @@ int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, 
 
     m_bOK = true;
 
+#endif          //    #ifdef ocpnUSE_GL
+    
     return 0;
 }
 
-
 int PolyTessGeo::BuildTessGL(void)
 {
+#ifdef ocpnUSE_GL
+    
       int iir, ip;
       int *cntr;
       GLdouble *geoPt;
@@ -1917,6 +1929,8 @@ int PolyTessGeo::BuildTessGL(void)
 
       m_bOK = true;
 
+#endif          //#ifdef ocpnUSE_GL
+      
       return 0;
 }
 
@@ -1975,8 +1989,6 @@ void __CALL_CONVENTION endCallback(void)
             pTPG->nVert = s_nvcall;
 
         //  Calculate bounding box
-            pTPG->p_bbox = new wxBoundingBox;
-
             float sxmax = -1000;                   // this poly BBox
             float sxmin = 1000;
             float symax = -90;
@@ -2012,9 +2024,11 @@ void __CALL_CONVENTION endCallback(void)
                 }
             }
 
-            pTPG->p_bbox->SetMin(sxmin, symin);
-            pTPG->p_bbox->SetMax(sxmax, symax);
-
+            pTPG->minx = sxmin;
+            pTPG->miny = symin;
+            pTPG->maxx = sxmax;
+            pTPG->maxy = symax;
+            
 
             //  Transcribe this geometry to TriPrim, converting to SM if called for
 
@@ -2300,7 +2314,6 @@ TriPrim::~TriPrim()
 {
 
     free(p_vertex);
-    delete p_bbox;
 }
 
 

@@ -77,6 +77,7 @@ public:
 
     void SetMessage( wxString message ) { m_Message = message; }
     void SetTimeZone( int TimeZone ) { m_TimeZone = TimeZone; }
+    void SetParentSize( int w, int h ) { m_ParentSize.SetWidth(w) ; m_ParentSize.SetHeight(h) ;}
 
     void SetGribTimelineRecordSet( GribTimelineRecordSet *pGribTimelineRecordSet1 );
     bool RenderGribOverlay( wxDC &dc, PlugIn_ViewPort *vp );
@@ -91,7 +92,9 @@ public:
     void DrawOLBitmap( const wxBitmap &bitmap, wxCoord x, wxCoord y, bool usemask );
     void DrawGLImage( wxImage *pimage, wxCoord x, wxCoord y, bool usemask );
     void DrawMessageZoomOut( PlugIn_ViewPort *vp );
+    wxColour GetGraphicColor(int config, double val);
 
+    wxSize  m_ParentSize;
 private:
 
     bool DoRenderGribOverlay( PlugIn_ViewPort *vp );
@@ -105,7 +108,7 @@ private:
     void DrawMessageWindow( wxString msg, int x, int y , wxFont *mfont);
 
     void drawWindArrowWithBarbs( int config, int x, int y, double vx, double vy,
-                                 bool polar, bool south, wxColour arrowColor );
+                                 bool polar, bool south, wxColour arrowColor, double rotate_angle );
     void drawWaveArrow( int i, int j, double dir, wxColour arrowColor );
     void drawSingleArrow( int i, int j, double dir, wxColour arrowColor, int width = 1 );
 
@@ -115,14 +118,12 @@ private:
     void drawGrandeBarbule( wxPen pen, bool south, double si, double co, int di, int dj, int b );
     void drawTriangle( wxPen pen, bool south, double si, double co, int di, int dj, int b );
 
-    wxColour GetGraphicColor(int config, double val);
-    wxImage &getLabel(double value);
+    wxImage &getLabel(double value, int settings);
 
-    void DrawGLTexture( GLuint texture, int width, int height, int xd, int yd, int grib_pixel_size );
+    void DrawGLTexture( GLuint texture, int width, int height, int xd, int yd, int grib_pixel_size, PlugIn_ViewPort *vp );
     void DrawGLRGBA( unsigned char *pRGBA, int RGBA_width, int RGBA_height, int xd, int yd );
     bool CreateGribGLTexture( GribOverlay *pGO, int config, GribRecord *pGR,
-                              PlugIn_ViewPort *vp, int grib_pixel_size,
-                              const wxPoint &porg );
+                              PlugIn_ViewPort *vp, int grib_pixel_size );
     wxImage CreateGribImage( int config, GribRecord *pGR, PlugIn_ViewPort *vp,
                              int grib_pixel_size, const wxPoint &porg );
 
@@ -131,6 +132,7 @@ private:
     GribOverlay *m_pOverlay[GribOverlaySettings::SETTINGS_COUNT];
 
     wxString m_Message;
+    wxString m_Message_Hiden;
     int  m_TimeZone;
 
     wxDC *m_pdc;

@@ -46,6 +46,7 @@
 
 #include "s52s57.h"                 //types
 #include "chcanv.h"                // for Viewport
+#include "OCPNRegion.h"
 
 
 // ----------------------------------------------------------------------------
@@ -83,6 +84,9 @@ class S57ObjectDesc;
 class S57Reader;
 class OGRS57DataSource;
 class S57ClassRegistrar;
+class S57Obj;
+class VE_Element;
+class VC_Element;
 
 #include <wx/dynarray.h>
 
@@ -127,9 +131,7 @@ public:
       void SetNativeScale(int s){m_Chart_Scale = s;}
 
       virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
-      virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
       virtual bool RenderOverlayRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
-      virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
 
       virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
 
@@ -182,6 +184,11 @@ public:
 
       void ClearRenderedTextCache();
 
+//#ifdef ocpnUSE_GL
+      virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
+      virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
+//#endif
+      
 // Public data
 //Todo Accessors here
       //  Object arrays used by S52PLIB TOPMAR rendering logic
@@ -217,19 +224,17 @@ public:
       bool        m_b2pointLUPS;
       bool        m_b2lineLUPS;
       
+      struct _chart_context     *m_this_chart_context;
+      
 private:
 
       bool DoRenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, RenderTypeEnum option, bool force_new_view);
-      bool DoRenderRectOnGL(const wxGLContext &glc, const ViewPort& VPoint, wxRect &rect);
 
       bool DoRenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_overlay);
-      bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_overlay);
 
       int DCRenderRect(wxMemoryDC& dcinput, const ViewPort& vp, wxRect *rect);
       bool DCRenderLPB(wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rect);
 
-      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_render_nodta = true);
-      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRect &Rect, bool b_render_nodta = true);
 
       InitReturn PostInit( ChartInitFlag flags, ColorScheme cs );
       InitReturn FindOrCreateSenc( const wxString& name );
@@ -259,7 +264,13 @@ private:
       const char *getName(OGRFeature *feature);
       int GetUpdateFileArray(const wxFileName file000, wxArrayString *UpFiles);
 
-
+//#ifdef ocpnUSE_GL
+      bool DoRenderRectOnGL(const wxGLContext &glc, const ViewPort& VPoint, wxRect &rect);
+      bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_overlay);
+      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRect &Rect, bool b_render_nodta = true);
+      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_render_nodta = true);
+//#endif
+      
 
  // Private Data
       wxString    *m_pcsv_locn;

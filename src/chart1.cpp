@@ -49,11 +49,7 @@
 #include <wx/dialog.h>
 #include <wx/progdlg.h>
 
-#if wxCHECK_VERSION(2, 9, 0)
 #include <wx/dialog.h>
-#else
-//  #include "scrollingdialog.h"
-#endif
 
 #include "dychart.h"
 
@@ -154,6 +150,7 @@ wxLog                     *Oldlogger;
 bool                      g_bFirstRun;
 wxString                  glog_file;
 wxString                  gConfig_File;
+wxString                  gExe_path;
 
 int                       g_unit_test_1;
 bool                      g_start_fullscreen;
@@ -706,6 +703,11 @@ catch_signals(int signo)
         case SIGSEGV:
         siglongjmp(env, 1);// jump back to the setjmp() point
         break;
+        
+        case SIGTERM:
+        LogMessageOnce(_T("Sigterm received"));
+        gFrame->Close();
+        break;
 
         default:
         break;
@@ -1062,6 +1064,9 @@ bool MyApp::OnInit()
     sigaction(SIGUSR1, &sa_all, NULL);
 
     sigaction(SIGUSR1, NULL, &sa_all_old);// inspect existing action for this signal
+    
+    sigaction(SIGTERM, &sa_all, NULL);
+    sigaction(SIGTERM, NULL, &sa_all_old);
 #endif
 
 //      Initialize memory tracer
@@ -1099,6 +1104,8 @@ bool MyApp::OnInit()
 //      Establish a "home" location
     wxStandardPathsBase& std_path = wxApp::GetTraits()->GetStandardPaths();
     std_path.Get();
+    
+    gExe_path = std_path.GetExecutablePath();
 
     pHome_Locn = new wxString;
 #ifdef __WXMSW__
@@ -1151,15 +1158,13 @@ bool MyApp::OnInit()
     glog_file.Append( _T("opencpn.log") );
 
     //  Constrain the size of the log file
+    wxString large_log_message;
     if( ::wxFileExists( glog_file ) ) {
         if( wxFileName::GetSize( glog_file ) > 1000000 ) {
             wxString oldlog = glog_file;                      // pjotrc 2010.02.09
             oldlog.Append( _T(".log") );
-            wxString msg1( _("Old log will be moved to opencpn.log.log") );
-            OCPNMessageBox ( NULL, msg1, wxString( _("OpenCPN Info") ),
-                    wxICON_INFORMATION | wxOK );
-//            int dlg_ret;
-//            dlg_ret = mdlg.ShowModal();
+            //  Defer the showing of this messagebox until the system locale is established.
+            large_log_message = ( _("Old log will be moved to opencpn.log.log") );
             ::wxRenameFile( glog_file, oldlog );
         }
     }
@@ -1454,7 +1459,13 @@ bool MyApp::OnInit()
 
     g_config_version_string = vs;
 
+    //  Show deferred log restart message, if it exists.
+    if( !large_log_message.IsEmpty() )
+        OCPNMessageBox ( NULL, large_log_message, wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK, 5 );
+    
     //  Validate OpenGL functionality, if selected
+#ifdef ocpnUSE_GL
+        
 #ifdef __WXMSW__
     if( /*g_bopengl &&*/ !g_bdisable_opengl ) {
         wxFileName fn(std_path.GetExecutablePath());
@@ -1467,7 +1478,11 @@ bool MyApp::OnInit()
     }
 #endif
     
-    
+#else
+    g_bdisable_opengl = true;;
+#endif
+
+
     
     
  #ifdef USE_S57
@@ -1820,9 +1835,6 @@ if( 0 == g_memCacheLimit )
 
     gFrame->ApplyGlobalSettings( 1, false );               // done once on init with resize
     
-    if ( g_start_fullscreen )
-        gFrame->ToggleFullScreen();
-
     g_toolbar_x = wxMax(g_toolbar_x, 0);
     g_toolbar_y = wxMax(g_toolbar_y, 0);
 
@@ -1903,9 +1915,6 @@ if( 0 == g_memCacheLimit )
 
     //   Notify all the AUI PlugIns so that they may syncronize with the Perspective
     g_pi_manager->NotifyAuiPlugIns();
-
-    //   Initialize and Save the existing Screen Brightness
-//       InitScreenBrightness();
 
     bool b_SetInitialPoint = false;
 
@@ -2084,6 +2093,8 @@ if( 0 == g_memCacheLimit )
 
     stats->Show( true );
 
+    Yield();
+    
     gFrame->DoChartUpdate();
 
     g_FloatingToolbarDialog->LockPosition(false);
@@ -2158,6 +2169,7 @@ if( 0 == g_memCacheLimit )
     //  We need a deferred resize to get glDrawPixels() to work right.
     //  So we set a trigger to generate a resize after 5 seconds....
     //  See the "UniChrome" hack elsewhere
+#ifdef ocpnUSE_GL    
     if ( !g_bdisable_opengl )
     {
         glChartCanvas *pgl = (glChartCanvas *) cc1->GetglCanvas();
@@ -2169,9 +2181,12 @@ if( 0 == g_memCacheLimit )
             gFrame->m_bdefer_resize = true;
         }
     }
-
+#endif
     g_pi_manager->CallLateInit();
-
+    
+    if ( g_start_fullscreen )
+        gFrame->ToggleFullScreen();
+    
     return TRUE;
 }
 
@@ -3160,7 +3175,7 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
         g_pAISTargetList->Destroy();
     }
 
-    g_FloatingCompassDialog->Destroy();
+    if( g_FloatingCompassDialog ) g_FloatingCompassDialog->Destroy();
     g_FloatingCompassDialog = NULL;
 
     //      Delete all open charts in the cache
@@ -5207,10 +5222,18 @@ void MyFrame::OnFrameTimer1( wxTimerEvent& event )
 double MyFrame::GetTrueOrMag(double a)
 {
     if( g_bShowMag ){
-        if(!wxIsNaN(gVar))
-            return ((a + gVar) >= 0.) ? (a + gVar) : (a + gVar + 360.);
-        else
-            return ((a + g_UserVar) >= 0.) ? (a + g_UserVar) : (a + g_UserVar + 360.);
+        if(!wxIsNaN(gVar)){
+            if((a + gVar) >360.)
+                return (a + gVar - 360.);
+            else
+                return ((a + gVar) >= 0.) ? (a + gVar) : (a + gVar + 360.);
+        }
+        else{
+            if((a + g_UserVar) >360.)
+                return (a + g_UserVar - 360.);
+            else                
+                return ((a + g_UserVar) >= 0.) ? (a + g_UserVar) : (a + g_UserVar + 360.);
+        }
     }
     else
         return a;
@@ -5629,6 +5652,9 @@ void MyFrame::SelectQuiltRefdbChart( int db_index )
         double best_scale = GetBestVPScale( pc );
         cc1->SetVPScale( best_scale );
     }
+    else
+        cc1->SetQuiltRefChart( -1 );
+    
 
 }
 
@@ -7117,8 +7143,10 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
                             {
                                 if( m_NMEA0183.Parse() )
                                 {
-                                    gSog = m_NMEA0183.Vtg.SpeedKnots;
-                                    gCog = m_NMEA0183.Vtg.TrackDegreesTrue;
+                                    if( !wxIsNaN(m_NMEA0183.Vtg.SpeedKnots) )
+                                        gSog = m_NMEA0183.Vtg.SpeedKnots;
+                                    if( !wxIsNaN(m_NMEA0183.Vtg.TrackDegreesTrue) )
+                                        gCog = m_NMEA0183.Vtg.TrackDegreesTrue;
                                     if( !wxIsNaN(m_NMEA0183.Vtg.SpeedKnots) && !wxIsNaN(m_NMEA0183.Vtg.TrackDegreesTrue) )
                                         gGPS_Watchdog = gps_watchdog_timeout_ticks;
                                 }
@@ -7735,6 +7763,7 @@ void MyPrintout::DrawPageOne( wxDC *dc )
 //  Get the latest bitmap as rendered by the ChartCanvas
 
     if(g_bopengl) {
+#ifdef ocpnUSE_GL        
         int gsx = cc1->GetglCanvas()->GetSize().x;
         int gsy = cc1->GetglCanvas()->GetSize().y;
 
@@ -7748,6 +7777,7 @@ void MyPrintout::DrawPageOne( wxDC *dc )
         mdc.SelectObject( bmp );
         dc->Blit( 0, 0, bmp.GetWidth(), bmp.GetHeight(), &mdc, 0, 0 );
         mdc.SelectObject( wxNullBitmap );
+#endif        
     }
     else {
 
@@ -8655,11 +8685,194 @@ void SetSystemColors( ColorScheme cs )
 #endif
 }
 
+class  OCPNMessageDialog: public wxDialog
+{
+    
+public:
+    OCPNMessageDialog(wxWindow *parent, const wxString& message,
+                           const wxString& caption = wxMessageBoxCaptionStr,
+                           long style = wxOK|wxCENTRE, const wxPoint& pos = wxDefaultPosition);
+    
+    void OnYes(wxCommandEvent& event);
+    void OnNo(wxCommandEvent& event);
+    void OnCancel(wxCommandEvent& event);
+    
+private:
+    int m_style;
+    DECLARE_EVENT_TABLE()
+};
+
+BEGIN_EVENT_TABLE(OCPNMessageDialog, wxDialog)
+EVT_BUTTON(wxID_YES, OCPNMessageDialog::OnYes)
+EVT_BUTTON(wxID_NO, OCPNMessageDialog::OnNo)
+EVT_BUTTON(wxID_CANCEL, OCPNMessageDialog::OnCancel)
+END_EVENT_TABLE()
+
+
+OCPNMessageDialog::OCPNMessageDialog( wxWindow *parent,
+                                                const wxString& message,
+                                                const wxString& caption,
+                                                long style,
+                                                const wxPoint& pos)
+: wxDialog( parent, wxID_ANY, caption, pos, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxSTAY_ON_TOP )
+{
+    m_style = style;
+    
+    wxBoxSizer *topsizer = new wxBoxSizer( wxVERTICAL );
+    
+    wxBoxSizer *icon_text = new wxBoxSizer( wxHORIZONTAL );
+    
+    #if wxUSE_STATBMP
+    // 1) icon
+    if (style & wxICON_MASK)
+    {
+        wxBitmap bitmap;
+        switch ( style & wxICON_MASK )
+        {
+            default:
+                wxFAIL_MSG(_T("incorrect log style"));
+                // fall through
+                
+            case wxICON_ERROR:
+                bitmap = wxArtProvider::GetIcon(wxART_ERROR, wxART_MESSAGE_BOX);
+                break;
+                
+            case wxICON_INFORMATION:
+                bitmap = wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MESSAGE_BOX);
+                break;
+                
+            case wxICON_WARNING:
+                bitmap = wxArtProvider::GetIcon(wxART_WARNING, wxART_MESSAGE_BOX);
+                break;
+                
+            case wxICON_QUESTION:
+                bitmap = wxArtProvider::GetIcon(wxART_QUESTION, wxART_MESSAGE_BOX);
+                break;
+        }
+        wxStaticBitmap *icon = new wxStaticBitmap(this, wxID_ANY, bitmap);
+        icon_text->Add( icon, 0, wxCENTER );
+    }
+    #endif // wxUSE_STATBMP
+    
+    #if wxUSE_STATTEXT
+    // 2) text
+    icon_text->Add( CreateTextSizer( message ), 0, wxALIGN_CENTER | wxLEFT, 10 );
+    
+    topsizer->Add( icon_text, 1, wxCENTER | wxLEFT|wxRIGHT|wxTOP, 10 );
+    #endif // wxUSE_STATTEXT
+    
+    // 3) buttons
+    int AllButtonSizerFlags = wxOK|wxCANCEL|wxYES|wxNO|wxHELP|wxNO_DEFAULT;
+    int center_flag = wxEXPAND;
+    if (style & wxYES_NO)
+        center_flag = wxALIGN_CENTRE;
+    wxSizer *sizerBtn = CreateSeparatedButtonSizer(style & AllButtonSizerFlags);
+    if ( sizerBtn )
+        topsizer->Add(sizerBtn, 0, center_flag | wxALL, 10 );
+    
+    SetAutoLayout( true );
+    SetSizer( topsizer );
+    
+    topsizer->SetSizeHints( this );
+    topsizer->Fit( this );
+    wxSize size( GetSize() );
+    if (size.x < size.y*3/2)
+    {
+        size.x = size.y*3/2;
+        SetSize( size );
+    }
+    
+    Centre( wxBOTH | wxCENTER_FRAME);
+}
+
+void OCPNMessageDialog::OnYes(wxCommandEvent& WXUNUSED(event))
+{
+    EndModal( wxID_YES );
+}
+
+void OCPNMessageDialog::OnNo(wxCommandEvent& WXUNUSED(event))
+{
+    EndModal( wxID_NO );
+}
+
+void OCPNMessageDialog::OnCancel(wxCommandEvent& WXUNUSED(event))
+{
+    // Allow cancellation via ESC/Close button except if
+    // only YES and NO are specified.
+    if ( (m_style & wxYES_NO) != wxYES_NO || (m_style & wxCANCEL) )
+    {
+        EndModal( wxID_CANCEL );
+    }
+}
+
+
+
+
+
+class TimedMessageBox:wxEvtHandler
+{
+public:
+    TimedMessageBox(wxWindow* parent, const wxString& message,
+                    const wxString& caption = _T("Message box"), long style = wxOK | wxCANCEL,
+                    int timeout_sec = -1, const wxPoint& pos = wxDefaultPosition );
+    ~TimedMessageBox();
+    int GetRetVal(void){ return ret_val; }
+    void OnTimer(wxTimerEvent &evt);
+    
+    wxTimer     m_timer;
+    OCPNMessageDialog *dlg;
+    int         ret_val;
+
+    DECLARE_EVENT_TABLE()
+};
+
+BEGIN_EVENT_TABLE(TimedMessageBox, wxEvtHandler)
+EVT_TIMER(-1, TimedMessageBox::OnTimer)
+END_EVENT_TABLE()
+
+TimedMessageBox::TimedMessageBox(wxWindow* parent, const wxString& message,
+                                 const wxString& caption, long style, int timeout_sec, const wxPoint& pos )
+{
+    ret_val = 0;
+    m_timer.SetOwner( this, -1 );
+    
+    if(timeout_sec > 0)
+        m_timer.Start( timeout_sec * 1000, wxTIMER_ONE_SHOT );
+                              
+    dlg = new OCPNMessageDialog( parent, message, caption, style, pos );
+    int ret = dlg->ShowModal();
+    
+    int yyp = 5;
+    
+    delete dlg;
+    dlg = NULL;
+    
+    ret_val = ret;
+}
+
+
+TimedMessageBox::~TimedMessageBox()
+{
+}
+
+void TimedMessageBox::OnTimer(wxTimerEvent &evt)
+{
+    if( dlg )
+        dlg->EndModal( wxID_CANCEL );
+}
+
+
+    
+
+
+
 int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& caption, int style,
-        int x, int y )
+                    int timeout_sec, int x, int y  )
 {
 
 #ifdef __WXOSX__
+    long parent_style;
+    
     if(g_FloatingToolbarDialog)
         g_FloatingToolbarDialog->Hide();
 
@@ -8668,9 +8881,21 @@ int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& c
 
     if( stats )
         stats->Hide();
+    
+    if(parent) {
+        parent_style = parent->GetWindowStyle();
+        parent->SetWindowStyle( parent_style & !wxSTAY_ON_TOP );
+    }
+    
 #endif
-    wxMessageDialog dlg( parent, message, caption, style | wxSTAY_ON_TOP, wxPoint( x, y ) );
-    int ret = dlg.ShowModal();
+
+      int ret =  wxID_OK;  
+        
+      TimedMessageBox tbox(parent, message, caption, style, timeout_sec, wxPoint( x, y )  );
+      ret = tbox.GetRetVal() ;
+      
+//    wxMessageDialog dlg( parent, message, caption, style | wxSTAY_ON_TOP, wxPoint( x, y ) );
+//    ret = dlg.ShowModal();
 
 #ifdef __WXOSX__
     if(gFrame)
@@ -8682,8 +8907,10 @@ int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& c
     if( stats )
         stats->Show();
 
-    if(parent)
+    if(parent){
         parent->Raise();
+        parent->SetWindowStyle( parent_style );
+    }
 #endif
 
     return ret;

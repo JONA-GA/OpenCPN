@@ -30,13 +30,18 @@
 #include <wx/wx.h>
 #include <wx/dynarray.h>
 #include <wx/dynlib.h>
+
+#ifdef ocpnUSE_GL
 #include <wx/glcanvas.h>
+#endif
 
 #include "ocpn_plugin.h"
 #include "chart1.h"                 // for MyFrame
 #include "chcanv.h"                 // for ViewPort
 #include "datastream.h"             // for GenericPosDat
 #include "OCPN_Sound.h"
+#include "s52s57.h"
+#include "s57chart.h"               // for Object list
 
 //For widgets...
 #include "wx/hyperlink.h"
@@ -74,7 +79,10 @@ typedef struct {
     bool all_lower;     // if true, blacklist also all the lower versions of the plugin
 } BlackListedPlugin;
 
-const BlackListedPlugin PluginBlacklist[] = { { _T("aisradar_pi"), 0, 95, false, true } };
+const BlackListedPlugin PluginBlacklist[] = {
+    { _T("aisradar_pi"), 0, 95, false, true },
+    { _T("radar_pi"), 0, 95, false, true },             // GCC alias for aisradar_pi
+};
 
 //----------------------------------------------------------------------------
 // PlugIn Messaging scheme Event
@@ -256,6 +264,10 @@ public:
 
       wxArrayString GetPlugInChartClassNameArray(void);
 
+      ListOfPI_S57Obj *GetPlugInObjRuleListAtLatLon( ChartPlugInWrapper *target, float zlat, float zlon,
+                                                       float SelectRadius, const ViewPort& vp );
+      wxString CreateObjDescriptions( ChartPlugInWrapper *target, ListOfPI_S57Obj *rule_list );
+      
       wxString GetLastError();
       MyFrame *GetParentFrame(){ return pParent; }
 
@@ -332,7 +344,39 @@ private:
 };
 
 
+//  API 1.11 adds access to S52 Presentation library
+//  These are some wrapper conversion utilities
 
+class S52PLIB_Context
+{
+public:
+    S52PLIB_Context(){
+        bBBObj_valid = false;
+        bCS_Added = false;
+        bFText_Added = false;
+        CSrules = NULL;
+        FText = NULL;
+        };
+        
+    ~S52PLIB_Context(){};
+    
+    wxBoundingBox           BBObj;                  // lat/lon BBox of the rendered object
+    bool                    bBBObj_valid;           // set after the BBObj has been calculated once.
+    
+    Rules                   *CSrules;               // per object conditional symbology
+    int                     bCS_Added;
+    
+    S52_TextC                *FText;
+    int                     bFText_Added;
+    wxRect                  rText;
+    
+    LUPrec                  *LUP;
+};
+
+
+
+void CreateCompatibleS57Object( PI_S57Obj *pObj, S57Obj *cobj );
+void UpdatePIObjectPlibContext( PI_S57Obj *pObj, S57Obj *cobj );
 
 #endif            // _PLUGINMGR_H_
 

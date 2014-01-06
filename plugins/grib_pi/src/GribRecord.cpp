@@ -53,7 +53,7 @@ void  GribRecord::translateDataType()
 				multiplyAllData( 3600.0 );
         }
         if (dataType == GRB_TEMP                        //gfs Water surface Temperature
-            && levelType == LV_GND_SURF 
+            && levelType == LV_GND_SURF
             && levelValue == 0) dataType = GRB_WTMP;
 
 	}
@@ -266,8 +266,12 @@ GribRecord::GribRecord(const GribRecord &rec1, const GribRecord &rec2, double d)
     if (rec1.data && rec2.data && rec1.Ni == rec2.Ni && rec1.Nj == rec2.Nj) {
         int size = rec1.Ni*rec1.Nj;
         this->data = new double[size];
-        for (int i=0; i<size; i++)
-            this->data[i] = (1-d)*rec1.data[i] + d*rec2.data[i];
+        for (int i=0; i<size; i++) {
+            if(rec1.data[i] == GRIB_NOTDEF || rec2.data[i] == GRIB_NOTDEF)
+                this->data[i] = GRIB_NOTDEF;
+            else
+                this->data[i] = (1-d)*rec1.data[i] + d*rec2.data[i];
+        }
     } else
         ok=false;
 
@@ -280,7 +284,7 @@ GribRecord::GribRecord(const GribRecord &rec1, const GribRecord &rec2, double d)
         } else
             ok = false;
     }
-    
+
     /* should maybe update strCurDate ? */
 }
 
@@ -307,7 +311,7 @@ GribRecord *GribRecord::MagnitudeRecord(const GribRecord &rec1, const GribRecord
         } else
             rec->ok = false;
     }
-    
+
     return rec;
 }
 
@@ -927,8 +931,8 @@ double GribRecord::getInterpolatedValue(double px, double py, bool numericalInte
     int i0 = (int) pi;  // point 00
     int j0 = (int) pj;
 
-    int i1 = pi+1, j1 = pj+1;
-    if(i1 >= (int)Ni)
+    unsigned int i1 = pi+1, j1 = pj+1;
+    if(i1 >= Ni)
         i1 -= Ni;
 
     bool h00,h01,h10,h11;

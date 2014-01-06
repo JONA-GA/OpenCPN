@@ -77,6 +77,7 @@ public:
 //    The override PlugIn Methods
       bool RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp);
       void SetCursorLatLon(double lat, double lon);
+      void OnContextMenuItemCallback(int id);
       void SetPluginMessage(wxString &message_id, wxString &message_body);
       bool RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp);
       void SendTimelineMessage(wxDateTime time);
@@ -94,19 +95,15 @@ public:
 
       void OnGribDialogClose();
 
-      void SetRequestConfig ( wxString conf ){ m_RequestConfig = conf; }
-      void SetZyGribLogin ( wxString log ){ m_ZyGribLogin = log; }
-      void SetZyGribCode ( wxString cod ){ m_ZyGribCode = cod; }
-      wxString GetRequestConfig(){ return m_RequestConfig; }
-      wxString GetMailAddresses(){ return m_bMailAddresses; }
-      wxString GetZyGribLogin() { return m_ZyGribLogin; }
-      wxString GetZyGribCode() { return m_ZyGribCode; }
-
       int  GetTimeZone() { return m_bTimeZone; }
+      int  GetStartOptions() { return m_bStartOptions; }
       bool GetCopyFirstCumRec() { return  m_bCopyFirstCumRec; }
       bool GetCopyMissWaveRec() { return  m_bCopyMissWaveRec; }
 
+      GRIBOverlayFactory *m_pGRIBOverlayFactory;
       GRIBOverlayFactory *GetGRIBOverlayFactory(){ return m_pGRIBOverlayFactory; }
+
+      int   m_MenuItem;
 
 private:
       bool LoadConfig(void);
@@ -116,7 +113,6 @@ private:
       wxWindow         *m_parent_window;
 
       GRIBUIDialog     *m_pGribDialog;
-      GRIBOverlayFactory *m_pGRIBOverlayFactory;
 
       int              m_display_width, m_display_height;
       int              m_leftclick_tool_id;
@@ -137,14 +133,14 @@ private:
       bool             m_bCopyFirstCumRec;
       bool             m_bCopyMissWaveRec;
       int              m_bLoadLastOpenFile;
+      int              m_bStartOptions;
       wxString         m_RequestConfig;
-      wxString         m_bMailAddresses;
+      wxString         m_bMailToAddresses;
+      wxString         m_bMailFromAddress;
       wxString         m_ZyGribLogin;
       wxString         m_ZyGribCode;
       
       bool             m_bGRIBShowIcon;
-
-      int              m_height;
 
       bool        m_bShowGrib;
 };
@@ -159,6 +155,8 @@ public:
     GribPreferencesDialog( wxWindow *pparent)
     : GribPreferencesDialogBase(pparent) {}
     ~GribPreferencesDialog() {}
-};
 
+private:
+    void OnStartOptionChange(wxCommandEvent& event);
+};
 #endif

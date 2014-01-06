@@ -31,12 +31,15 @@
 #include "bbox.h"
 #include "ocpn_types.h"
 
+#ifdef ocpnUSE_GL
 #include <wx/glcanvas.h>
+#endif
 
 //----------------------------------------------------------------------------
 //  Forward Declarations
 //----------------------------------------------------------------------------
 class ViewPort;
+class wxGLContext;
 
 //----------------------------------------------------------------------------
 // Constants. etc
@@ -332,6 +335,8 @@ class ChartPlugInWrapper : public ChartBase
             virtual void SetColorScheme(ColorScheme cs, bool bApplyImmediate);
 
             virtual double GetNearestPreferredScalePPM(double target_scale_ppm);
+            
+            virtual PlugInChartBase *GetPlugInChart(void){ return m_ppicb; }
 
             virtual int GetCOVREntries();
             virtual int GetCOVRTablePoints(int iTable);

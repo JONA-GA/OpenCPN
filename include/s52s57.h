@@ -230,6 +230,7 @@ public:
     int           RGBA_width;
     int           RGBA_height;
     int           rendered_char_height;
+    wxRect      rText;          // rectangle of the text as currently rendered, used for declutter
 };
 
 
@@ -262,6 +263,8 @@ typedef struct _S57attVal {
     OGRatt_t valType;
 } S57attVal;
 
+WX_DEFINE_ARRAY( S57attVal *, wxArrayOfS57attVal );
+
 typedef struct _OBJLElement {
     char OBJLName[6];
     int nViz;
@@ -289,6 +292,16 @@ class S57Obj;
 class OGRFeature;
 class PolyTessGeo;
 class PolyTessGeoTrap;
+
+typedef struct _chart_context{
+    void                    *m_pvc_hash;
+    void                    *m_pve_hash;
+    double                  ref_lat;
+    double                  ref_lon;
+    wxArrayPtrVoid          *pFloatingATONArray;
+    wxArrayPtrVoid          *pRigidATONArray;
+    s57chart                *chart;
+}chart_context;
 
 
 class S57Obj
@@ -363,10 +376,16 @@ public:
       double                  y_rate;                 // to be used in GetPointPix() and friends
       double                  x_origin;               // on a per-object basis if necessary
       double                  y_origin;
+      
+      chart_context           *m_chart_context;       // per-chart constants, carried in each object for convenience
 
 };
 
 
+typedef struct _sm_parms{
+    double easting_vp_center;
+    double northing_vp_center;
+}sm_parms;
 
 
 
@@ -374,7 +393,10 @@ public:
 typedef struct _ObjRazRules{
    LUPrec          *LUP;
    S57Obj          *obj;
-   s57chart        *chart;                //dsr ... chart object owning this rule set
+//   void         (*GetPointPixel)(void *, float, float, wxPoint *);
+   
+//   s57chart        *chart;                //dsr ... chart object owning this rule set
+   sm_parms        *sm_transform_parms;
    struct _ObjRazRules *child;            // child list, used only for MultiPoint Soundings
    struct _ObjRazRules *next;
 }ObjRazRules;
@@ -391,7 +413,6 @@ class render_canvas_parms
 {
 public:
       render_canvas_parms(void);
-      render_canvas_parms(int x, int y, int width, int height, wxColour color);
       ~render_canvas_parms(void);
 
       unsigned char           *pix_buff;
@@ -407,6 +428,7 @@ public:
       int                     depth;
       bool                    b_stagger;
       int                     OGL_tex_name;
+      bool                    b_revrgb;
 };
 
 //----------------------------------------------------------------------------------

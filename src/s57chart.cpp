@@ -932,48 +932,6 @@ render_canvas_parms::render_canvas_parms()
     pix_buff = NULL;
 }
 
-render_canvas_parms::render_canvas_parms( int xr, int yr, int widthr, int heightr, wxColour color )
-{
-    depth = BPP;
-    pb_pitch = ( widthr * depth / 8 );
-    lclip = x;
-    rclip = x + widthr - 1;
-    pix_buff = (unsigned char *) malloc( heightr * pb_pitch );
-    width = widthr;
-    height = heightr;
-    x = xr;
-    y = yr;
-
-    unsigned char r, g, b;
-    if( color.IsOk() ) {
-        r = color.Red();
-        g = color.Green();
-        b = color.Blue();
-    } else
-        r = g = b = 0;
-
-    if( depth == 24 ) {
-        for( int i = 0; i < height; i++ ) {
-            unsigned char *p = pix_buff + ( i * pb_pitch );
-            for( int j = 0; j < width; j++ ) {
-                *p++ = r;
-                *p++ = g;
-                *p++ = b;
-            }
-        }
-    } else {
-        for( int i = 0; i < height; i++ ) {
-            unsigned char *p = pix_buff + ( i * pb_pitch );
-            for( int j = 0; j < width; j++ ) {
-                *p++ = r;
-                *p++ = g;
-                *p++ = b;
-                *p++ = 0;
-            }
-        }
-    }
-
-}
 
 render_canvas_parms::~render_canvas_parms( void )
 {
@@ -1514,6 +1472,8 @@ bool s57chart::RenderOverlayRegionViewOnGL( const wxGLContext &glc, const ViewPo
 bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& VPoint,
         const OCPNRegion &Region, bool b_overlay )
 {
+#ifdef ocpnUSE_GL
+    
 //     CALLGRIND_START_INSTRUMENTATION
 //      g_bDebugS57 = true;
 
@@ -1666,13 +1626,15 @@ bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& V
     glPopMatrix();
 
 //      CALLGRIND_STOP_INSTRUMENTATION
-
+#endif
     return true;
 }
 
 void s57chart::SetClipRegionGL( const wxGLContext &glc, const ViewPort& VPoint,
         const OCPNRegion &Region, bool b_render_nodta )
 {
+#ifdef ocpnUSE_GL
+    
     if( g_b_useStencil ) {
         //    Create a stencil buffer for clipping to the region
         glEnable( GL_STENCIL_TEST );
@@ -1756,12 +1718,14 @@ void s57chart::SetClipRegionGL( const wxGLContext &glc, const ViewPort& VPoint,
     }
 
     glColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );  // re-enable color buffer
-
+#endif
 }
 
 void s57chart::SetClipRegionGL( const wxGLContext &glc, const ViewPort& VPoint, const wxRect &Rect,
         bool b_render_nodta )
 {
+#ifdef ocpnUSE_GL
+    
     if( g_b_useStencil ) {
         //    Create a stencil buffer for clipping to the region
         glEnable( GL_STENCIL_TEST );
@@ -1836,11 +1800,13 @@ void s57chart::SetClipRegionGL( const wxGLContext &glc, const ViewPort& VPoint, 
     }
 
     glColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );  // re-enable color buffer
-
+#endif
 }
 
 bool s57chart::DoRenderRectOnGL( const wxGLContext &glc, const ViewPort& VPoint, wxRect &rect )
 {
+#ifdef ocpnUSE_GL
+    
     int i;
     ObjRazRules *top;
     ObjRazRules *crnt;
@@ -1910,7 +1876,8 @@ bool s57chart::DoRenderRectOnGL( const wxGLContext &glc, const ViewPort& VPoint,
     glDisable( GL_STENCIL_TEST );
     glDisable( GL_DEPTH_TEST );
     glDisable( GL_SCISSOR_TEST );
-
+#endif          //#ifdef ocpnUSE_GL
+    
     return true;
 }
 
@@ -2274,6 +2241,12 @@ int s57chart::DCRenderRect( wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rec
     pb_spec.x = rect->x;
     pb_spec.y = rect->y;
 
+#ifdef ocpnUSE_ocpnBitmap
+    pb_spec.b_revrgb = true;
+#else
+    pb_spec.b_revrgb = false;
+#endif
+    
     // Preset background
     wxColour color = GetGlobalColor( _T ( "NODTA" ) );
     unsigned char r, g, b;
@@ -3887,8 +3860,7 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
     Title.append( SENCfile.GetFullPath() );
 
     s_ProgDialog = new wxProgressDialog( Title, Message, m_nGeoRecords, NULL,
-            wxPD_AUTO_HIDE | wxPD_ELAPSED_TIME | wxPD_ESTIMATED_TIME | wxPD_REMAINING_TIME
-                    | wxPD_SMOOTH | wxSTAY_ON_TOP );
+                                         wxPD_AUTO_HIDE | wxPD_SMOOTH | wxSTAY_ON_TOP | wxPD_APP_MODAL);
 
     //      Analyze Updates
     //      The OGR library will apply updates automatically, if enabled.
@@ -3936,7 +3908,7 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
     //      Open the OGRS57DataSource
     //      This will ingest the .000 file from the working dir, and apply updates
 
-    int open_return = poS57DS->Open( m_tmpup_array->Item( 0 ).mb_str(), TRUE, &s_ProgressCallBack ); ///172
+    int open_return = poS57DS->Open( m_tmpup_array->Item( 0 ).mb_str(), TRUE, NULL/*&s_ProgressCallBack*/ ); ///172
     if( open_return == BAD_UPDATE )         ///172
     bbad_update = true;
 
@@ -4485,6 +4457,24 @@ int s57chart::BuildRAZFromSENCFile( const wxString& FullPath )
             }
         }
     }
+    
+    //  Set up the chart context
+    m_this_chart_context = (chart_context *)calloc( sizeof(chart_context), 1);
+    m_this_chart_context->chart = this;
+    
+    //  Loop and populate all the objects
+    for( int i = 0; i < PRIO_NUM; ++i ) {
+        for( int j = 0; j < LUPNAME_NUM; j++ ) {
+            top = razRules[i][j];
+            while( top != NULL ) {
+                S57Obj *obj = top->obj;
+                obj->m_chart_context = m_this_chart_context;
+                top = top->next;
+            }
+        }
+    }
+    
+    
 
     return ret_val;
 }
@@ -4596,7 +4586,7 @@ int s57chart::_insertRules( S57Obj *obj, LUPrec *LUP, s57chart *pOwner )
     rzRules->obj = obj;
     obj->nRef++;                         // Increment reference counter for delete check;
     rzRules->LUP = LUP;
-    rzRules->chart = pOwner;
+//    rzRules->chart = pOwner;
     rzRules->next = razRules[disPrioIdx][LUPtypeIdx];
     rzRules->child = NULL;
     razRules[disPrioIdx][LUPtypeIdx] = rzRules;
@@ -4793,7 +4783,7 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
     wxString sheader;
 
     fprintf( fpOut, "OGRFeature(%s):%ld\n", pFeature->GetDefnRef()->GetName(), pFeature->GetFID() );
-
+    
 //      In the interests of output file size, DO NOT report fields that are not set.
     for( int iField = 0; iField < pFeature->GetFieldCount(); iField++ ) {
         if( pFeature->IsFieldSet( iField ) ) {
@@ -4816,6 +4806,12 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                         if( poReader->GetNall() == 2) {     // ENC is using UCS-2 / UTF-16 encoding
                             wxMBConvUTF16 conv;
                             wxString att_conv(pAttrVal, conv);
+                            att_conv.RemoveLast();      // Remove the \037 that terminates UTF-16 strings in S57
+                            wxAttrValue = att_conv;
+                        }
+                        else if( poReader->GetNall() == 1) {     // ENC is using Lex level 1 (ISO 8859_1) encoding
+                            wxCSConv conv(_T("iso8859-1") );
+                            wxString att_conv(pAttrVal, conv);
                             wxAttrValue = att_conv;
                         }
                     }
@@ -4827,9 +4823,17 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                         wxAttrValue = wxString( pAttrVal, wxConvUTF8 );
 
                         if( 0 ==wxAttrValue.Length() ) {
-                            wxMBConvUTF16 conv;
-                            wxString att_conv(pAttrVal, conv);
-                            wxAttrValue = att_conv;
+                            if( poReader->GetNall() == 2) {     // ENC is using UCS-2 / UTF-16 encoding
+                                wxMBConvUTF16 conv;
+                                wxString att_conv(pAttrVal, conv);
+                                att_conv.RemoveLast();          // Remove the \037 that terminates UTF-16 strings in S57
+                                wxAttrValue = att_conv;
+                            }
+                            else if( poReader->GetNall() == 1) {     // ENC is using Lex level 1 (ISO 8859_1) encoding
+                                wxCSConv conv(_T("iso8859-1") );
+                                wxString att_conv(pAttrVal, conv);
+                                wxAttrValue = att_conv;
+                            }
                             
                             if( 0 ==wxAttrValue.Length() ) {
                                 wxLogError( _T("Warning: CreateSENCRecord(): Failed to convert string value to wxString.") );
@@ -5700,7 +5704,8 @@ bool s57chart::IsPointInObjArea( float lat, float lon, float select_radius, S57O
     bool ret = false;
 
     if( obj->pPolyTessGeo ) {
-        if( !obj->pPolyTessGeo->IsOk() ) obj->pPolyTessGeo->BuildTessGL();
+        if( !obj->pPolyTessGeo->IsOk() )
+            obj->pPolyTessGeo->BuildDeferredTess();
 
         PolyTriGroup *ppg = obj->pPolyTessGeo->Get_PolyTriGroup_head();
 
@@ -5729,7 +5734,11 @@ bool s57chart::IsPointInObjArea( float lat, float lon, float select_radius, S57O
 
         while( pTP ) {
 //  Coarse test
-            if( pTP->p_bbox->PointInBox( lon, lat, 0 ) ) {
+            wxBoundingBox tp_box;
+            tp_box.SetMin(pTP->minx, pTP->miny);
+            tp_box.SetMax(pTP->maxx, pTP->maxy);
+
+            if( tp_box.PointInBox( lon, lat, 0 ) ) {
                 double *p_vertex = pTP->p_vertex;
 
                 switch( pTP->type ){
@@ -6669,7 +6678,7 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
     if( sectorlegs.size() > 0 ) {
         std::vector<int> sectorangles;
         for( unsigned int i=0; i<sectorlegs.size(); i++ ) {
-            if( fabs( sectorlegs[i].sector1 - sectorlegs[i].sector2 ) < 0.5 )
+            if( fabs( sectorlegs[i].sector1 - sectorlegs[i].sector2 ) < 0.3 )
                 continue;
             
             double endx, endy;

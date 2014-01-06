@@ -42,14 +42,18 @@
 #endif
 
 #include <wx/xml/xml.h>
+
+class wxGLContext;
+#ifdef ocpnUSE_GL
 #include <wx/glcanvas.h>
+#endif
 
 //    This is the most modern API Version number
 //    It is expected that the API will remain downward compatible, meaning that
 //    PlugIns conforming to API Version less then the most modern will also
 //    be correctly supported.
 #define API_VERSION_MAJOR           1
-#define API_VERSION_MINOR           10
+#define API_VERSION_MINOR           11
 
 //    Fwd Definitions
 class       wxFileConfig;
@@ -80,6 +84,7 @@ class       wxAuiManager;
 #define     WANTS_OPENGL_OVERLAY_CALLBACK             0x00008000
 #define     WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK     0x00010000
 #define     WANTS_LATE_INIT                           0x00020000
+#define     INSTALLS_PLUGIN_CHART_GL                  0x00040000
 
 //----------------------------------------------------------------------------------------------------------
 //    Some PlugIn API interface object class definitions
@@ -468,8 +473,16 @@ class DECL_EXP opencpn_plugin_110 : public opencpn_plugin_19
     public:
             opencpn_plugin_110(void *pmgr);
             virtual ~opencpn_plugin_110();
-    
+
             virtual void LateInit(void); // If WANTS_LATE_INIT is returned by Init()
+};
+
+class DECL_EXP opencpn_plugin_111 : public opencpn_plugin_110
+{
+public:
+    opencpn_plugin_111(void *pmgr);
+    virtual ~opencpn_plugin_111();
+
 };
 
 //------------------------------------------------------------------
@@ -477,7 +490,7 @@ class DECL_EXP opencpn_plugin_110 : public opencpn_plugin_19
 //
 //------------------------------------------------------------------
 
-class DECL_EXP Plugin_Hyperlink 
+class DECL_EXP Plugin_Hyperlink
 {
 public:
     wxString DescrText;
@@ -497,20 +510,20 @@ public:
                     const wxString& icon_ident, const wxString& wp_name,
                     const wxString& GUID = _T("") );
     ~PlugIn_Waypoint();
-    
+
     double             m_lat;
     double             m_lon;
-    
+
     wxString          m_GUID;
-    
+
     wxString          m_MarkName;
     wxString          m_MarkDescription;
     wxDateTime        m_CreateTime;
-    
+
     wxString          m_IconName;
 
     Plugin_HyperlinkList *m_HyperlinkList;
-    
+
 };
 
 WX_DECLARE_LIST(PlugIn_Waypoint, Plugin_WaypointList);
@@ -520,12 +533,12 @@ class DECL_EXP PlugIn_Route
 public:
     PlugIn_Route(void);
     ~PlugIn_Route(void);
-    
+
     wxString    m_NameString;
     wxString    m_StartString;
     wxString    m_EndString;
     wxString    m_GUID;
-    
+
     Plugin_WaypointList     *pWaypointList;
 };
 
@@ -534,12 +547,12 @@ class DECL_EXP PlugIn_Track
 public:
     PlugIn_Track(void);
     ~PlugIn_Track(void);
-    
+
     wxString    m_NameString;
     wxString    m_StartString;
     wxString    m_EndString;
     wxString    m_GUID;
-    
+
     Plugin_WaypointList     *pWaypointList;
 };
 
@@ -670,6 +683,209 @@ extern DECL_EXP bool AddPlugInTrack( PlugIn_Track *ptrack, bool b_permanent = tr
 extern DECL_EXP bool DeletePlugInTrack( wxString& GUID );
 extern DECL_EXP bool UpdatePlugInTrack ( PlugIn_Track *ptrack );
 
+/* API 1.11  */
 
-#endif            // _PLUGIN_H_
+/* API 1.11  adds some more common functions to avoid unnecessary code duplication */
+wxColour DECL_EXP GetBaseGlobalColor(wxString colorName);
+int DECL_EXP OCPNMessageBox_PlugIn(wxWindow *parent,
+                          const wxString& message,
+                          const wxString& caption = _T("Message"),
+                          int style = wxOK, int x = -1, int y = -1);
 
+extern DECL_EXP wxString toSDMM_PlugIn(int NEflag, double a, bool hi_precision = true);
+
+extern "C"  DECL_EXP wxString *GetpPrivateApplicationDataLocation();
+extern  DECL_EXP wxString GetOCPN_ExePath( void );
+extern "C"  DECL_EXP wxString *GetpPlugInLocation();
+extern  DECL_EXP wxString GetPlugInPath(opencpn_plugin *pplugin);
+
+extern "C"  DECL_EXP int AddChartToDBInPlace( wxString &full_path, bool b_ProgressDialog );
+extern "C"  DECL_EXP int RemoveChartFromDBInPlace( wxString &full_path );
+
+
+//  API 1.11 adds access to S52 Presentation library
+//Types
+
+class PI_S57Obj;
+
+WX_DECLARE_LIST(PI_S57Obj, ListOfPI_S57Obj);
+
+// ----------------------------------------------------------------------------
+// PlugInChartBaseGL
+//  Derived from PlugInChartBase, add OpenGL Vector chart support
+// ----------------------------------------------------------------------------
+
+class DECL_EXP PlugInChartBaseGL : public PlugInChartBase
+{
+public:
+    PlugInChartBaseGL();
+    virtual ~PlugInChartBaseGL();
+
+    virtual int RenderRegionViewOnGL( const wxGLContext &glc, const PlugIn_ViewPort& VPoint,
+                                      const wxRegion &Region, bool b_use_stencil );
+
+    virtual ListOfPI_S57Obj *GetObjRuleListAtLatLon(float lat, float lon, float select_radius, PlugIn_ViewPort *VPoint);
+    virtual wxString CreateObjDescriptions( ListOfPI_S57Obj* obj_list );
+
+    virtual int GetNoCOVREntries();
+    virtual int GetNoCOVRTablePoints(int iTable);
+    virtual int  GetNoCOVRTablenPoints(int iTable);
+    virtual float *GetNoCOVRTableHead(int iTable);
+    
+};
+
+
+
+
+
+
+
+class wxArrayOfS57attVal;
+
+// name of the addressed look up table set (fifth letter)
+typedef enum _PI_LUPname{
+    PI_SIMPLIFIED                             = 'L', // points
+    PI_PAPER_CHART                            = 'R', // points
+    PI_LINES                                  = 'S', // lines
+    PI_PLAIN_BOUNDARIES                       = 'N', // areas
+    PI_SYMBOLIZED_BOUNDARIES                  = 'O', // areas
+    PI_LUPNAME_NUM                            = 5
+}PI_LUPname;
+
+// display category type
+typedef enum _PI_DisCat{
+    PI_DISPLAYBASE          = 'D',            //
+    PI_STANDARD             = 'S',            //
+    PI_OTHER                = 'O',            // O for OTHER
+    PI_MARINERS_STANDARD    = 'M',            // Mariner specified
+    PI_MARINERS_OTHER,                        // value not defined
+    PI_DISP_CAT_NUM,                          // value not defined
+}PI_DisCat;
+
+// Display Priority
+typedef enum _PI_DisPrio{
+    PI_PRIO_NODATA          = '0',                  // no data fill area pattern
+    PI_PRIO_GROUP1          = '1',                  // S57 group 1 filled areas
+    PI_PRIO_AREA_1          = '2',                  // superimposed areas
+    PI_PRIO_AREA_2          = '3',                  // superimposed areas also water features
+    PI_PRIO_SYMB_POINT      = '4',                  // point symbol also land features
+    PI_PRIO_SYMB_LINE       = '5',                  // line symbol also restricted areas
+    PI_PRIO_SYMB_AREA       = '6',                  // area symbol also traffic areas
+    PI_PRIO_ROUTEING        = '7',                  // routeing lines
+    PI_PRIO_HAZARDS         = '8',                  // hazards
+    PI_PRIO_MARINERS        = '9',                  // VRM, EBL, own ship
+    PI_PRIO_NUM             = 10                    // number of priority levels
+
+}PI_DisPrio;
+
+typedef enum PI_InitReturn
+{
+    PI_INIT_OK = 0,
+    PI_INIT_FAIL_RETRY,        // Init failed, retry suggested
+    PI_INIT_FAIL_REMOVE,       // Init failed, suggest remove from further use
+    PI_INIT_FAIL_NOERROR       // Init failed, request no explicit error message
+}_PI_InitReturn;
+
+
+class DECL_EXP PI_S57Obj
+{
+public:
+
+      //  Public Methods
+      PI_S57Obj();
+      ~PI_S57Obj();
+
+public:
+      // Instance Data
+      char                    FeatureName[8];
+      int                     Primitive_type;
+
+      char                    *att_array;
+      wxArrayOfS57attVal      *attVal;
+      int                     n_attr;
+
+      int                     iOBJL;
+      int                     Index;
+
+      double                  x;                      // for POINT
+      double                  y;
+      double                  z;
+      int                     npt;                    // number of points as needed by arrays
+      void                    *geoPt;                 // for LINE & AREA not described by PolyTessGeo
+      double                  *geoPtz;                // an array[3] for MultiPoint, SM with Z, i.e. depth
+      double                  *geoPtMulti;            // an array[2] for MultiPoint, lat/lon to make bbox
+                                                      // of decomposed points
+
+      void                    *pPolyTessGeo;
+
+      double                  m_lat;                  // The lat/lon of the object's "reference" point
+      double                  m_lon;
+
+      double                  chart_ref_lat;
+      double                  chart_ref_lon;
+
+      double                  lat_min;
+      double                  lat_max;
+      double                  lon_min;
+      double                  lon_max;
+      bool                    bBBObj_valid;
+
+      int                     Scamin;                 // SCAMIN attribute decoded during load
+
+      bool                    bIsClone;
+      int                     nRef;                   // Reference counter, to signal OK for deletion
+
+      bool                    bIsAton;                // This object is an aid-to-navigation
+      bool                    bIsAssociable;          // This object is DRGARE or DEPARE
+
+      int                     m_n_lsindex;
+      int                     *m_lsindex_array;
+      int                     m_n_edge_max_points;
+      void                    *m_chart_context;
+
+      PI_DisCat               m_DisplayCat;
+
+      void *                  S52_Context;
+      PI_S57Obj               *child;           // child list, used only for MultiPoint Soundings
+
+      PI_S57Obj               *next;            //  List linkage
+
+
+                                                      // This transform converts from object geometry
+                                                      // to SM coordinates.
+      double                  x_rate;                 // These auxiliary transform coefficients are
+      double                  y_rate;                 // to be used in GetPointPix() and friends
+      double                  x_origin;               // on a per-object basis if necessary
+      double                  y_origin;
+};
+
+
+
+wxString DECL_EXP PI_GetPLIBColorScheme();
+int DECL_EXP PI_GetPLIBDepthUnitInt();
+int DECL_EXP PI_GetPLIBSymbolStyle();
+int DECL_EXP PI_GetPLIBBoundaryStyle();
+int DECL_EXP PI_GetPLIBStateHash();
+
+bool DECL_EXP PI_PLIBObjectRenderCheck( PI_S57Obj *pObj, PlugIn_ViewPort *vp );
+PI_LUPname DECL_EXP PI_GetObjectLUPName( PI_S57Obj *pObj );
+PI_DisPrio DECL_EXP PI_GetObjectDisplayPriority( PI_S57Obj *pObj );
+PI_DisCat DECL_EXP PI_GetObjectDisplayCategory( PI_S57Obj *pObj );
+void DECL_EXP PI_PLIBSetLineFeaturePriority( PI_S57Obj *pObj, int prio );
+void DECL_EXP PI_PLIBPrepareForNewRender(void);
+
+
+bool DECL_EXP PI_PLIBSetContext( PI_S57Obj *pObj );
+
+int DECL_EXP PI_PLIBRenderObjectToDC( wxDC *pdc, PI_S57Obj *pObj, PlugIn_ViewPort *vp );
+int DECL_EXP PI_PLIBRenderAreaToDC( wxDC *pdc, PI_S57Obj *pObj, PlugIn_ViewPort *vp, wxRect rect, unsigned char *pixbuf );
+
+
+int DECL_EXP PI_PLIBRenderAreaToGL( const wxGLContext &glcc, PI_S57Obj *pObj,
+                                    PlugIn_ViewPort *vp, wxRect &render_rect );
+
+int DECL_EXP PI_PLIBRenderObjectToGL( const wxGLContext &glcc, PI_S57Obj *pObj,
+                                    PlugIn_ViewPort *vp, wxRect &render_rect );
+
+
+#endif //_PLUGIN_H_

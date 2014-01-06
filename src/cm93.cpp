@@ -108,6 +108,7 @@ M_COVR_Desc::M_COVR_Desc()
 
       user_xoff = 0.;
       user_yoff = 0.;
+      m_centerlat_cos = 1.0;
       m_buser_offsets = false;
 
 }
@@ -164,8 +165,10 @@ bool M_COVR_Desc:: WriteWKB ( void *p )
             *pd++ = m_covr_lon_min;
             *pd++ = m_covr_lon_max;
 
-            *pd++ = user_xoff;
-            *pd++ = user_yoff;
+            double centerlat_cos = cos( ((m_covr_lat_min + m_covr_lat_max)/2.) * PI/180. );
+            
+            *pd++ = user_xoff * centerlat_cos;
+            *pd++ = user_yoff * centerlat_cos;
       }
 
       return true;
@@ -196,15 +199,21 @@ int M_COVR_Desc:: ReadWKB ( wxFFileInputStream &ifs )
             ifs.Read ( &m_covr_lon_min, sizeof ( double ) );
             ifs.Read ( &m_covr_lon_max, sizeof ( double ) );
 
+            m_centerlat_cos = cos( ((m_covr_lat_min + m_covr_lat_max)/2.) * PI/180. );
+            
             ifs.Read ( &user_xoff, sizeof ( double ) );
             ifs.Read ( &user_yoff, sizeof ( double ) );
 
+            user_xoff /= m_centerlat_cos;
+            user_yoff /= m_centerlat_cos;
+            
             if ( ( fabs ( user_xoff ) > 1. ) || ( fabs ( user_yoff ) > 1. ) )
                   m_buser_offsets = true;
             else
                   m_buser_offsets = false;
 
             m_covr_bbox = wxBoundingBox ( m_covr_lon_min, m_covr_lat_min, m_covr_lon_max, m_covr_lat_max );
+            
 
       }
       return length;
@@ -1911,6 +1920,10 @@ cm93chart::cm93chart()
       m_nDrawBufferSize = 1;
 
 
+      //  Set up the chart context
+      m_this_chart_context = (chart_context *)calloc( sizeof(chart_context), 1);
+      m_this_chart_context->chart = this;
+      
 }
 
 cm93chart::~cm93chart()
@@ -2457,6 +2470,10 @@ int cm93chart::CreateObjChain ( int cell_index, int subcell )
 
 //              Establish Object's Display Category
                               obj->m_DisplayCat = LUP->DISC;
+                              
+ //              Populate the chart context
+                               obj->m_chart_context = m_this_chart_context;
+                                          
                         }
                   }
 
@@ -3583,6 +3600,8 @@ S57Obj *cm93chart::CreateS57Obj ( int cell_index, int iobject, int subcell, Obje
                               pmcd->transform_WGS84_offset_x = tmp_transform_x;
                               pmcd->transform_WGS84_offset_y = tmp_transform_y;
 
+                              pmcd->m_centerlat_cos = cos( ((pmcd->m_covr_lat_min + pmcd->m_covr_lat_max)/2.) * PI/180. );
+                              
                               //    Add this MCD to the persistent class covr_set
                               GetCoverSet()->Add_Update_MCD ( pmcd );
 
@@ -3667,7 +3686,7 @@ S57Obj *cm93chart::CreateS57Obj ( int cell_index, int iobject, int subcell, Obje
 
                   if(1)
                   {
-                  //    This will be a deferred tesselation.....
+                //    This will be a deferred tesselation.....
 
                         // Set up the conversion factors for use in the tesselator
                         xgeom->x_rate   = m_CIB.transform_x_rate;
@@ -4204,6 +4223,8 @@ void cm93chart::ProcessMCOVRObjects ( int cell_index, char subcell )
                                     //    Capture and store the potential WGS transform offsets grabbed during attribute decode
                                     pmcd->transform_WGS84_offset_x = tmp_transform_x;
                                     pmcd->transform_WGS84_offset_y = tmp_transform_y;
+                                    
+                                    pmcd->m_centerlat_cos = cos( ((pmcd->m_covr_lat_min + pmcd->m_covr_lat_max)/2.) * PI/180. );
 
                                     //     Add this object to the covr_set
                                     m_pcovr_set->Add_Update_MCD ( pmcd );
@@ -6347,11 +6368,11 @@ wxString  OCPNOffsetListCtrl::OnGetItemText ( long item, long column ) const
                   break;
 
             case tlUXOFF:
-                  ret.Printf ( _T ( "%g" ), pmcd->user_xoff );
+                  ret.Printf ( _T ( "%6.0f" ), pmcd->user_xoff * pmcd->m_centerlat_cos );
                   break;
 
             case tlUYOFF:
-                  ret.Printf ( _T ( "%g" ), pmcd->user_yoff );
+                  ret.Printf ( _T ( "%6.0f" ), pmcd->user_yoff * pmcd->m_centerlat_cos );
                   break;
 
             default:
@@ -6503,8 +6524,8 @@ void CM93OffsetDialog::OnOK ( wxCommandEvent& event )
 
 void CM93OffsetDialog::OnOffSetSet ( wxCommandEvent& event )
 {
-      m_xoff = m_pSpinCtrlXoff->GetValue();
-      m_yoff = m_pSpinCtrlYoff->GetValue();
+    m_xoff = m_pSpinCtrlXoff->GetValue() / m_centerlat_cos;
+    m_yoff = m_pSpinCtrlYoff->GetValue() / m_centerlat_cos;
 
       UpdateOffsets();
 
@@ -6553,8 +6574,8 @@ void CM93OffsetDialog::OnCellSelected ( wxListEvent &event )
             M_COVR_Desc *cached_mcd = pchart->GetCoverSet()->Find_MCD ( mcd->m_cell_index, mcd->m_object_id, mcd->m_subcell );
             if ( cached_mcd )
             {
-                  m_pSpinCtrlXoff->SetValue ( wxRound ( cached_mcd->user_xoff ) );
-                  m_pSpinCtrlYoff->SetValue ( wxRound ( cached_mcd->user_yoff ) );
+                m_pSpinCtrlXoff->SetValue ( wxRound ( cached_mcd->user_xoff * cached_mcd->m_centerlat_cos ) );
+                m_pSpinCtrlYoff->SetValue ( wxRound ( cached_mcd->user_yoff * cached_mcd->m_centerlat_cos ) );
             }
       }
 
@@ -6563,7 +6584,8 @@ void CM93OffsetDialog::OnCellSelected ( wxListEvent &event )
       m_selected_cell_index = mcd->m_cell_index;
       m_selected_object_id  = mcd->m_object_id;
       m_selected_subcell = mcd->m_subcell;
-
+      m_centerlat_cos = mcd->m_centerlat_cos;
+      
       m_pcompchart->InvalidateCache();
 
       if ( m_pparent )

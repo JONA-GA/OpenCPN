@@ -1234,7 +1234,7 @@ bool dashboard_pi::SaveConfig( void )
         pConf->Write( _T("WindSpeedUnit"), g_iDashWindSpeedUnit );
 
         pConf->Write( _T("DashboardCount" ), (int) m_ArrayOfDashboardWindow.GetCount() );
-        for( size_t i = 0; i < m_ArrayOfDashboardWindow.GetCount(); i++ ) {
+        for( unsigned int i = 0; i < m_ArrayOfDashboardWindow.GetCount(); i++ ) {
             DashboardWindowContainer *cont = m_ArrayOfDashboardWindow.Item( i );
             pConf->SetPath( wxString::Format( _T("/PlugIns/Dashboard/Dashboard%d"), i + 1 ) );
             pConf->Write( _T("Name"), cont->m_sName );
@@ -1242,7 +1242,7 @@ bool dashboard_pi::SaveConfig( void )
             pConf->Write( _T("Orientation"), cont->m_sOrientation );
 
             pConf->Write( _T("InstrumentCount"), (int) cont->m_aInstrumentList.GetCount() );
-            for( size_t j = 0; j < cont->m_aInstrumentList.GetCount(); j++ )
+            for( unsigned int j = 0; j < cont->m_aInstrumentList.GetCount(); j++ )
                 pConf->Write( wxString::Format( _T("Instrument%d"), j + 1 ),
                         cont->m_aInstrumentList.Item( j ) );
         }

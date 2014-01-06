@@ -30,14 +30,12 @@
 
 #include "s52s57.h"                 //types
 
-//    Dynamic arrays of pointers need explicit macros in wx261
-#ifdef __WX261
-WX_DEFINE_ARRAY_PTR(S57attVal *, wxArrayOfS57attVal);
-#else
-WX_DEFINE_ARRAY( S57attVal *, wxArrayOfS57attVal );
+class wxGLContext;
+#ifdef ocpnUSE_GL
+#include <wx/glcanvas.h>
 #endif
 
-#include <wx/glcanvas.h>
+
 #include <wx/dcgraph.h>         // supplemental, for Mac
 
 //    wxWindows Hash Map Declarations
@@ -48,13 +46,14 @@ WX_DECLARE_HASH_MAP( wxString, Rule*, wxStringHash, wxStringEqual, RuleHash );
 
 WX_DEFINE_SORTED_ARRAY( LUPrec *, wxArrayOfLUPrec );
 
-WX_DECLARE_LIST( S57Obj, ObjList );
+WX_DECLARE_LIST( S52_TextC, TextObjList );
 
 WX_DECLARE_STRING_HASH_MAP( int, CARC_Hash );
 
 class ViewPort;
 class PixelCache;
 
+#ifdef ocpnUSE_GL
 /* Copyright (c) Mark J. Kilgard, 1997. */
 
 /* This program is freely distributable without licensing fees  and is
@@ -129,6 +128,11 @@ extern void txfRenderString( TexFont * txf, char *string, int len );
 extern void txfRenderFancyString( TexFont * txf, char *string, int len );
 
 #endif /* __TEXFONT_H__ */
+
+#else
+typedef struct {} TexFont;
+
+#endif
 
 class RenderFromHPGL;
 
@@ -210,12 +214,6 @@ public:
     int RenderObjectToDC( wxDC *pdc, ObjRazRules *rzRules, ViewPort *vp );
     int RenderAreaToDC( wxDC *pdc, ObjRazRules *rzRules, ViewPort *vp, render_canvas_parms *pb_spec );
 
-    //    For OpenGL
-    int RenderObjectToGL( const wxGLContext &glcc, ObjRazRules *rzRules,
-        ViewPort *vp, wxRect &render_rect );
-    int RenderAreaToGL( const wxGLContext &glcc, ObjRazRules *rzRules,
-        ViewPort *vp, wxRect &render_rect );
-
     // Accessors
     bool GetShowSoundings() { return m_bShowSoundg; }
     void SetShowSoundings( bool f ) { m_bShowSoundg = f; GenerateStateHash(); }
@@ -241,6 +239,14 @@ public:
     void DestroyPatternRuleNode( Rule *pR );
     void DestroyRuleNode( Rule *pR );
 
+//#ifdef ocpnUSE_GL
+    //    For OpenGL
+    int RenderObjectToGL( const wxGLContext &glcc, ObjRazRules *rzRules,
+                          ViewPort *vp, wxRect &render_rect );
+    int RenderAreaToGL( const wxGLContext &glcc, ObjRazRules *rzRules,
+                        ViewPort *vp, wxRect &render_rect );
+//#endif
+    
     //Todo accessors
     DisCat m_nDisplayCategory;
     LUPname m_nSymbolStyle;
@@ -317,7 +323,7 @@ private:
 
     void RenderToBufferFilledPolygon( ObjRazRules *rzRules, S57Obj *obj,
         S52color *c, wxBoundingBox &BBView, render_canvas_parms *pb_spec,
-        render_canvas_parms *patt_spec );
+        render_canvas_parms *patt_spec, ViewPort *vp );
 
     void draw_lc_poly( wxDC *pdc, wxColor &color, int width, wxPoint *ptp,
         int npt, float sym_len, float sym_factor, Rule *draw_rule,
@@ -332,7 +338,7 @@ private:
     bool RenderText( wxDC *pdc, S52_TextC *ptext, int x, int y,
         wxRect *pRectDrawn, S57Obj *pobj, bool bCheckOverlap, ViewPort *vp );
 
-    bool CheckTextRectList( const wxRect &test_rect, S57Obj *pobj );
+    bool CheckTextRectList( const wxRect &test_rect, S52_TextC *ptext );
     int RenderT_All( ObjRazRules *rzRules, Rules *rules, ViewPort *vp,	bool bTX );
 
     int PrioritizeLineFeature( ObjRazRules *rzRules, int npriority );
@@ -355,6 +361,10 @@ private:
     bool TextRenderCheck( ObjRazRules *rzRules );
     bool inter_tri_rect( wxPoint *ptp, render_canvas_parms *pb_spec );
 
+    bool GetPointPixArray( ObjRazRules *rzRules, wxPoint2DDouble* pd, wxPoint *pp, int nv, ViewPort *vp );
+    bool GetPointPixSingle( ObjRazRules *rzRules, float north, float east, wxPoint *r, ViewPort *vp );
+    void GetPixPointSingle( int pixx, int pixy, double *plat, double *plon, ViewPort *vp );
+    
     wxString m_plib_file;
 
     float canvas_pix_per_mm; // Set by parent, used to scale symbols/lines/patterns
@@ -366,7 +376,10 @@ private:
     bool useLegacyRaster;
 
     wxDC *m_pdc; // The current DC
+    
+//#ifdef ocpnUSE_GL
     wxGLContext *m_glcc;
+//#endif
 
     int *ledge;
     int *redge;
@@ -374,7 +387,7 @@ private:
     int m_colortable_index;
     int m_colortable_index_save;
 
-    ObjList m_textObjList;
+    TextObjList m_textObjList;
 
     double m_display_pix_per_mm;
 
@@ -385,12 +398,13 @@ private:
     wxRect m_render_rect;
 
     bool m_txf_ready;
-    TexFont *m_txf;
     int m_txf_avg_char_width;
     int m_txf_avg_char_height;
     CARC_Hash m_CARC_hashmap;
     RenderFromHPGL* HPGL;
 
+    TexFont *m_txf;
+    
 };
 
 

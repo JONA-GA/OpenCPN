@@ -50,6 +50,7 @@ class GRIBRecord;
 class GribRecordTree;
 class GRIBOverlayFactory;
 class GribRecordSet;
+class GribRequestSetting;
 
 class wxFileConfig;
 class grib_pi;
@@ -79,32 +80,29 @@ public:
     ~GRIBUIDialog();
 
     void OpenFile( bool newestFile = false );
-    wxString GetNewestFileInDirectory();
-
-    void SetFilename( wxString file_name ) { m_file_name = file_name; }
-    void SelectTreeControlGRS( GRIBFile *pgribfile );
-    void PopulateTreeControlGRS( GRIBFile *pgribfile, int file_index );
-    void SelectGribRecordSet( GribRecordSet *pGribRecordSet );
-    void SetGribTimelineRecordSet(GribTimelineRecordSet *pTimelineSet);
+    
+    void ContextMenuItemCallback(int id);
     void SetCursorLatLon( double lat, double lon );
     void SetFactoryOptions( bool set_val = false );
+    void PopulateTrackingControls( void );
 
     wxDateTime TimelineTime();
-    wxDateTime MinTime();
-    //wxDateTime MaxTime();
     GribTimelineRecordSet* GetTimeLineRecordSet(wxDateTime time);
-    void TimelineChanged(bool sync=false);
+    void TimelineChanged();
     void CreateActiveFileFromName( wxString filename );
-    void PopulateComboDataList( int index );
+    void PopulateComboDataList();
     void ComputeBestForecastForNow();
-    void DisplayDataGRS();
-    void SetViewPort( PlugIn_ViewPort *vp ) { m_vp = new PlugIn_ViewPort(*vp); }
+    void SetViewPort( PlugIn_ViewPort *vp );
 
     GribOverlaySettings m_OverlaySettings;
 
     wxTimer m_tPlayStop;
 
+    grib_pi             *pPlugIn;
+    GribRequestSetting  *pReq_Dialog;
     GRIBFile        *m_bGRIBActiveFile;
+    bool             m_InterpolateMode;
+    double m_cursor_lat, m_cursor_lon;
 
 private:
     void OnClose( wxCloseEvent& event );
@@ -115,11 +113,11 @@ private:
     void OnPlayStopTimer( wxTimerEvent & );
 
     void AddTrackingControl( wxControl *ctrl1,  wxControl *ctrl2,  wxControl *ctrl3, bool show );
-    void PopulateTrackingControls( void );
     void UpdateTrackingControls( void );
 
+    void OnZoomToCenterClick( wxCommandEvent& event );
     void OnPrev( wxCommandEvent& event );
-    void OnRecordForecast( wxCommandEvent& event ) { DisplayDataGRS(); }
+    void OnRecordForecast( wxCommandEvent& event ) { m_InterpolateMode = false; TimelineChanged(); }
     void OnNext( wxCommandEvent& event );
     void OnNow( wxCommandEvent& event ) { ComputeBestForecastForNow(); }
     void OnOpenFile( wxCommandEvent& event );
@@ -128,14 +126,16 @@ private:
     void OnTimeline( wxScrollEvent& event );
     void OnCBAny( wxCommandEvent& event );
 
+    wxDateTime MinTime();
+    wxString GetNewestFileInDirectory();
+    void SetGribTimelineRecordSet(GribTimelineRecordSet *pTimelineSet);
+    int GetTimePosition(wxDateTime time);
+
     //    Data
     wxWindow *pParent;
-    grib_pi *pPlugIn;
 
     PlugIn_ViewPort  *m_vp;
     int m_lastdatatype;
-
-    double m_cursor_lat, m_cursor_lon;
 
     GribTimelineRecordSet *m_pTimelineSet;
     int m_TimeLineHours;
@@ -170,6 +170,13 @@ public:
     {
         return &m_GribRecordSetArray;
     }
+    time_t GetRefDateTime( void )
+    {
+        return m_pRefDateTime;
+    }
+
+    WX_DEFINE_ARRAY_INT(int, GribIdxArray);
+    GribIdxArray m_GribIdxArray;
 
 private:
 
@@ -177,6 +184,7 @@ private:
     wxString m_last_message;
     wxString m_FileName;
     GribReader *m_pGribReader;
+    time_t m_pRefDateTime;
 
     //    An array of GribRecordSets found in this GRIB file
     ArrayOfGribRecordSets m_GribRecordSetArray;
@@ -190,33 +198,36 @@ private:
 class GribRequestSetting : public GribRequestSettingBase
 {
 public:
-      GribRequestSetting( wxWindow *parent, wxString config, int latmax, int latmin, int lonmin,
-          int lonmax, wxString address, wxString login, wxString code)
-          : GribRequestSettingBase(parent)
-      {m_RequestConfigBase = config; m_LatmaxBase = latmax;  m_LatminBase = latmin;  m_LonminBase = lonmin;  m_LonmaxBase = lonmax; 
-          m_MailAddressBase = address; m_pLogin->ChangeValue(login); m_pCode->ChangeValue(code); InitRequestConfig();}
+      GribRequestSetting( wxWindow *parent )
+          : GribRequestSettingBase(parent) {};
 
       ~GribRequestSetting() {}
+
+      void InitRequestConfig();
+      void SetVpSize(PlugIn_ViewPort *vp);
+      void OnVpChange(PlugIn_ViewPort *vp);
+
       wxString m_RequestConfigBase;
-      wxString m_MailAddressBase;
+      wxString m_MailToAddresses;
       int m_LatmaxBase;
       int m_LatminBase;
       int m_LonminBase;
       int m_LonmaxBase;
-      
+    
 private:
-      void InitRequestConfig();
-      void ApplyRequestConfig( int sel1, int sel2 );
+      void ApplyRequestConfig( unsigned rs, unsigned it, unsigned tr );
       wxString WriteMail();
       bool EstimateFileSize();
 
       void OnTopChange(wxCommandEvent &event);
       void OnAnyChange( wxCommandEvent& event );
+      void OnTimeRangeChange( wxCommandEvent& event );
       void OnSendMaiL( wxCommandEvent& event );
-      void OnSaveMail( wxCommandEvent& event ) { this->EndModal(wxID_APPLY); }
+      void OnSaveMail( wxCommandEvent& event );
 
       int  m_MailError_Nb;
-
+      int  m_SendMethod;
+      bool m_AllowSend;
 };
 
 #endif
