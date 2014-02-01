@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: opencpn 2.2.1110\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2013-11-17 19:30-0500\n"
+"POT-Creation-Date: 2014-01-28 10:21-0500\n"
 "PO-Revision-Date: 2011-01-09 18:59+0200\n"
 "Last-Translator: Peep Prants <peep@prants.ee>\n"
 "Language-Team: \n"
@@ -51,6 +51,9 @@ msgstr "Tuule kiirus"
 msgid "Appearance"
 msgstr ""
 #
+msgid "Barometric pressure"
+msgstr ""
+#
 msgid "Boat speed units:"
 msgstr ""
 #
@@ -59,6 +62,9 @@ msgid "COG"
 msgstr "COG"
 #
 msgid "Caption:"
+msgstr ""
+#
+msgid "Centimeters"
 msgstr ""
 #
 msgid "Clock"
@@ -100,6 +106,9 @@ msgstr "Kustuta"
 msgid "Depth"
 msgstr "Sügavus"
 #
+msgid "Depth units:"
+msgstr ""
+#
 msgid "Distance units:"
 msgstr ""
 #
@@ -120,6 +129,12 @@ msgstr "NE"
 #, fuzzy
 msgid "ESE"
 msgstr "SE"
+#
+msgid "Fathoms"
+msgstr ""
+#
+msgid "Feet"
+msgstr ""
 #
 msgid "Fonts"
 msgstr "Fondid"
@@ -143,6 +158,9 @@ msgid "Honor OpenCPN settings"
 msgstr ""
 #
 msgid "Horizontal"
+msgstr ""
+#
+msgid "Inches"
 msgstr ""
 #
 #
@@ -347,8 +365,12 @@ msgstr ""
 #
 #
 #
+#
+#
 #~ msgid "Edit"
 #~ msgstr "Muuda"
+#
+#
 #
 #
 #
@@ -357,8 +379,12 @@ msgstr ""
 #
 #
 #
+#
+#
 #~ msgid "Instrument width:"
 #~ msgstr "Sildi laius:"
+#
+#
 #
 #
 #

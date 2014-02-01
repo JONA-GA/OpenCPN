@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: opencpn 2.4.606\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2013-11-17 19:30-0500\n"
+"POT-Creation-Date: 2014-01-28 10:21-0500\n"
 "PO-Revision-Date: 2011-06-07 08:47+0100\n"
 "Last-Translator: Pavel Kalian <pavel@kalian.cz>\n"
 "Language-Team: \n"
@@ -51,6 +51,9 @@ msgstr "Rychlost větru"
 msgid "Appearance"
 msgstr "Vzhled"
 #
+msgid "Barometric pressure"
+msgstr ""
+#
 msgid "Boat speed units:"
 msgstr ""
 #
@@ -60,6 +63,9 @@ msgstr "COG"
 #
 msgid "Caption:"
 msgstr "Popis:"
+#
+msgid "Centimeters"
+msgstr ""
 #
 msgid "Clock"
 msgstr "Hodiny"
@@ -103,6 +109,9 @@ msgstr "Smazat"
 msgid "Depth"
 msgstr "Hloubka"
 #
+msgid "Depth units:"
+msgstr ""
+#
 msgid "Distance units:"
 msgstr ""
 #
@@ -123,6 +132,12 @@ msgstr "SV"
 #, fuzzy
 msgid "ESE"
 msgstr "JV"
+#
+msgid "Fathoms"
+msgstr ""
+#
+msgid "Feet"
+msgstr ""
 #
 msgid "Fonts"
 msgstr "Písma"
@@ -147,6 +162,9 @@ msgstr ""
 #
 msgid "Horizontal"
 msgstr "Horizontální"
+#
+msgid "Inches"
+msgstr ""
 #
 #
 msgid "Instruments"
@@ -350,8 +368,12 @@ msgstr "zobrazit tuto palubní desku"
 #
 #
 #
+#
+#
 #~ msgid "Apparent wind"
 #~ msgstr "Zdánlivý vítr"
+#
+#
 #
 #
 #
@@ -360,8 +382,12 @@ msgstr "zobrazit tuto palubní desku"
 #
 #
 #
+#
+#
 #~ msgid "Instrument width:"
 #~ msgstr "Šířka přístroje:"
+#
+#
 #
 #
 #

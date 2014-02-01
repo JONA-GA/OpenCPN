@@ -40,6 +40,7 @@ wxFont *g_pFontLabel;
 wxFont *g_pFontSmall;
 int g_iDashSpeedMax;
 int g_iDashSpeedUnit;
+int g_iDashDepthUnit;
 int g_iDashDistanceUnit;
 int g_iDashWindSpeedUnit;
 
@@ -75,7 +76,7 @@ enum {
     ID_DBP_I_DPT, ID_DBP_D_DPT, ID_DBP_I_TMP, ID_DBP_I_VMG, ID_DBP_D_VMG, ID_DBP_I_RSA,
     ID_DBP_D_RSA, ID_DBP_I_SAT, ID_DBP_D_GPS, ID_DBP_I_PTR, ID_DBP_I_CLK, ID_DBP_I_SUN,
     ID_DBP_D_MON, ID_DBP_I_ATMP, ID_DBP_I_AWA, ID_DBP_I_TWA, ID_DBP_I_TWD, ID_DBP_I_TWS,
-    ID_DBP_D_TWD, ID_DBP_I_HDM, ID_DBP_D_HDT,ID_DBP_D_WDH,ID_DBP_I_VLW1, ID_DBP_I_VLW2,
+    ID_DBP_D_TWD, ID_DBP_I_HDM, ID_DBP_D_HDT, ID_DBP_D_WDH, ID_DBP_I_VLW1, ID_DBP_I_VLW2, ID_DBP_D_MDA, ID_DBP_I_MDA,
     ID_DBP_LAST_ENTRY //this has a reference in one of the routines; defining a "LAST_ENTRY" and setting the reference to it, is one codeline less to change (and find) when adding new instruments :-)
 };
 
@@ -120,6 +121,10 @@ wxString getInstrumentCaption( unsigned int id )
             return _("Depth");
         case ID_DBP_D_DPT:
             return _("Depth");
+	case ID_DBP_D_MDA:
+            return _("Barometric pressure");
+        case ID_DBP_I_MDA:
+            return _("Barometric pressure");
         case ID_DBP_I_TMP:
             return _("Water Temp.");
         case ID_DBP_I_ATMP:
@@ -177,6 +182,7 @@ void getListItemForInstrument( wxListItem &item, unsigned int id )
         case ID_DBP_I_HDM:
         case ID_DBP_I_AWS:
         case ID_DBP_I_DPT:
+	case ID_DBP_I_MDA:
         case ID_DBP_I_TMP:
         case ID_DBP_I_ATMP:
         case ID_DBP_I_TWA:
@@ -201,6 +207,7 @@ void getListItemForInstrument( wxListItem &item, unsigned int id )
         case ID_DBP_D_TW:
         case ID_DBP_D_TWD:
         case ID_DBP_D_DPT:
+	case ID_DBP_D_MDA:
         case ID_DBP_D_VMG:
         case ID_DBP_D_RSA:
         case ID_DBP_D_GPS:
@@ -486,7 +493,7 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
                             * 0.3048;
                     else if( m_NMEA0183.Dbt.DepthFathoms != 999. ) depth =
                             m_NMEA0183.Dbt.DepthFathoms * 1.82880;
-                    SendSentenceToAllInstruments( OCPN_DBP_STC_DPT, depth, _T("m") );
+                    SendSentenceToAllInstruments( OCPN_DBP_STC_DPT, toUsrDistance_Plugin( depth / 1852.0, g_iDashDepthUnit ), getUsrDistanceUnit_Plugin( g_iDashDepthUnit ) );
                 }
             }
         }
@@ -503,7 +510,7 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
                     double depth = 999.;
                     if( m_NMEA0183.Dpt.DepthMeters != 999. ) depth = m_NMEA0183.Dpt.DepthMeters;
                     if( m_NMEA0183.Dpt.OffsetFromTransducerMeters != 999. ) depth += m_NMEA0183.Dpt.OffsetFromTransducerMeters;
-                    SendSentenceToAllInstruments( OCPN_DBP_STC_DPT, depth, _T("m") );
+                    SendSentenceToAllInstruments( OCPN_DBP_STC_DPT, toUsrDistance_Plugin( depth / 1852.0, g_iDashDepthUnit ), getUsrDistanceUnit_Plugin( g_iDashDepthUnit ) );
                 }
             }
         }
@@ -644,8 +651,25 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
                 SendSentenceToAllInstruments( OCPN_DBP_STC_ATMP, m_NMEA0183.Mta.Temperature,
                         m_NMEA0183.Mta.UnitOfMeasurement );
             }
-        }
+        } else if( m_NMEA0183.LastSentenceIDReceived == _T("MDA") ) {  //Barometric pressure
+            if( m_NMEA0183.Parse() ) {
+                // TODO make posibilyti to select between Bar or InchHg
+                /*
 
+                 double   m_NMEA0183.Mda.Pressure;
+
+                 wxString m_NMEA0183.Mda.UnitOfMeasurement;
+
+                 */
+
+                SendSentenceToAllInstruments( OCPN_DBP_STC_MDA, m_NMEA0183.Mda.Pressure *1000,
+
+                       _T("hpa") ); //Convert to hpa befor sending to instruments.
+
+
+            }
+
+        }
         else if( m_NMEA0183.LastSentenceIDReceived == _T("MTW") ) {
             if( m_NMEA0183.Parse() ) {
                 /*
@@ -1155,6 +1179,10 @@ bool dashboard_pi::LoadConfig( void )
 
         pConf->Read( _T("SpeedometerMax"), &g_iDashSpeedMax, 12 );
         pConf->Read( _T("SpeedUnit"), &g_iDashSpeedUnit, 0 );
+        
+        pConf->Read( _T("DepthUnit"), &g_iDashDepthUnit, 3 );
+        g_iDashDepthUnit = wxMax(g_iDashDepthUnit, 3);
+
         pConf->Read( _T("DistanceUnit"), &g_iDashDistanceUnit, 0 );
         pConf->Read( _T("WindSpeedUnit"), &g_iDashWindSpeedUnit, 0 );
 
@@ -1230,6 +1258,7 @@ bool dashboard_pi::SaveConfig( void )
 
         pConf->Write( _T("SpeedometerMax"), g_iDashSpeedMax );
         pConf->Write( _T("SpeedUnit"), g_iDashSpeedUnit );
+        pConf->Write( _T("DepthUnit"), g_iDashDepthUnit );
         pConf->Write( _T("DistanceUnit"), g_iDashDistanceUnit );
         pConf->Write( _T("WindSpeedUnit"), g_iDashWindSpeedUnit );
 
@@ -1524,6 +1553,15 @@ DashboardPreferencesDialog::DashboardPreferencesDialog( wxWindow *parent, wxWind
     m_pChoiceSpeedUnit = new wxChoice( itemPanelNotebook02, wxID_ANY, wxDefaultPosition, wxDefaultSize, m_SpeedUnitNChoices, m_SpeedUnitChoices, 0 );
     m_pChoiceSpeedUnit->SetSelection( g_iDashSpeedUnit + 1 );
     itemFlexGridSizer04->Add( m_pChoiceSpeedUnit, 0, wxALIGN_RIGHT | wxALL, 0 );
+    
+    wxStaticText* itemStaticTextDepthU = new wxStaticText( itemPanelNotebook02, wxID_ANY, _("Depth units:"),
+            wxDefaultPosition, wxDefaultSize, 0 );
+    itemFlexGridSizer04->Add( itemStaticTextDepthU, 0, wxEXPAND | wxALL, border_size );
+    wxString m_DepthUnitChoices[] = { _("Meters"), _("Feet"), _("Fathoms"), _("Centimeters"), _("Inches") };
+    int m_DepthUnitNChoices = sizeof( m_DepthUnitChoices ) / sizeof( wxString );
+    m_pChoiceDepthUnit = new wxChoice( itemPanelNotebook02, wxID_ANY, wxDefaultPosition, wxDefaultSize, m_DepthUnitNChoices, m_DepthUnitChoices, 0 );
+    m_pChoiceDepthUnit->SetSelection( g_iDashDepthUnit - 3);
+    itemFlexGridSizer04->Add( m_pChoiceDepthUnit, 0, wxALIGN_RIGHT | wxALL, 0 );
 
     wxStaticText* itemStaticText0b = new wxStaticText( itemPanelNotebook02, wxID_ANY, _("Distance units:"),
             wxDefaultPosition, wxDefaultSize, 0 );
@@ -1571,6 +1609,7 @@ void DashboardPreferencesDialog::SaveDashboardConfig()
 {
     g_iDashSpeedMax = m_pSpinSpeedMax->GetValue();
     g_iDashSpeedUnit = m_pChoiceSpeedUnit->GetSelection() - 1;
+    g_iDashDepthUnit = m_pChoiceDepthUnit->GetSelection() + 3;
     g_iDashDistanceUnit = m_pChoiceDistanceUnit->GetSelection() - 1;
     g_iDashWindSpeedUnit = m_pChoiceWindSpeedUnit->GetSelection();
     if( curSel != -1 ) {
@@ -2060,6 +2099,20 @@ void DashboardWindow::SetInstrumentList( wxArrayInt list )
             case ID_DBP_I_TMP: //water temperature
                 instrument = new DashboardInstrument_Single( this, wxID_ANY,
                         getInstrumentCaption( id ), OCPN_DBP_STC_TMP, _T("%2.1f") );
+                break;
+            case ID_DBP_I_MDA: //barometric pressure
+                instrument = new DashboardInstrument_Single( this, wxID_ANY,
+                        getInstrumentCaption( id ), OCPN_DBP_STC_MDA, _T("%5.1f") );
+                break;
+               case ID_DBP_D_MDA: //barometric pressure
+                instrument = new DashboardInstrument_Speedometer( this, wxID_ANY,
+                        getInstrumentCaption( id ), OCPN_DBP_STC_MDA, 930, 1080 );
+                ( (DashboardInstrument_Dial *) instrument )->SetOptionLabel( 10,
+                        DIAL_LABEL_HORIZONTAL );
+                ( (DashboardInstrument_Dial *) instrument )->SetOptionMarker( 5,
+                        DIAL_MARKER_SIMPLE, 1 );
+                ( (DashboardInstrument_Dial *) instrument )->SetOptionMainValue( _T("%5.1f"),
+                        DIAL_POSITION_INSIDE );
                 break;
             case ID_DBP_I_ATMP: //air temperature
                 instrument = new DashboardInstrument_Single( this, wxID_ANY,

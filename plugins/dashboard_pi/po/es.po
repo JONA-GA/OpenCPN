@@ -5,17 +5,17 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: opencpn 3.1.1224\n"
+"Project-Id-Version: Plugin Dashboard 1.2 Opencpn 3.3.1303\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2013-11-17 19:30-0500\n"
-"PO-Revision-Date: 2013-01-07 10:36+0100\n"
-"Last-Translator: opencpn.es <opencpn.es@gmx.com>\n"
+"POT-Creation-Date: 2014-01-28 10:21-0500\n"
+"PO-Revision-Date: 2014-01-20 21:18+0100\n"
+"Last-Translator: Pepo II <Pepo_II@outlok.es>\n"
 "Language-Team: SpanishTeam LaTabernadelPuerto.com <opencpn.es@gmx.com>\n"
 "Language: es_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 1.5.4\n"
+"X-Generator: Poedit 1.6.3\n"
 #
 msgid " mag"
 msgstr "mag"
@@ -49,15 +49,22 @@ msgstr "Vel. Viento Apar."
 msgid "Appearance"
 msgstr "Aspecto"
 #
-msgid "Boat speed units:"
+msgid "Barometric pressure"
 msgstr ""
 #
+msgid "Boat speed units:"
+msgstr "Unidades velocidad barco:"
 #
+# Rumbo efectivo (de GPS) se deja en inglés por ser más conicido
 msgid "COG"
 msgstr "COG"
 #
 msgid "Caption:"
 msgstr "Nombre:"
+#
+#, fuzzy
+msgid "Centimeters"
+msgstr "Kilómetros"
 #
 msgid "Clock"
 msgstr "Reloj"
@@ -100,8 +107,12 @@ msgstr "Borrar"
 msgid "Depth"
 msgstr "Profundidad"
 #
+#, fuzzy
+msgid "Depth units:"
+msgstr "Unidades distancia:"
+#
 msgid "Distance units:"
-msgstr ""
+msgstr "Unidades distancia:"
 #
 #
 msgid "Down"
@@ -119,6 +130,12 @@ msgstr "ENE"
 msgid "ESE"
 msgstr "ESE"
 #
+msgid "Fathoms"
+msgstr ""
+#
+msgid "Feet"
+msgstr ""
+#
 msgid "Fonts"
 msgstr "Fuentes"
 #
@@ -134,18 +151,22 @@ msgstr "Estado GPS"
 msgid "GPS in View"
 msgstr "GPS visibles"
 #
+# Al elegir las unidades de distancia permite coger la misma que se tenga seleccionada en OpenCPN
 msgid "Honor OpenCPN settings"
-msgstr ""
+msgstr "La seleccionada en OpenCPN"
 #
 msgid "Horizontal"
 msgstr "Horizontal"
+#
+msgid "Inches"
+msgstr ""
 #
 #
 msgid "Instruments"
 msgstr "Instrumentos"
 #
 msgid "Kilometers"
-msgstr ""
+msgstr "Kilómetros"
 #
 msgid "Kts"
 msgstr "Kts"
@@ -154,14 +175,14 @@ msgid "Label:"
 msgstr "Etiqueta:"
 #
 msgid "Mag HDG"
-msgstr "HDG Magnético"
+msgstr "Rumbo Mag."
 #
 #, c-format
 msgid "Max %.1f since %02d:%02d  Overall %.1f"
-msgstr ""
+msgstr "Max %.1f de %02d:%02d  global %.1f"
 #
 msgid "Meters"
-msgstr ""
+msgstr "Metros"
 #
 msgid "Moon phase"
 msgstr "Fase lunar"
@@ -187,7 +208,7 @@ msgid "NW"
 msgstr "NW"
 #
 msgid "Nautical miles"
-msgstr ""
+msgstr "Millas náuticas"
 #
 msgid "Orientation:"
 msgstr "Orientación:"
@@ -211,7 +232,7 @@ msgstr "S"
 msgid "SE"
 msgstr "SE"
 #
-#
+# Velocidad de GPS se deja en inglés por ser más conocido
 msgid "SOG"
 msgstr "SOG"
 #
@@ -223,7 +244,8 @@ msgstr "SSE"
 msgid "SSW"
 msgstr "SSW"
 #
-#
+# Speed Through Water
+# Velocidad del barco
 msgid "STW"
 msgstr "STW"
 #
@@ -243,15 +265,14 @@ msgid "Speedometer"
 msgstr "Velocímetro"
 #
 #
-#, fuzzy
 msgid "Speedometer max value:"
-msgstr "Velocímetro"
+msgstr "Max. valor velocímetro:"
 #
 msgid "Statute miles"
-msgstr ""
+msgstr "Milla internacional"
 #
 msgid "Sum Log"
-msgstr ""
+msgstr "Dist. total"
 #
 msgid "Sunrise/Sunset"
 msgstr "Salida/Ocaso"
@@ -260,14 +281,15 @@ msgid "Title:"
 msgstr "Título:"
 #
 msgid "Trip Log"
-msgstr ""
+msgstr "Dist. viaje"
 #
+# Heading: Rumbo
 msgid "True HDG"
-msgstr "HDG Verdadero"
+msgstr "Rumbo Verd."
 #
 #
 msgid "True Wind Angle"
-msgstr "Angulo Viento Real"
+msgstr "Ang. Viento Real"
 #
 #
 msgid "True Wind Angle & Speed"
@@ -275,7 +297,7 @@ msgstr "Ang./vel. Viento Real"
 #
 #
 msgid "True Wind Dir. & Speed"
-msgstr "Vel/Dir Viento Real"
+msgstr "Dir/Vel. Viento Real"
 #
 msgid "True Wind Direction"
 msgstr "Dir. Viento Real"
@@ -285,13 +307,13 @@ msgid "True Wind Speed"
 msgstr "Velocidad Viento Real"
 #
 msgid "Units, Ranges, Formats"
-msgstr ""
+msgstr "Unidades, Rangos y Formatos"
 #
 #
 msgid "Up"
 msgstr "Arriba"
 #
-#
+# Velocity Made Good to a waypoint
 msgid "VMG"
 msgstr "VMG"
 #
@@ -317,16 +339,16 @@ msgid "Wind history"
 msgstr "Histórico de viento"
 #
 msgid "Wind speed units:"
-msgstr ""
+msgstr "Unidades vel. viento:"
 #
 msgid "km/h"
-msgstr ""
+msgstr "km/h"
 #
 msgid "m/s"
-msgstr ""
+msgstr "m/s"
 #
 msgid "mph"
-msgstr ""
+msgstr "mph"
 #
 msgid "show this dashboard"
 msgstr "muestra este tablero"
