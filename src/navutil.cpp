@@ -645,7 +645,7 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
             }
 
     int style = wxSOLID;
-    int width = g_route_line_width;
+    int width = g_track_line_width;
     wxColour col;
     if( m_style != STYLE_UNDEFINED )
         style = m_style;
@@ -2243,7 +2243,7 @@ void MyConfig::UpdateSettings()
     Write( _T ( "CourseUpMode" ), g_bCourseUp );
     Write( _T ( "LookAheadMode" ), g_bLookAhead );
     Write( _T ( "COGUPAvgSeconds" ), g_COGAvgSec );
-    Write( _T ( "ShowMag" ), g_bMagneticAPB );
+    Write( _T ( "UseMagAPB" ), g_bMagneticAPB );
     
     Write( _T ( "OwnshipCOGPredictorMinutes" ), g_ownship_predictor_minutes );
     Write( _T ( "OwnshipCOGPredictorWidth" ), g_cog_predictor_width );
@@ -2724,6 +2724,7 @@ void MyConfig::UI_ImportGPX( wxWindow* parent, bool islayer, wxString dirpath, b
         wxFileDialog openDialog( parent, _( "Import GPX file" ), m_gpx_path, wxT ( "" ),
                 wxT ( "GPX files (*.gpx)|*.gpx|All files (*.*)|*.*" ),
                 wxFD_OPEN | wxFD_MULTIPLE );
+        openDialog.Centre();
         response = openDialog.ShowModal();
         if( response == wxID_OK ) {
             openDialog.GetPaths( file_array );

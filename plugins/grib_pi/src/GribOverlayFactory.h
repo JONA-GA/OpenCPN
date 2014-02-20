@@ -42,7 +42,9 @@ public:
     ~GribOverlay( void )
     {
         if(m_iTexture)
+#ifdef ocpnUSE_GL            
           glDeleteTextures( 1, &m_iTexture );
+#endif          
         delete m_pDCBitmap, delete[] m_pRGBA;
     }
 
@@ -109,8 +111,8 @@ private:
 
     void drawWindArrowWithBarbs( int config, int x, int y, double vx, double vy,
                                  bool polar, bool south, wxColour arrowColor, double rotate_angle );
-    void drawWaveArrow( int i, int j, double dir, wxColour arrowColor );
-    void drawSingleArrow( int i, int j, double dir, wxColour arrowColor, int width = 1 );
+    void drawDoubleArrow( int i, int j, double dir, wxColour arrowColor, int arrowWidth, int arrowSize );
+    void drawSingleArrow( int i, int j, double dir, wxColour arrowColor, int arrowWidth, int arrowSize );
 
     void drawTransformedLine( wxPen pen, double si, double co, int di, int dj,
                               int i, int j, int k, int l );
@@ -120,10 +122,13 @@ private:
 
     wxImage &getLabel(double value, int settings);
 
+    
+#ifdef ocpnUSE_GL    
     void DrawGLTexture( GLuint texture, int width, int height, int xd, int yd, int grib_pixel_size, PlugIn_ViewPort *vp );
     void DrawGLRGBA( unsigned char *pRGBA, int RGBA_width, int RGBA_height, int xd, int yd );
     bool CreateGribGLTexture( GribOverlay *pGO, int config, GribRecord *pGR,
                               PlugIn_ViewPort *vp, int grib_pixel_size );
+#endif    
     wxImage CreateGribImage( int config, GribRecord *pGR, PlugIn_ViewPort *vp,
                              int grib_pixel_size, const wxPoint &porg );
 

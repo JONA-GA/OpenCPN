@@ -442,6 +442,7 @@ struct sigaction          sa_all_old;
 #endif
 
 bool                      g_boptionsactive;
+options                   *g_options;
 
 bool GetMemoryStatus(int *mem_total, int *mem_used);
 
@@ -4105,21 +4106,21 @@ int MyFrame::DoOptionsDialog()
     g_boptionsactive = true;
     
     ::wxBeginBusyCursor();
-    options optionsDlg( this, -1, _("Options") );
+    g_options = new options( this, -1, _("Options") );
     ::wxEndBusyCursor();
 
 //    Set initial Chart Dir
-    optionsDlg.SetInitChartDir( *pInit_Chart_Dir );
+    g_options->SetInitChartDir( *pInit_Chart_Dir );
 
 //      Pass two working pointers for Chart Dir Dialog
-    optionsDlg.SetCurrentDirList( ChartData->GetChartDirArray() );
+    g_options->SetCurrentDirList( ChartData->GetChartDirArray() );
     ArrayOfCDI *pWorkDirArray = new ArrayOfCDI;
-    optionsDlg.SetWorkDirListPtr( pWorkDirArray );
+    g_options->SetWorkDirListPtr( pWorkDirArray );
 
 //      Pass a ptr to MyConfig, for updates
-    optionsDlg.SetConfigPtr( pConfig );
+    g_options->SetConfigPtr( pConfig );
 
-    optionsDlg.SetInitialSettings();
+    g_options->SetInitialSettings();
 
     bDBUpdateInProgress = true;
 
@@ -4131,7 +4132,7 @@ int MyFrame::DoOptionsDialog()
 
     bool b_sub = false;
     if( g_FloatingToolbarDialog && g_FloatingToolbarDialog->IsShown() ) {
-        wxRect bx_rect = optionsDlg.GetScreenRect();
+        wxRect bx_rect = g_options->GetScreenRect();
         wxRect tb_rect = g_FloatingToolbarDialog->GetScreenRect();
         if( tb_rect.Intersects( bx_rect ) ) b_sub = true;
 
@@ -4142,24 +4143,27 @@ int MyFrame::DoOptionsDialog()
     if(stats) stats->Hide();
 #endif
 
-    if( lastPage >= 0 ) optionsDlg.m_pListbook->SetSelection( lastPage );
-    optionsDlg.lastWindowPos = lastWindowPos;
+    if( lastPage >= 0 )
+        g_options->m_pListbook->SetSelection( lastPage );
+    g_options->lastWindowPos = lastWindowPos;
     if( lastWindowPos != wxPoint(0,0) ) {
-        optionsDlg.Move( lastWindowPos );
-        optionsDlg.SetSize( lastWindowSize );
+        g_options->Move( lastWindowPos );
+        g_options->SetSize( lastWindowSize );
     } else {
-        optionsDlg.Center();
+        g_options->Center();
     }
 
-    if( g_FloatingToolbarDialog) g_FloatingToolbarDialog->DisableTooltips();
+    if( g_FloatingToolbarDialog)
+        g_FloatingToolbarDialog->DisableTooltips();
 
-    int rr = optionsDlg.ShowModal();
+    int rr = g_options->ShowModal();
 
-    if( g_FloatingToolbarDialog) g_FloatingToolbarDialog->EnableTooltips();
+    if( g_FloatingToolbarDialog)
+        g_FloatingToolbarDialog->EnableTooltips();
 
-    lastPage = optionsDlg.lastPage;
-    lastWindowPos = optionsDlg.lastWindowPos;
-    lastWindowSize = optionsDlg.lastWindowSize;
+    lastPage = g_options->lastPage;
+    lastWindowPos = g_options->lastWindowPos;
+    lastWindowSize = g_options->lastWindowSize;
 
     if( b_sub ) {
         SurfaceToolbar();
@@ -4172,7 +4176,7 @@ int MyFrame::DoOptionsDialog()
 
     bool ret_val = false;
     if( rr ) {
-        ProcessOptionsDialog( rr, &optionsDlg );
+        ProcessOptionsDialog( rr, g_options );
         ret_val = true;
     }
 
@@ -4180,16 +4184,21 @@ int MyFrame::DoOptionsDialog()
 
     bDBUpdateInProgress = false;
     if( g_FloatingToolbarDialog ) {
-        if( IsFullScreen() && !g_bFullscreenToolbar ) g_FloatingToolbarDialog->Submerge();
+        if( IsFullScreen() && !g_bFullscreenToolbar )
+            g_FloatingToolbarDialog->Submerge();
     }
 
 #ifdef __WXMAC__
-    if(stats) stats->Show();
+    if(stats)
+        stats->Show();
 #endif
 
     Refresh( false );
     
     g_boptionsactive = false;
+    
+    delete g_options;
+    g_options = NULL;
     
     return ret_val;
 }
@@ -4224,15 +4233,16 @@ int MyFrame::ProcessOptionsDialog( int rr, options* dialog )
         }
     }
 
+    bool b_groupchange = false;
     if( ( ( rr & VISIT_CHARTS )
             && ( ( rr & CHANGE_CHARTS ) || ( rr & FORCE_UPDATE ) || ( rr & SCAN_UPDATE ) ) )
             || ( rr & GROUPS_CHANGED ) ) {
-        ScrubGroupArray();
+        b_groupchange = ScrubGroupArray();
         ChartData->ApplyGroupArray( g_pGroupArray );
         SetGroupIndex( g_GroupIndex );
     }
 
-    if( rr & GROUPS_CHANGED ) {
+    if( rr & GROUPS_CHANGED || b_groupchange) {
         pConfig->DestroyConfigGroups();
         pConfig->CreateConfigGroups( g_pGroupArray );
     }
@@ -4331,12 +4341,13 @@ bool MyFrame::CheckGroup( int igroup )
 
 }
 
-void MyFrame::ScrubGroupArray()
+bool MyFrame::ScrubGroupArray()
 {
     //    For each group,
     //    make sure that each group element (dir or chart) references at least oneitem in the database.
     //    If not, remove the element.
 
+    bool b_change = false;
     unsigned int igroup = 0;
     while( igroup < g_pGroupArray->GetCount() ) {
         bool b_chart_in_element = false;
@@ -4361,11 +4372,14 @@ void MyFrame::ScrubGroupArray()
                 ChartGroupElement *pelement = pGroup->m_element_array.Item( j );
                 pGroup->m_element_array.RemoveAt( j );
                 delete pelement;
+                b_change = true;
             }
         }
 
         igroup++;                                 // next group
     }
+    
+    return b_change;
 }
 
 // Flav: This method reloads all charts for convenience
@@ -5223,16 +5237,16 @@ double MyFrame::GetTrueOrMag(double a)
 {
     if( g_bShowMag ){
         if(!wxIsNaN(gVar)){
-            if((a + gVar) >360.)
-                return (a + gVar - 360.);
+            if((a - gVar) >360.)
+                return (a - gVar - 360.);
             else
-                return ((a + gVar) >= 0.) ? (a + gVar) : (a + gVar + 360.);
+                return ((a - gVar) >= 0.) ? (a - gVar) : (a - gVar + 360.);
         }
         else{
-            if((a + g_UserVar) >360.)
-                return (a + g_UserVar - 360.);
+            if((a - g_UserVar) >360.)
+                return (a - g_UserVar - 360.);
             else                
-                return ((a + g_UserVar) >= 0.) ? (a + g_UserVar) : (a + g_UserVar + 360.);
+                return ((a - g_UserVar) >= 0.) ? (a - g_UserVar) : (a - g_UserVar + 360.);
         }
     }
     else
@@ -6065,8 +6079,13 @@ bool MyFrame::DoChartUpdate( void )
                     }
                 }
 
-                cc1->SetQuiltRefChart( initial_db_index );
-                pCurrentStack->SetCurrentEntryFromdbIndex( initial_db_index );
+                if( ChartData ) {
+                    ChartBase *pc = ChartData->OpenChartFromDB( initial_db_index, FULL_INIT );
+                    if( pc ) {
+                        cc1->SetQuiltRefChart( initial_db_index );
+                        pCurrentStack->SetCurrentEntryFromdbIndex( initial_db_index );
+                    }
+                }
 
                 // Try to bound the inital Viewport scale to something reasonable for the selected reference chart
                 if( ChartData ) {
@@ -8696,6 +8715,7 @@ public:
     void OnYes(wxCommandEvent& event);
     void OnNo(wxCommandEvent& event);
     void OnCancel(wxCommandEvent& event);
+    void OnClose( wxCloseEvent& event );
     
 private:
     int m_style;
@@ -8706,6 +8726,7 @@ BEGIN_EVENT_TABLE(OCPNMessageDialog, wxDialog)
 EVT_BUTTON(wxID_YES, OCPNMessageDialog::OnYes)
 EVT_BUTTON(wxID_NO, OCPNMessageDialog::OnNo)
 EVT_BUTTON(wxID_CANCEL, OCPNMessageDialog::OnCancel)
+EVT_CLOSE(OCPNMessageDialog::OnClose)
 END_EVENT_TABLE()
 
 
@@ -8805,6 +8826,10 @@ void OCPNMessageDialog::OnCancel(wxCommandEvent& WXUNUSED(event))
     }
 }
 
+void OCPNMessageDialog::OnClose( wxCloseEvent& event )
+{
+    EndModal( wxID_CANCEL );
+}
 
 
 

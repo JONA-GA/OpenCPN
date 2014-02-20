@@ -79,6 +79,8 @@ extern wxString        *pChartListFileName;
 extern wxString         gExe_path;
 extern bool             g_b_useStencil;
 extern wxString         g_Plugin_Dir;
+extern bool             g_boptionsactive;
+extern options         *g_options;
 
 #include <wx/listimpl.cpp>
 WX_DEFINE_LIST(Plugin_WaypointList);
@@ -1047,6 +1049,7 @@ void PlugInManager::SendMessageToAllPlugins(const wxString &message_id, const wx
                 case 108:
                 case 109:
                 case 110:
+                case 111:
                 {
                     opencpn_plugin_18 *ppi = dynamic_cast<opencpn_plugin_18 *>(pic->m_pplugin);
                     if(ppi)
@@ -1701,10 +1704,8 @@ int AddChartToDBInPlace( wxString &full_path, bool b_ProgressDialog )
             ChartData = new ChartDB( gFrame );
             ChartData->LoadBinary(*pChartListFileName, XnewChartDirArray);
 
-            ChartTableEntry *pcte;
-            for(int i=0 ; i<ChartData->GetChartTableEntries() ; i++){
-                pcte = ChartData->GetpChartTableEntry(i);
-                int yyp = 5;
+            if(g_boptionsactive){
+                g_options->UpdateDisplayedChartDirList(ChartData->GetChartDirArray());
             }
             
             ViewPort vp;
@@ -1733,6 +1734,10 @@ int RemoveChartFromDBInPlace( wxString &full_path )
         ChartData = new ChartDB( gFrame );
         ChartData->LoadBinary(*pChartListFileName, XnewChartDirArray);
     
+        if(g_boptionsactive){
+            g_options->UpdateDisplayedChartDirList(ChartData->GetChartDirArray());
+        }
+        
         ViewPort vp;
         gFrame->ChartsRefresh(-1, vp);
     }
@@ -3390,7 +3395,7 @@ int OCPNMessageBox_PlugIn(wxWindow *parent,
                           const wxString& caption,
                           int style, int x, int y)
 {
-    return OCPNMessageBox( parent, message, caption, style, 10, x, y );
+    return OCPNMessageBox( parent, message, caption, style, 100, x, y );
 }
 
 wxString GetOCPN_ExePath( void )
@@ -3674,7 +3679,9 @@ void UpdatePIObjectPlibContext( PI_S57Obj *pObj, S57Obj *cobj )
     if(cobj->bBBObj_valid)
         pContext->BBObj = cobj->BBObj;
     pContext->bBBObj_valid = cobj->bBBObj_valid;
-    
+
+    //  Render operation may have promoted the object's display category (e.g.WRECKS)
+    pObj->m_DisplayCat = (PI_DisCat)cobj->m_DisplayCat;
 }
 
 bool PI_GetObjectRenderBox( PI_S57Obj *pObj, double *lat_min, double *lat_max, double *lon_min, double *lon_max)
@@ -3852,6 +3859,7 @@ int PI_PLIBRenderAreaToDC( wxDC *pdc, PI_S57Obj *pObj, PlugIn_ViewPort *vp, wxRe
 
 int PI_PLIBRenderAreaToGL( const wxGLContext &glcc, PI_S57Obj *pObj, PlugIn_ViewPort *vp, wxRect &render_rect )
 {
+#ifdef ocpnUSE_GL
     //  Create and populate a compatible s57 Object
     S57Obj cobj;
     
@@ -3879,7 +3887,8 @@ int PI_PLIBRenderAreaToGL( const wxGLContext &glcc, PI_S57Obj *pObj, PlugIn_View
     
     //  Update the PLIB context after the render operation
     UpdatePIObjectPlibContext( pObj, &cobj );
-    
+
+#endif    
     return 1;
     
 }
