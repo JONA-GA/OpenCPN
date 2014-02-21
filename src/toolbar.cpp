@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  OpenCPN Toolbar
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -21,10 +21,7 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- *
- *
- */
+ **************************************************************************/
 
 #include "wx/wxprec.h"
 
@@ -40,8 +37,8 @@
 #include "toolbar.h"
 #include "chart1.h"
 #include "pluginmanager.h"
+#include "FontMgr.h"
 
-extern FontMgr*                   pFontMgr;
 extern ocpnFloatingToolbarDialog* g_FloatingToolbarDialog;
 extern bool                       g_bTransparentToolbar;
 extern ChartCanvas*               cc1;
@@ -69,6 +66,7 @@ GrabberWin::GrabberWin( wxWindow *parent )
     Create( parent, -1 );
 
     SetSize( wxSize( m_pbitmap.GetWidth(), m_pbitmap.GetHeight() ) );
+    SetMinSize( wxSize( m_pbitmap.GetWidth(), m_pbitmap.GetHeight() ) );
 
     m_bLeftDown = false;
     m_bRightDown = false;
@@ -566,10 +564,9 @@ void ocpnFloatingToolbarDialog::OnToolLeftClick( wxCommandEvent& event )
             }
 
             if( m_ptoolbar->GetVisibleToolCount() == 1 ) {
-                OCPNMessageDialog mdlg( this,
-                        _("You can't hide the last tool from the toolbar\nas this would make is inaccessible."),
+                OCPNMessageBox( this,
+                        _("You can't hide the last tool from the toolbar\nas this would make it inaccessible."),
                         _("OpenCPN Alert"), wxOK );
-                int dialog_ret = mdlg.ShowModal();
                 g_FloatingToolbarConfigMenu->FindItem( event.GetId() )->Check( true );
                 return;
             }
@@ -681,7 +678,7 @@ ToolTipWin::~ToolTipWin()
 void ToolTipWin::SetColorScheme( ColorScheme cs )
 {
     m_back_color = GetGlobalColor( _T ( "UIBCK" ) );
-    m_text_color = GetGlobalColor( _T ( "UITX1" ) );
+    m_text_color = FontMgr::Get().GetFontColor( _("ToolTips") );
 }
 
 void ToolTipWin::SetBitmap()
@@ -690,7 +687,7 @@ void ToolTipWin::SetBitmap()
 
     wxClientDC cdc( GetParent() );
 
-    wxFont *plabelFont = pFontMgr->GetFont( _("ToolTips") );
+    wxFont *plabelFont = FontMgr::Get().GetFont( _("ToolTips") );
     cdc.GetTextExtent( m_string, &w, &h, NULL, NULL, plabelFont );
 
     m_size.x = w + 8;
@@ -752,6 +749,7 @@ public:
         if( toolname == _T("") ) {
             isPluginTool = false;
             toolname = label;
+            iconName = label;
         } else {
             isPluginTool = true;
             pluginNormalIcon = &bmpNormal;
@@ -780,12 +778,22 @@ public:
         return toolname;
     }
 
+    void SetIconName(wxString name)
+    {
+        iconName = name;
+    }
+    wxString GetIconName()
+    {
+        return iconName;
+    }
+
     wxCoord m_x;
     wxCoord m_y;
     wxCoord m_width;
     wxCoord m_height;
     wxRect trect;
     wxString toolname;
+    wxString iconName;
     const wxBitmap* pluginNormalIcon;
     const wxBitmap* pluginRolloverIcon;
     bool firstInLine;
@@ -1226,14 +1234,14 @@ void ocpnToolBarSimple::OnToolTipTimerEvent( wxTimerEvent& event )
                         && ( g_FloatingToolbarDialog->GetOrient() == wxTB_VERTICAL ) ) pos_in_toolbar.y =
                         m_last_ro_tool->m_y - 30;
 
-                m_pToolTipWin->SetPosition( GetParent()->ClientToScreen( pos_in_toolbar ) );
+                m_pToolTipWin->Move(0,0);       // workaround for gtk autocentre dialog behavior
+
+                m_pToolTipWin->SetPosition( ClientToScreen( pos_in_toolbar ) );
                 m_pToolTipWin->SetBitmap();
                 m_pToolTipWin->Show();
                 gFrame->Raise();
             }
         }
-
-        m_one_shot = 10;
     }
 }
 
@@ -1241,10 +1249,6 @@ int s_dragx, s_dragy;
 
 void ocpnToolBarSimple::OnMouseEvent( wxMouseEvent & event )
 {
-
-    if( event.Leaving() ) m_one_shot = 500;                   // inital value
-    if( event.Entering() ) m_one_shot = 500;
-
     wxCoord x, y;
     event.GetPosition( &x, &y );
     ocpnToolBarTool *tool = (ocpnToolBarTool *) FindToolForPosition( x, y );
@@ -1259,7 +1263,6 @@ void ocpnToolBarSimple::OnMouseEvent( wxMouseEvent & event )
 
     if( tool && tool->IsButton() && IsShown() ) {
 
-#ifndef __WXOSX__
         //    ToolTips
         if( NULL == m_pToolTipWin ) {
             m_pToolTipWin = new ToolTipWin( GetParent() );
@@ -1272,7 +1275,6 @@ void ocpnToolBarSimple::OnMouseEvent( wxMouseEvent & event )
         if( !m_pToolTipWin->IsShown() ) {
             m_tooltip_timer.Start( m_one_shot, wxTIMER_ONE_SHOT );
         }
-#endif
 
         //    Tool Rollover highlighting
         if( tool != m_last_ro_tool ) {
@@ -1400,8 +1402,8 @@ void ocpnToolBarSimple::DrawTool( wxDC& dc, wxToolBarToolBase *toolBase )
     if( tool->bitmapOK ) {
         if( tool->IsEnabled() ) {
             bmp = tool->GetNormalBitmap();
-            if( !bmp.IsOk() ) bmp = m_style->GetToolIcon( tool->GetToolname(), TOOLICON_NORMAL,
-                    tool->rollover );
+            if( !bmp.IsOk() )
+                bmp = m_style->GetToolIcon( tool->GetToolname(), TOOLICON_NORMAL, tool->rollover );
         } else {
             bmp = tool->GetDisabledBitmap();
             if( !bmp.IsOk() ) bmp = m_style->GetToolIcon( tool->GetToolname(), TOOLICON_DISABLED );
@@ -1437,10 +1439,11 @@ void ocpnToolBarSimple::DrawTool( wxDC& dc, wxToolBarToolBase *toolBase )
             tool->bitmapOK = true;
         } else {
             if( tool->IsEnabled() ) {
-                if( tool->IsToggled() ) bmp = m_style->GetToolIcon( tool->GetToolname(), TOOLICON_TOGGLED,
-                        tool->rollover );
+                if( tool->IsToggled() )
+                    bmp = m_style->GetToolIcon( tool->GetToolname(), TOOLICON_TOGGLED, tool->rollover );
                 else
-                    bmp = m_style->GetToolIcon( tool->GetToolname(), TOOLICON_NORMAL, tool->rollover );
+                    bmp = m_style->GetToolIcon( tool->GetIconName(), TOOLICON_NORMAL, tool->rollover );
+
                 tool->SetNormalBitmap( bmp );
                 tool->bitmapOK = true;
             } else {
@@ -1861,6 +1864,20 @@ void ocpnToolBarSimple::OnMouseEnter( int id )
 
     (void) GetEventHandler()->ProcessEvent( event );
 }
+
+void ocpnToolBarSimple::SetToolNormalBitmapEx(wxToolBarToolBase *tool, const wxString & iconName)
+{
+    if( tool ) {
+        ocpnStyle::Style *style = g_StyleManager->GetCurrentStyle();
+
+        wxBitmap bmp = style->GetToolIcon( iconName, TOOLICON_NORMAL );
+        tool->SetNormalBitmap( bmp );
+        ocpnToolBarTool *otool = (ocpnToolBarTool *)tool;
+        if(otool)
+            otool->SetIconName( iconName );
+    }
+}
+
 
 //-------------------------------------------------------------------------------------
 

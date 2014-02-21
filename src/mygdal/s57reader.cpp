@@ -71,6 +71,9 @@ S57Reader::S57Reader( const char * pszFilename )
 
     bMissingWarningIssued = FALSE;
     bAttrWarningIssued = FALSE;
+    
+    Nall = 0;
+
 }
 
 /************************************************************************/
@@ -389,8 +392,8 @@ int S57Reader::Ingest(CallBackFunction pcallback)
         else if( EQUAL(pszname,"DSID") )
         {
             CPLFree( pszDSNM );
-            pszDSNM =
-                CPLStrdup(poRecord->GetStringSubfield( "DSID", 0, "DSNM", 0 ));
+            pszDSNM = CPLStrdup(poRecord->GetStringSubfield( "DSID", 0, "DSNM", 0 ));
+            Nall = poRecord->GetIntSubfield( "DSSI", 0, "NALL", 0 );
         }
 
         else
@@ -865,8 +868,49 @@ void S57Reader::ApplyObjectClassAttributes( DDFRecord * poRecord,
             continue;
         }
 
-        poFeature->SetField( pszAcronym,
-                          poRecord->GetStringSubfield("NATF",0,"ATVL",iAttr) );
+        const char *pszValue = poRecord->GetStringSubfield("NATF",0,"ATVL",iAttr);
+        if( pszValue != NULL )
+        {
+            
+        //      If National Language strings are encoded as UCS-2 (a.k.a UTF-16)
+        //      then we capture and duplicate the attribute string directly,
+        //      in order to avoid truncation that would happen if it were considered a simple char *
+        
+            if(Nall==2) { //national string encoded in UCS-2, determined from DSID record
+
+        //      Compute the data size
+                DDFField    *poField;
+                int nLength = 0;
+                poField = poRecord->FindField( "NATF", 0 );
+                if( poField ) {
+                    DDFSubfieldDefn     *poSFDefn;
+            
+                    poSFDefn = poField->GetFieldDefn()->FindSubfieldDefn( "ATVL" );
+                    if( poSFDefn ) {
+                        int max_length = 0;
+                        const char *pachData = poField->GetSubfieldData(poSFDefn, &max_length, iAttr);
+                        nLength = poSFDefn->GetDataLength( pachData, max_length, NULL);
+                    }
+                }
+ 
+                if( nLength ) {
+                    //  Make the new length a multiple of 2, so that
+                    //  later stages will count chars correctly
+                    //  Also, be sure that the string ends with 00 00
+                    int new_len = ((nLength / 2) + 2)*2;
+                    char *aa = (char *)calloc(new_len, 1);
+                    memcpy(aa, pszValue, nLength);
+                    
+                    int index = poFeature->GetFieldIndex(pszAcronym);
+                    OGRField *field = poFeature->GetRawFieldRef( index );
+                    field->String =  aa;
+                }
+            }
+            else {      //  encoded as ISO8859_1, pass it along
+                poFeature->SetField(pszAcronym,pszValue);
+            }
+        }
+                
     }
 }
 
@@ -1502,6 +1546,18 @@ void S57Reader::AssembleLineGeometry( DDFRecord * poFRecord,
         int nVC_RCID1 = 0;
         int nVC_RCIDStart, nVC_RCIDEnd;
 
+        if( poField == NULL )
+        {
+            CPLError( CE_Warning, CPLE_AppDefined,
+                      "Couldn't find field VRPT in spatial record %d.\n"
+                      "Feature OBJL=%s, RCID=%d may have corrupt or"
+                      "missing geometry.",
+                      nRCID,
+                      poFeature->GetDefnRef()->GetName(),
+                      poFRecord->GetIntSubfield( "FRID", 0, "RCID", 0 ) );
+            continue;
+        }
+        
         if(poField->GetRepeatCount() > 1)
         {
               nVC_RCID0 = ParseName( poField, 0 );

@@ -130,7 +130,7 @@ KmlPastebufferType Kml::ParseTrack( TiXmlNode* node, wxString& name ) {
             routepoint = rpNode->GetData();
             if( ! routepoint ) continue;
             whenTime.ParseFormat( wxString( when->GetText(), wxConvUTF8 ), _T("%Y-%m-%dT%H:%M:%SZ") );
-            routepoint->m_CreateTime = whenTime;
+            routepoint->SetCreateTime(whenTime);
             rpNode = rpNode->GetNext();
         }
 
@@ -198,7 +198,8 @@ KmlPastebufferType Kml::ParseOnePlacemarkPoint( TiXmlNode* node, wxString& name 
 }
 
 KmlPastebufferType Kml::ParsePasteBuffer() {
-    if( ! wxTheClipboard->Open() ) return KML_PASTE_INVALID;
+    if( !wxTheClipboard->IsOpened() )
+        if( ! wxTheClipboard->Open() ) return KML_PASTE_INVALID;
 
     wxTextDataObject data;
     wxTheClipboard->GetData( data );
@@ -512,7 +513,7 @@ wxString Kml::MakeKmlFromTrack( Track* track ) {
             TiXmlElement* when = new TiXmlElement( "when" );
             gxTrack->LinkEndChild( when );
 
-            wxDateTime whenTime( routepoint->m_CreateTime );
+            wxDateTime whenTime( routepoint->GetCreateTime() );
             TiXmlText* whenVal = new TiXmlText( whenTime.Format( _T("%Y-%m-%dT%H:%M:%SZ") ).mb_str( wxConvUTF8 ) );
             when->LinkEndChild( whenVal );
         }

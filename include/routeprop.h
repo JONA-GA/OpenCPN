@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  RouteProerties Support
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,11 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- *
- */
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef _ROUTEPROP_H_
 #define _ROUTEPROP_H_
@@ -40,6 +37,7 @@
 #include <wx/bmpcbox.h>
 #include <wx/notebook.h>
 #include <wx/filesys.h>
+#include "LinkPropDlg.h"
 
 #if wxCHECK_VERSION(2, 9, 0)
 #include <wx/dialog.h>
@@ -52,10 +50,8 @@
  */
 
 class   wxListCtrl;
-class   OCPNTrackListCtrl;
 class   Route;
 class   RoutePoint;
-class   LinkPropImpl;
 class   HyperlinkList;
 
 /*!
@@ -80,6 +76,7 @@ class   HyperlinkList;
 #define ID_ROUTEPROP_SPLIT     7107
 #define ID_ROUTEPROP_EXTEND    7207
 #define ID_ROUTEPROP_COPYTXT   7307
+#define ID_ROUTEPROP_PRINT     7407
 #define ID_PLANSPEEDCTL        7008
 #define ID_TEXTCTRL4           7009
 #define ID_TEXTCTRLDESC        7010
@@ -96,7 +93,7 @@ class   HyperlinkList;
 
 #define ID_MARKPROP 8000
 #define SYMBOL_MARKPROP_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX
-#define SYMBOL_MARKPROP_TITLE _("Mark Properties")
+#define SYMBOL_MARKPROP_TITLE _("Waypoint Properties")
 #define SYMBOL_MARKPROP_IDNAME ID_MARKPROP
 #define SYMBOL_MARKPROP_SIZE wxSize(200, 300)
 #define SYMBOL_MARKPROP_POSITION wxDefaultPosition
@@ -150,7 +147,7 @@ public:
     void CreateControls();
 
     void SetColorScheme(ColorScheme cs);
-    void SetDialogTitle(wxString title);
+    void SetDialogTitle(const wxString & title);
     void OnRoutepropCancelClick( wxCommandEvent& event );
     void OnRoutepropOkClick( wxCommandEvent& event );
     void OnPlanSpeedCtlUpdated( wxCommandEvent& event );
@@ -159,11 +156,11 @@ public:
     void OnRoutepropListClick( wxListEvent& event );
     void OnRoutepropSplitClick( wxCommandEvent& event );
     void OnRoutepropExtendClick( wxCommandEvent& event );
+    void OnRoutepropPrintClick( wxCommandEvent& event );
     void OnRoutepropCopyTxtClick( wxCommandEvent& event );
     void OnRoutePropRightClick( wxListEvent &event );
     void OnRoutePropMenuSelected( wxCommandEvent &event );
     bool IsThisRouteExtendable();
-    bool IsThisTrackExtendable();
     void OnEvtColDragEnd(wxListEvent& event);
     void InitializeList();
 
@@ -191,11 +188,11 @@ public:
     wxTextCtrl  *m_RouteDestCtl;
 
     wxListCtrl        *m_wpList;
-    OCPNTrackListCtrl *m_wpTrackList;
 
     wxButton*     m_CancelButton;
     wxButton*     m_OKButton;
     wxButton*     m_CopyTxtButton;
+    wxButton*     m_PrintButton;
     wxButton*     m_ExtendButton;
     wxButton*     m_SplitButton;
 
@@ -311,43 +308,13 @@ class MarkInfoDef : public wxDialog
 
 	public:
 
-		MarkInfoDef( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Mark Properties"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 450,550 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
+		MarkInfoDef( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Waypoint Properties"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 450,550 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
 		~MarkInfoDef();
 
 		void m_hyperlink17OnContextMenu( wxMouseEvent &event )
 		{
 			m_hyperlink17->PopupMenu( m_menuLink, event.GetPosition() );
 		}
-
-};
-
-///////////////////////////////////////////////////////////////////////////////
-/// Class LinkPropDlgDef
-///////////////////////////////////////////////////////////////////////////////
-class LinkPropDlgDef : public wxDialog
-{
-	private:
-
-	protected:
-		wxStaticText* m_staticTextLinkDesc;
-		wxStaticText* m_staticTextLinkUrl;
-		wxButton* m_buttonBrowseLocal;
-		wxStdDialogButtonSizer* m_sdbSizerButtons;
-		wxButton* m_sdbSizerButtonsOK;
-		wxButton* m_sdbSizerButtonsCancel;
-
-		// Virtual event handlers, overide them in your derived class
-		virtual void OnLocalFileClick( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnCancelClick( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnOkClick( wxCommandEvent& event ) { event.Skip(); }
-
-
-	public:
-		wxTextCtrl* m_textCtrlLinkDescription;
-		wxTextCtrl* m_textCtrlLinkUrl;
-
-		LinkPropDlgDef( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Link Properties"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 468,247 ), long style = wxDEFAULT_DIALOG_STYLE );
-		~LinkPropDlgDef();
 
 };
 
@@ -358,14 +325,14 @@ public :
       void OnMarkInfoOKClick( wxCommandEvent& event );
       void OnMarkInfoCancelClick( wxCommandEvent& event );
       void SetRoutePoint( RoutePoint *pRP );
-      void SetDialogTitle(wxString title) { SetTitle(title); }
+      void SetDialogTitle(const wxString & title) { SetTitle(title); }
       RoutePoint *GetRoutePoint(void) { return m_pRoutePoint; }
       bool UpdateProperties( bool positionOnly = false );
       void ValidateMark(void);
       void InitialFocus(void);
       void OnRightClick( wxCommandEvent& event );
 
-      MarkInfoImpl( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Mark Information"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 450,550 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
+      MarkInfoImpl( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Waypoint Information"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 450,550 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
       ~MarkInfoImpl();
 
       void m_hyperlinkContextMenu( wxMouseEvent &event );
@@ -373,8 +340,8 @@ public :
 protected :
       virtual void OnPositionCtlUpdated( wxCommandEvent& event );
       void OnDeleteLink( wxCommandEvent& event );
-	void OnEditLink( wxCommandEvent& event );
-	void OnAddLink( wxCommandEvent& event );
+      void OnEditLink( wxCommandEvent& event );
+      void OnAddLink( wxCommandEvent& event );
       void OnEditLinkToggle( wxCommandEvent& event );
       void OnDescChangedBasic( wxCommandEvent& event );
       void OnDescChangedExt( wxCommandEvent& event );
@@ -386,6 +353,7 @@ private :
       void OnHyperLinkClick(wxHyperlinkEvent &event);
       LinkPropImpl* m_pLinkProp;
       bool SaveChanges();
+      wxHyperlinkCtrl* m_pEditedLink;
 
       int           m_current_icon_Index;
       double        m_lat_save;
@@ -394,36 +362,5 @@ private :
       bool          m_bShowName_save;
       bool          m_bIsVisible_save;
 };
-
-class LinkPropImpl : public LinkPropDlgDef
-{
-public :
-      LinkPropImpl( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Link Properties"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 468,247 ), long style = wxDEFAULT_DIALOG_STYLE );
-private :
-      void OnLocalFileClick( wxCommandEvent& event );
-      void OnOkClick( wxCommandEvent& event );
-};
-
-class PositionParser {
-public:
-    PositionParser( wxString& src );
-    wxString GetSeparator() { return separator; }
-    wxString GetLatitudeString() { return latitudeString; }
-    wxString GetLongitudeString() { return longitudeString; }
-    double GetLatitude() { return latitude; }
-    double GetLongitude() { return longitude; }
-    bool FindSeparator( wxString src );
-    bool IsOk() { return parsedOk; }
-
-private:
-    wxString source;
-    wxString separator;
-    wxString latitudeString;
-    wxString longitudeString;
-    double latitude;
-    double longitude;
-    bool parsedOk;
-};
-
 
 #endif // _ROUTEPROP_H_

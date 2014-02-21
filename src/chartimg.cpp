@@ -256,7 +256,7 @@ bool ChartDummy::GetChartExtent(Extent *pext)
     return true;
 }
 
-bool ChartDummy::RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region)
+bool ChartDummy::RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region)
 {
       return true;
 }
@@ -264,7 +264,7 @@ bool ChartDummy::RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VP
 
 
 
-bool ChartDummy::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region)
+bool ChartDummy::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region)
 {
       return RenderViewOnDC(dc, VPoint);
 }
@@ -304,7 +304,7 @@ bool ChartDummy::AdjustVP(ViewPort &vp_last, ViewPort &vp_proposed)
 }
 
 
-void ChartDummy::GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion)
+void ChartDummy::GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion)
 {
       pValidRegion->Clear();
       pValidRegion->Union(0, 0, 1, 1);
@@ -727,6 +727,8 @@ found_uclc_file:
       if(!SetMinMax())
             return INIT_FAIL_REMOVE;          // have to bail here
 
+      AnalyzeSkew();
+      
       if(init_flags == HEADER_ONLY)
             return INIT_OK;
 
@@ -1316,6 +1318,12 @@ InitReturn ChartKAP::Init( const wxString& name, ChartInitFlag init_flags )
       else if(m_projection == PROJECTION_POLYCONIC)
             m_proj_lon = m_proj_parameter;
 
+      //    We have seen improperly coded charts, with non-sense value of PP parameter
+      //    FS#1251      
+      //    Check and override if necessary      
+      if(m_proj_lat >82.0 || m_proj_lat < -82.0)
+        m_proj_lat = 0.0;
+            
 
 //    Validate some of the header data
       if((Size_X == 0) || (Size_Y == 0))
@@ -1362,6 +1370,8 @@ InitReturn ChartKAP::Init( const wxString& name, ChartInitFlag init_flags )
       if(!SetMinMax())
             return INIT_FAIL_REMOVE;          // have to bail here
 
+      AnalyzeSkew();
+      
       if(init_flags == HEADER_ONLY)
             return INIT_OK;
 
@@ -3069,7 +3079,7 @@ bool ChartBaseBSB::IsRenderCacheable( wxRect& source, wxRect& dest )
 }
 
 
-void ChartBaseBSB::GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion)
+void ChartBaseBSB::GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion)
 {
       SetVPRasterParms(VPoint);
 
@@ -3102,7 +3112,7 @@ void ChartBaseBSB::GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValid
 }
 
 
-bool ChartBaseBSB::GetViewUsingCache( wxRect& source, wxRect& dest, const wxRegion& Region, ScaleTypeEnum scale_type )
+bool ChartBaseBSB::GetViewUsingCache( wxRect& source, wxRect& dest, const OCPNRegion& Region, ScaleTypeEnum scale_type )
 {
       wxRect s1;
       ScaleTypeEnum scale_type_corrected;
@@ -3341,7 +3351,7 @@ bool ChartBaseBSB::RenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint)
 {
       SetVPRasterParms(VPoint);
 
-      wxRegion rgn(0,0,VPoint.pix_width, VPoint.pix_height);
+      OCPNRegion rgn(0,0,VPoint.pix_width, VPoint.pix_height);
 
       bool bsame_region = (rgn == m_last_region);          // only want to do this once
 
@@ -3357,13 +3367,13 @@ bool ChartBaseBSB::RenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint)
 
 
 
-bool ChartBaseBSB::RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region)
+bool ChartBaseBSB::RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region)
 {
       return true;
 }
 
 
-bool ChartBaseBSB::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region)
+bool ChartBaseBSB::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region)
 {
       SetVPRasterParms(VPoint);
 
@@ -3374,12 +3384,12 @@ bool ChartBaseBSB::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, 
       {
             printf("%d RenderRegion  ScaleType:  %d   factor:  %g\n", s_dc++, RENDER_HIDEF, factor );
             printf("Rect list:\n");
-            wxRegionIterator upd ( Region ); // get the requested rect list
-            while ( upd )
+            OCPNRegionIterator upd ( Region ); // get the requested rect list
+            while ( upd.HaveRects() )
             {
                   wxRect rect = upd.GetRect();
                   printf("   %d %d %d %d\n", rect.x, rect.y, rect.width, rect.height);
-                  upd ++ ;
+                  upd.NextRect() ;
             }
       }
 
@@ -3440,11 +3450,11 @@ bool ChartBaseBSB::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, 
      //     Get the region rectangle count
 
      int n_rect =0;
-     wxRegionIterator upd ( Region ); // get the requested rect list
-     while ( upd )
+     OCPNRegionIterator upd ( Region ); // get the requested rect list
+     while ( upd.HaveRects() )
      {
            n_rect++;
-           upd ++ ;
+           upd.NextRect();
      }
 
      if((!IsRenderCacheable( Rsrc, dest ) && ( n_rect > 4 ) && (n_rect < 20)) || ( factor < 1))
@@ -3456,14 +3466,14 @@ bool ChartBaseBSB::RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, 
 //           PixelCache *pPixCacheTemp = new PixelCache(dest.width, dest.height, BPP);
 
       //    Decompose the region into rectangles, and fetch them into the target dc
-           wxRegionIterator upd ( Region ); // get the requested rect list
+           OCPNRegionIterator upd ( Region ); // get the requested rect list
            int ir = 0;
-           while ( upd )
+           while ( upd.HaveRects() )
            {
                  wxRect rect = upd.GetRect();
                  GetAndScaleData(pPixCache->GetpData(), Rsrc, Rsrc.width, rect, dest.width, factor, ren_type);
                  ir++;
-                 upd ++ ;
+                 upd.NextRect();;
            }
 
 //           delete pPixCache;                           // new cache is OK
@@ -4098,18 +4108,37 @@ int   ChartBaseBSB::BSBGetScanline( unsigned char *pLineBuf, int y, int xs, int 
       if((bUseLineCache && !pt->bValid) || (!bUseLineCache))
       {
           if(pline_table[y] == 0)
+          {
+              free (xtemp_line);
               return 0;
+          }
 
           if(pline_table[y+1] == 0)
+          {
+              free (xtemp_line);
               return 0;
+          }
 
             int thisline_size = pline_table[y+1] - pline_table[y] ;
 
             if(thisline_size > ifs_bufsize)
+            {
+                unsigned char * tmp = ifs_buf;
                 ifs_buf = (unsigned char *)realloc(ifs_buf, thisline_size);
+                if (NULL == ifs_buf)
+                {
+                    free(tmp);
+                    tmp = NULL;
+                    free (xtemp_line);
+                    return 0;
+                }
+            }
 
             if( wxInvalidOffset == ifs_bitmap->SeekI(pline_table[y], wxFromStart))
-                  return 0;
+            {
+                free (xtemp_line);
+                return 0;
+            }
 
             ifs_bitmap->Read(ifs_buf, thisline_size);
             lp = ifs_buf;
@@ -4320,6 +4349,165 @@ PaletteDir ChartBaseBSB::GetPaletteDir(void)
              return PaletteRev;
  }
 
+bool ChartBaseBSB::AnalyzeSkew(void)
+{
+    double lonmin = 1000;
+    double lonmax = -1000;
+    double latmin = 90.;
+    double latmax = -90.;
+    
+    int plonmin = 100000;
+    int plonmax = 0;
+    int platmin = 100000;
+    int platmax = 0;
+    int nlonmin, nlonmax, nlatmax, nlatmin;
+    nlonmin =0; nlonmax=0; nlatmax=0; nlatmin=0;
+    
+    if(0 == nRefpoint)                  // bad chart georef...
+            return (1);
+    
+    for(int n=0 ; n<nRefpoint ; n++)
+    {
+        //    Longitude
+        if(pRefTable[n].lonr > lonmax)
+        {
+            lonmax = pRefTable[n].lonr;
+            plonmax = (int)pRefTable[n].xr;
+            nlonmax = n;
+        }
+        if(pRefTable[n].lonr < lonmin)
+        {
+            lonmin = pRefTable[n].lonr;
+            plonmin = (int)pRefTable[n].xr;
+            nlonmin = n;
+        }
+        
+        //    Latitude
+        if(pRefTable[n].latr < latmin)
+        {
+            latmin = pRefTable[n].latr;
+            platmin = (int)pRefTable[n].yr;
+            nlatmin = n;
+        }
+        if(pRefTable[n].latr > latmax)
+        {
+            latmax = pRefTable[n].latr;
+            platmax = (int)pRefTable[n].yr;
+            nlatmax = n;
+        }
+    }
+
+    //    Special case for charts which cross the IDL
+    if((lonmin * lonmax) < 0)
+    {
+        if(pRefTable[nlonmin].xr > pRefTable[nlonmax].xr)
+        {
+            //    walk the reference table and add 360 to any longitude which is < 0
+            for(int n=0 ; n<nRefpoint ; n++)
+            {
+                if(pRefTable[n].lonr < 0.0)
+                    pRefTable[n].lonr += 360.;
+            }
+            
+            //    And recalculate the  min/max
+            lonmin = 1000;
+            lonmax = -1000;
+            
+            for(int n=0 ; n<nRefpoint ; n++)
+            {
+                //    Longitude
+                if(pRefTable[n].lonr > lonmax)
+                {
+                    lonmax = pRefTable[n].lonr;
+                    plonmax = (int)pRefTable[n].xr;
+                    nlonmax = n;
+                }
+                if(pRefTable[n].lonr < lonmin)
+                {
+                    lonmin = pRefTable[n].lonr;
+                    plonmin = (int)pRefTable[n].xr;
+                    nlonmin = n;
+                }
+                
+                //    Latitude
+                if(pRefTable[n].latr < latmin)
+                {
+                    latmin = pRefTable[n].latr;
+                    platmin = (int)pRefTable[n].yr;
+                    nlatmin = n;
+                }
+                if(pRefTable[n].latr > latmax)
+                {
+                    latmax = pRefTable[n].latr;
+                    platmax = (int)pRefTable[n].yr;
+                    nlatmax = n;
+                }
+            }
+            m_bIDLcross = true;
+        }
+    }
+    
+    
+    
+    //  Find the two REF points that are farthest apart
+    double dist_max = 0.;
+    int imax = 0;
+    int jmax = 0;
+    
+    for(int i=0 ; i<nRefpoint ; i++)
+    {
+        for(int j=i+1 ; j < nRefpoint ; j++)
+        {
+            double dx = pRefTable[i].xr - pRefTable[j].xr;
+            double dy = pRefTable[i].yr - pRefTable[j].yr;
+            double dist = (dx * dx) + (dy * dy);
+            if(dist > dist_max)
+            {
+                dist_max = dist;
+                imax = i;
+                jmax = j;
+            }
+        }
+    }
+    
+    if(m_projection == PROJECTION_MERCATOR)
+    {
+        double easting0, easting1, northing0, northing1;
+        //  Get the Merc projection of the two REF points
+        toSM_ECC(pRefTable[imax].latr, pRefTable[imax].lonr, m_proj_lat, m_proj_lon, &easting0, &northing0);
+        toSM_ECC(pRefTable[jmax].latr, pRefTable[jmax].lonr, m_proj_lat, m_proj_lon, &easting1, &northing1);
+     
+        double skew_proj = atan2( (easting1-easting0), (northing1 - northing0) ) * 180./PI;
+        double skew_points = atan2( (pRefTable[jmax].yr - pRefTable[imax].yr), (pRefTable[jmax].xr - pRefTable[imax].xr) ) * 180./PI; 
+        
+        double apparent_skew =  skew_points - skew_proj + 90.;
+        
+        // normalize to +/- 180.
+        if(fabs(apparent_skew) > 180.){
+            if(apparent_skew < 0.)
+                apparent_skew += 360.;
+            else
+                apparent_skew -= 360.;
+        }
+        
+        if(fabs( apparent_skew - m_Chart_Skew ) > 2) {           // measured skew is more than 2 degrees 
+           m_Chart_Skew = apparent_skew;                         // different from stated skew
+           
+           wxString msg = _T("   Warning: Skew override on chart ");
+           msg.Append(m_FullPath);
+           wxString msg1;
+           msg1.Printf(_T(" is %5g degrees"), apparent_skew);
+           msg.Append(msg1);
+           
+           wxLogMessage(msg);
+           
+           return false;
+           
+        }
+    }    
+    
+    return true;
+}
 
 
 int   ChartBaseBSB::AnalyzeRefpoints(void)
@@ -4670,8 +4858,31 @@ int   ChartBaseBSB::AnalyzeRefpoints(void)
        else
              m_ppm_avg = 1.0;                      // absolute fallback to prevent div-0 errors
 
-
-
+#if 0
+       // Alternate Skew verification
+       ViewPort vps;
+       vps.clat = pRefTable[0].latr;
+       vps.clon = pRefTable[0].lonr;
+       vps.view_scale_ppm = m_ppm_avg;
+       vps.skew = 0.;
+       vps.pix_width = 1000;
+       vps.pix_height = 1000;
+       
+       int x1, y1, x2, y2;
+       latlong_to_pix_vp(latmin, (lonmax + lonmin)/2., x1, y1, vps);
+       latlong_to_pix_vp(latmax, (lonmax + lonmin)/2., x2, y2, vps);
+      
+       double apparent_skew = (atan2( (y2-y1), (x2-x1) ) * 180./PI) + 90.;
+       if(apparent_skew < 0.)
+           apparent_skew += 360;
+       if(apparent_skew > 360.)
+           apparent_skew -= 360;
+       
+       if(fabs( apparent_skew - m_Chart_Skew ) > 2) {           // measured skew is more than 2 degress different
+           m_Chart_Skew = apparent_skew;
+       }
+#endif       
+       
         // Do a last little test using a synthetic ViewPort of nominal size.....
         ViewPort vp;
         vp.clat = pRefTable[0].latr;
@@ -4726,14 +4937,20 @@ int   ChartBaseBSB::AnalyzeRefpoints(void)
         }
 
         Chart_Error_Factor = fmax(fabs(xpl_err_max/(lonmax - lonmin)), fabs(ypl_err_max/(latmax - latmin)));
-
+        double chart_error_meters = fmax(fabs(xpl_err_max * 60. * 1852.),
+                                         fabs(ypl_err_max * 60. * 1852.));
+        //      calculate a nominal pixel error
+        //      Assume a modern display has about 4000 pixels/meter.
+        //      Assume the chart is to be displayed at nominal printed scale
+        double chart_error_pixels = chart_error_meters * 4000. / m_Chart_Scale;
+        
         //        Good enough for navigation?
-        if(Chart_Error_Factor > .02)
+        if(chart_error_pixels > 10)
         {
                     wxString msg = _("   VP Final Check: Georeference Chart_Error_Factor on chart ");
                     msg.Append(m_FullPath);
                     wxString msg1;
-                    msg1.Printf(_T(" is %5g"), Chart_Error_Factor);
+                    msg1.Printf(_T(" is %5g \n     nominal pixel error is: %5g"), Chart_Error_Factor, chart_error_pixels);
                     msg.Append(msg1);
 
                     wxLogMessage(msg);
@@ -4743,7 +4960,7 @@ int   ChartBaseBSB::AnalyzeRefpoints(void)
 
         //  Try again with my calculated georef
         //  This problem was found on NOAA 514_1.KAP.  The embedded coefficients are just wrong....
-        if((Chart_Error_Factor > .02) && bHaveEmbeddedGeoref)
+        if((chart_error_pixels > 10) && bHaveEmbeddedGeoref)
         {
               wxString msg = _("   Trying again with internally calculated georef solution ");
               wxLogMessage(msg);
@@ -4791,13 +5008,17 @@ int   ChartBaseBSB::AnalyzeRefpoints(void)
 
               Chart_Error_Factor = fmax(fabs(xpl_err_max/(lonmax - lonmin)), fabs(ypl_err_max/(latmax - latmin)));
 
+              chart_error_meters = fmax(fabs(xpl_err_max * 60. * 1852.),
+                                               fabs(ypl_err_max * 60. * 1852.));
+              chart_error_pixels = chart_error_meters * 4000. / m_Chart_Scale;
+              
         //        Good enough for navigation?
-              if(Chart_Error_Factor > .02)
+              if(chart_error_pixels > 10)
               {
                     wxString msg = _("   VP Final Check with internal georef: Georeference Chart_Error_Factor on chart ");
                     msg.Append(m_FullPath);
                     wxString msg1;
-                    msg1.Printf(_(" is %5g"), Chart_Error_Factor);
+                    msg1.Printf(_T(" is %5g\n     nominal pixel error is: %5g"), Chart_Error_Factor, chart_error_pixels);
                     msg.Append(msg1);
 
                     wxLogMessage(msg);
@@ -4809,6 +5030,8 @@ int   ChartBaseBSB::AnalyzeRefpoints(void)
                     wxString msg = _("   Result: OK, Internal georef solution used.");
 
                     wxLogMessage(msg);
+                    
+                    m_ExtraInfo = _T("");
               }
 
         }

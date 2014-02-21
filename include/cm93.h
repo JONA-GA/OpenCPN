@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  CM93 Chart Object
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,9 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- */
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef __CM93CHART_H__
 #define __CM93CHART_H__
@@ -55,7 +54,7 @@ class M_COVR_Desc
       bool     WriteWKB(void *p);
       int      ReadWKB(wxFFileInputStream &ifs);
       void     Update(M_COVR_Desc *pmcd);
-      wxRegion GetRegion(const ViewPort &vp, wxPoint *pwp);
+      OCPNRegion GetRegion(const ViewPort &vp, wxPoint *pwp);
 
 
       int         m_cell_index;
@@ -73,7 +72,8 @@ class M_COVR_Desc
       double      m_covr_lon_max;
       double      user_xoff;
       double      user_yoff;
-
+      double      m_centerlat_cos;
+      
       wxBoundingBox m_covr_bbox;
       bool        m_buser_offsets;
 
@@ -233,7 +233,7 @@ class cm93_dictionary
             cm93_dictionary();
             ~cm93_dictionary();
 
-            bool LoadDictionary(wxString dictionary_dir);
+            bool LoadDictionary(const wxString & dictionary_dir);
             bool IsOk(void){ return m_ok; }
             wxString GetDictDir(void){ return m_dict_dir; }
 
@@ -275,7 +275,7 @@ class cm93manager
 public:
     cm93manager();
     ~cm93manager();
-    bool Loadcm93Dictionary(wxString name);
+    bool Loadcm93Dictionary(const wxString & name);
     cm93_dictionary *FindAndLoadDict(const wxString &file);
 
 
@@ -321,14 +321,14 @@ class cm93chart : public s57chart
             void GetPixPoint(int pixx, int pixy, double *plat, double *plon, ViewPort *vpt);
 
             void SetCM93Dict(cm93_dictionary *pDict){m_pDict = pDict;}
-            void SetCM93Prefix(wxString &prefix){m_prefix = prefix;}
+            void SetCM93Prefix(const wxString &prefix){m_prefix = prefix;}
             void SetCM93Manager(cm93manager *pManager){m_pManager = pManager;}
 
             bool UpdateCovrSet(ViewPort *vpt);
             bool IsPointInLoadedM_COVR(double xc, double yc);
             covr_set *GetCoverSet(){ return m_pcovr_set; }
 
-            wxString &GetLastFileName(void){ return m_LastFileName; }
+            const wxString & GetLastFileName(void) const { return m_LastFileName; }
 
             ArrayOfInts GetVPCellArray(const ViewPort &vpt);
 
@@ -339,7 +339,7 @@ class cm93chart : public s57chart
 
             wxPoint *GetDrawBuffer(int nSize);
 
-            wxRegion          m_render_region;
+            OCPNRegion          m_render_region;
 
       private:
             InitReturn CreateHeaderDataFromCM93Cell(void);
@@ -351,7 +351,7 @@ class cm93chart : public s57chart
 
             void ProcessMCOVRObjects(int cell_index, char subcell);
 
-            void translate_colmar(wxString &sclass, S57attVal *pattValTmp);
+            void translate_colmar(const wxString &sclass, S57attVal *pattValTmp);
 
             int CreateObjChain(int cell_index, int subcell);
 
@@ -419,7 +419,7 @@ class cm93compchart : public s57chart
             wxString GetPubDate();
 
             void SetVPParms(const ViewPort &vpt);
-            void GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion);
+            void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
 
 
             ThumbData *GetThumbData(int tnx, int tny, float lat, float lon);
@@ -427,10 +427,10 @@ class cm93compchart : public s57chart
 
             bool AdjustVP(ViewPort &vp_last, ViewPort &vp_proposed);
 
-            bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region);
+            bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
 
             virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
-                                              const wxRegion &Region);
+                                              const OCPNRegion &Region);
             void SetColorScheme(ColorScheme cs, bool bApplyImmediate);
 
             bool RenderNextSmallerCellOutlines( ocpnDC &dc, ViewPort& vp);
@@ -463,7 +463,7 @@ class cm93compchart : public s57chart
             void InvalidateCache();
       private:
             void UpdateRenderRegions ( const ViewPort& VPoint );
-            wxRegion GetValidScreenCanvasRegion(const ViewPort& VPoint, const wxRegion &ScreenRegion);
+            OCPNRegion GetValidScreenCanvasRegion(const ViewPort& VPoint, const OCPNRegion &ScreenRegion);
             bool RenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint);
 
             InitReturn CreateHeaderData();
@@ -471,9 +471,9 @@ class cm93compchart : public s57chart
             void FillScaleArray(double lat, double lon);
             int PrepareChartScale(const ViewPort &vpt, int cmscale);
             int GetCMScaleFromVP(const ViewPort &vpt);
-            bool DoRenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region);
+            bool DoRenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
 
-            bool DoRenderRegionViewOnGL (const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region );
+            bool DoRenderRegionViewOnGL (const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region );
 
 
             //    Data members
@@ -500,8 +500,6 @@ class cm93compchart : public s57chart
             ViewPort          m_vpt;
 
             CM93OffsetDialog  *m_pOffsetDialog;
-            double            m_last_scale_for_busy;
-            bool              m_b_busy_shown;
 
 };
 
@@ -549,6 +547,7 @@ class CM93OffsetDialog: public wxDialog
             int               m_selected_object_id;
             int               m_selected_subcell;
             int               m_selected_list_index;
+            double            m_centerlat_cos;
 
 };
 

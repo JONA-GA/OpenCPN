@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  NMEA Data Multiplexer Object
@@ -21,7 +21,8 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************/
+ **************************************************************************/
+
 #ifndef __MULTIPLEXER_H__
 #define __MULTIPLEXER_H__
 
@@ -44,20 +45,41 @@ class Multiplexer : public wxEvtHandler
         void AddStream(DataStream *stream);
         void StopAllStreams();
         void ClearStreams();
-        void SendNMEAMessage( wxString &msg );
+        DataStream *FindStream(const wxString & port);
+        void StopAndRemoveStream( DataStream *stream );
+        void SaveStreamProperties( DataStream *stream );
+        bool CreateAndRestoreSavedStreamProperties();
+
+        void SendNMEAMessage(const wxString &msg);
         void SetAISHandler(wxEvtHandler *handler);
         void SetGPSHandler(wxEvtHandler *handler);
 
-        bool SendRouteToGPS(Route *pr, wxString &com_name, bool bsend_waypoints, wxGauge *pProgress);
-        bool SendWaypointToGPS(RoutePoint *prp, wxString &com_name, wxGauge *pProgress);
+        bool SendRouteToGPS(Route *pr, const wxString &com_name, bool bsend_waypoints, wxGauge *pProgress);
+        bool SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wxGauge *pProgress);
 
         void OnEvtStream(OCPN_DataStreamEvent& event);
+        void LogOutputMessage(const wxString &msg, wxString stream_name, bool b_filter);
+        void LogOutputMessageColor(const wxString &msg, const wxString & stream_name, const wxString & color);
+        void LogInputMessage(const wxString &msg, const wxString & stream_name, bool b_filter);
 
     private:
         wxArrayOfDataStreams *m_pdatastreams;
 
         wxEvtHandler        *m_aisconsumer;
         wxEvtHandler        *m_gpsconsumer;
+
+        //      A set of temporarily saved parameters for a DataStream
+        wxString port_save;
+        wxString baud_rate_save;
+        dsPortType port_type_save;
+        int priority_save;
+        wxArrayString input_sentence_list_save;
+        ListType input_sentence_list_type_save;
+        wxArrayString output_sentence_list_save;
+        ListType output_sentence_list_type_save;
+        bool bchecksum_check_save;
+        bool bGarmin_GRMN_mode_save;
+
 };
 #endif // __MULTIPLEXER_H__
 

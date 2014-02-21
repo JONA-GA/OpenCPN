@@ -36,7 +36,7 @@
 
 
 #include <ogr_geometry.h>
-#include "s52s57.h"
+//#include "s52s57.h"
 
 #define TESS_VERT   0                           // constants describing preferred tess orientation
 #define TESS_HORZ   1
@@ -50,7 +50,9 @@
 #define PTG_TRIANGLE_FAN                   0x0006
 
 //  Error Return Codes
+#define ERROR_NONE              0
 #define ERROR_NO_DLL            1
+#define ERROR_BAD_OGRPOLY       2
 
 //  Some external prototypes
 
@@ -103,7 +105,7 @@ public:
         int         nVert;
         double      *p_vertex;              //  Pointer to vertex array, x,y,x,y.....
 
-        wxBoundingBox *p_bbox;
+        double      minx, miny, maxx, maxy;
 
         TriPrim     *p_next;                // chain link
 };
@@ -179,7 +181,7 @@ class PolyTessGeo
 
         bool IsOk(){ return m_bOK;}
 
-        int BuildTessGL(void);
+        int BuildDeferredTess(void);
 
         int Write_PolyTriGroup( FILE *ofs);
         int Write_PolyTriGroup( wxOutputStream &ostream);
@@ -194,6 +196,8 @@ class PolyTessGeo
 
 
     private:
+        int BuildTessGL(void);
+        int BuildTessTri(void);
         int PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon);
         int PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon);
         int my_bufgets( char *buf, int buf_len_max );

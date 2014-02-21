@@ -1,48 +1,53 @@
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the PACKAGE package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
-#
 msgid ""
 msgstr ""
-"Project-Id-Version: OpenCPN 3.1.714 beta\n"
+"Project-Id-Version: opencpn 3.3.1328\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2012-11-05 19:42-0500\n"
-"PO-Revision-Date: 2012-07-21 12:21+0100\n"
+"POT-Creation-Date: 2014-02-18 23:59-0500\n"
+"PO-Revision-Date: 2014-01-29 19:11+0100\n"
 "Last-Translator: NAV <rider2@kpnmail.nl>\n"
 "Language-Team: NAV <rider2@kpnmail.nl>\n"
-"Language: \n"
+"Language: nl_NL\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Poedit-Language: Dutch\n"
-"X-Poedit-Country: NETHERLANDS\n"
-"X-Poedit-SourceCharset: utf-8\n"
+"X-Poedit-SourceCharset: UTF-8\n"
 "X-Poedit-Bookmarks: -1,-1,-1,-1,-1,182,-1,-1,-1,-1\n"
+"X-Generator: Poedit 1.5.4\n"
 #
 msgid ""
 "\n"
 " - your GPS offset from bow must be within your ship's length"
 msgstr ""
+"\n"
+" - de GPS-offset vanaf de boeg moet vallen binnen de scheepslengte"
 #
 msgid ""
 "\n"
 " - your GPS offset from midship must be within your ship's beam"
 msgstr ""
+"\n"
+" - de GPS-offset vanaf de middenlijn moet vallen binnen de scheepsbreedte"
 #
 msgid ""
 "\n"
 " - your minimum ship icon size must be between 1 and 100 mm"
 msgstr ""
+"\n"
+" - de minimum grootte van het scheepsicoon moet vallen tussen 1mm en 100mm"
 #
 msgid ""
 "\n"
 " - your ship's beam must be > 0"
 msgstr ""
+"\n"
+" - de scheepsbreedte moet > 0 zijn"
 #
 msgid ""
 "\n"
 " - your ship's length must be > 0"
 msgstr ""
+"\n"
+" - de scheepslengte moet > 0 zijn"
 #
 #
 #
@@ -187,13 +192,14 @@ msgid " %H Hours  %M Minutes"
 msgstr " %H uur   %M minuten"
 #
 msgid " (Ctrl-Space)"
-msgstr ""
+msgstr " (Ctrl-Space)"
 #
 #
 #
-#, fuzzy
+#
+#
 msgid " (Last Known)"
-msgstr " (Laatst bekende):  "
+msgstr " (Laatst bekende)"
 #
 #
 #
@@ -206,16 +212,14 @@ msgstr " - "
 msgid " -- [Portable(-p) executing from "
 msgstr " -- [Portable(-p) uitvoeren vanaf "
 #
-msgid " </b>in<b> "
-msgstr ""
 #
 #
 #
 #
 #
-#, fuzzy
+#
 msgid " COG Unavailable"
-msgstr "COG: niet beschikbaar"
+msgstr "COG niet beschikbaar"
 #
 #
 #
@@ -271,9 +275,8 @@ msgstr " Schaal: 1:%d"
 #
 #
 #
-#, fuzzy
 msgid " Ship "
-msgstr " Schip: "
+msgstr " Schip"
 #
 #
 #
@@ -299,18 +302,12 @@ msgstr " Bijgewerkt: "
 msgid " for details."
 msgstr " voor details."
 #
-#
-#
-#
-#
-#, c-format
-msgid " is %5g"
-msgstr " is %5g"
-#
 msgid ""
 " shorter than rhumbline.\n"
 "\n"
 msgstr ""
+" korter dan de loxodroomverheid.\n"
+"\n"
 #
 #
 #
@@ -327,23 +324,21 @@ msgstr "\" is leeg, gebruik de \"All Active Charts\" groep."
 #
 #
 #
-#, fuzzy
 msgid "\"Ship Name\" MMSI (Call Sign)"
-msgstr "    \"scheepsnaam\" MMSI (roepnaam)"
+msgstr "    \"Scheepsnaam\" MMSI (roepnaam)"
 #
+msgid "%D Days, %H:%M"
+msgstr "%D dagen, %H:%M"
 #
-#
-#
-#
-msgid "&Acknowledge"
-msgstr "&Bevestig"
+msgid "%H:%M"
+msgstr "%H:%M"
 #
 #
 #
 #
 #
 msgid "&Activate"
-msgstr "&Activeer"
+msgstr "&Activeren"
 #
 #
 #
@@ -353,7 +348,7 @@ msgid "&Cancel"
 msgstr "&Annuleer"
 #
 msgid "&Center View"
-msgstr ""
+msgstr "&Gecentreerd beeld"
 #
 msgid "&Copy all as text"
 msgstr "&Kopieer alles als tekst"
@@ -366,7 +361,7 @@ msgstr "&Kopieer als tekst"
 #
 #
 msgid "&Delete"
-msgstr "&Verwijder"
+msgstr "&Verwijderen"
 #
 #
 #
@@ -379,22 +374,8 @@ msgstr "&Verwijder alles"
 #
 #
 #
-msgid "&Export Route..."
-msgstr "&Exporteer route ..."
-#
-#
-#
-#
-#
-msgid "&Export Track..."
-msgstr "&Exporteer track ..."
-#
-#
-#
-#
-#
-msgid "&Export Wpt..."
-msgstr "&Exporteer markeringspunt ..."
+msgid "&Export selected..."
+msgstr "&Exporteer selectie ..."
 #
 #
 #
@@ -409,13 +390,6 @@ msgstr "&Lettertype: "
 #
 msgid "&Go To"
 msgstr "&Ga naar"
-#
-#
-#
-#
-#
-msgid "&Jump To"
-msgstr "&Spring naar"
 #
 #
 #
@@ -484,13 +458,6 @@ msgstr "&Zend naar GPS ..."
 #
 #
 #
-msgid "&Silence Alert"
-msgstr "&Stille waarschuwing"
-#
-#
-#
-#
-#
 msgid "&Start Track"
 msgstr "&Start track"
 #
@@ -550,6 +517,9 @@ msgstr "(Track zonder naam)"
 msgid "(Unnamed Waypoint)"
 msgstr "(Markeringspunt zonder naam)"
 #
+msgid "(reserved for future use)"
+msgstr "(reserved for future use)"
+#
 #
 #
 #
@@ -557,8 +527,7 @@ msgstr "(Markeringspunt zonder naam)"
 msgid "(unnamed)"
 msgstr "(onbenoemd)"
 #
-msgid ", Out: None"
-msgstr ""
+#
 #
 #
 #
@@ -571,6 +540,8 @@ msgstr "-"
 #
 #
 #
+#
+#
 msgid "--"
 msgstr "--"
 #
@@ -578,9 +549,10 @@ msgstr "--"
 #
 #
 #
-#, fuzzy
+#
+#
 msgid "---"
-msgstr "--"
+msgstr "---"
 #
 #
 #
@@ -607,15 +579,14 @@ msgstr "..."
 #
 #
 #
-#, fuzzy
 msgid "...and TCPA is less than (min)"
-msgstr " ... en TCPA is minder dan (minuten): "
+msgstr " ... en TCPA is minder dan (minuten):"
 #
 msgid "0"
-msgstr ""
+msgstr "0"
 #
 msgid "1"
-msgstr ""
+msgstr "1"
 #
 #
 msgid "1 pixel"
@@ -631,19 +602,19 @@ msgid "10 pixels"
 msgstr "10 pixels"
 #
 msgid "115200"
-msgstr ""
+msgstr "115200"
 #
 msgid "1200"
-msgstr ""
+msgstr "1200"
 #
 msgid "150"
-msgstr ""
+msgstr "150"
 #
 msgid "19200"
-msgstr ""
+msgstr "19200"
 #
 msgid "2"
-msgstr ""
+msgstr "2"
 #
 #
 #
@@ -657,26 +628,26 @@ msgid "2 pixels"
 msgstr "2 pixels"
 #
 msgid "230400"
-msgstr ""
+msgstr "230400"
 #
 msgid "2400"
-msgstr ""
+msgstr "2400"
 #
 msgid "3"
-msgstr ""
+msgstr "3"
 #
 #
 msgid "3 pixels"
 msgstr "3 pixels"
 #
 msgid "300"
-msgstr ""
+msgstr "300"
 #
 msgid "38400"
-msgstr ""
+msgstr "38400"
 #
 msgid "4"
-msgstr ""
+msgstr "4"
 #
 #
 #
@@ -690,57 +661,57 @@ msgid "4 pixels"
 msgstr "4 pixels"
 #
 msgid "460800"
-msgstr ""
+msgstr "460800"
 #
 msgid "4800"
-msgstr ""
+msgstr "4800"
 #
 msgid "5"
-msgstr ""
+msgstr "5"
 #
 #
 msgid "5 pixels"
 msgstr "5 pixels"
 #
 msgid "57600"
-msgstr ""
+msgstr "57600"
 #
 msgid "6"
-msgstr ""
+msgstr "6"
 #
 #
 msgid "6 pixels"
 msgstr "6 pixels"
 #
 msgid "600"
-msgstr ""
+msgstr "600"
 #
 msgid "7"
-msgstr ""
+msgstr "7"
 #
 #
 msgid "7 pixels"
 msgstr "7 pixels"
 #
 msgid "8"
-msgstr ""
+msgstr "8"
 #
 #
 msgid "8 pixels"
 msgstr "8 pixels"
 #
 msgid "9"
-msgstr ""
+msgstr "9"
 #
 #
 msgid "9 pixels"
 msgstr "9 pixels"
 #
 msgid "921600"
-msgstr ""
+msgstr "921600"
 #
 msgid "9600"
-msgstr ""
+msgstr "9600"
 #
 msgid "<font size=-2>(Sector angles are True Bearings from Seaward)</font><br>"
 msgstr ""
@@ -751,6 +722,8 @@ msgstr ""
 #
 msgid "?"
 msgstr "?"
+#
+#
 #
 #
 #
@@ -770,16 +743,15 @@ msgstr "AIS"
 #
 #
 #
-msgid "AIS Alert"
-msgstr "AIS waarschuwing"
-#
-#
-#
-#
-#
-#, fuzzy
 msgid "AIS Target List..."
-msgstr "AIS objectlijst"
+msgstr "AIS objectenlijst ..."
+#
+#
+#
+#
+#
+msgid "AIS Target Name"
+msgstr "AIS objectnaam"
 #
 #
 #
@@ -792,16 +764,19 @@ msgstr "AIS objectgegevens"
 #
 #
 #
-#, fuzzy
 msgid "AIS Targets"
-msgstr "Toon AIS objecten"
+msgstr "AIS Objecten"
+#
+#
 #
 #
 #
 #
 #
 msgid "AIS target list"
-msgstr "AIS objectlijst"
+msgstr "AIS objectenlijst"
+#
+#
 #
 #
 #
@@ -814,15 +789,26 @@ msgstr "Info AIS bij aanwijzen"
 #
 #
 #
-msgid "AISTargetAlert"
-msgstr "AIS objectwaarschuwing"
-#
-#
-#
 #
 #
 msgid "AISTargetQuery"
 msgstr "AIS objectquery"
+#
+msgid "APRS"
+msgstr "APRS"
+#
+#
+#
+#
+#
+msgid "APRS Position Report"
+msgstr "APRS positierapport"
+#
+msgid "ARPA"
+msgstr "ARPA"
+#
+msgid "ARPA radar target"
+msgstr "ARPA radar object"
 #
 #
 #
@@ -839,10 +825,10 @@ msgid "About OpenCPN"
 msgstr "Over OpenCPN"
 #
 msgid "Accept Sentences"
-msgstr ""
+msgstr "Accepteer Onderstaande Strings"
 #
 msgid "Accept only sentences"
-msgstr ""
+msgstr "Accepteer alleen onderstaande strings"
 #
 #
 #
@@ -855,9 +841,10 @@ msgstr "Activeer "
 #
 #
 #
-#, fuzzy
 msgid "Activate Next Waypoint"
 msgstr "Activeer volgende routepunt"
+#
+#
 #
 #
 #
@@ -870,9 +857,8 @@ msgstr "Actief "
 #
 #
 #
-#, fuzzy
 msgid "Active Datasets"
-msgstr "Actieve Kaarten"
+msgstr "Actieve datasets"
 #
 #
 msgid "Add"
@@ -882,33 +868,36 @@ msgstr "Toevoegen"
 #
 #
 #
-#, fuzzy
 msgid "Add Connection"
-msgstr "Opties Lettertype"
+msgstr "Voeg verbinding toe"
 #
 msgid "Add Dataset..."
-msgstr ""
+msgstr "Voeg dataset toe ..."
 #
 #
 #
-#, fuzzy
 msgid "Add Directory..."
-msgstr "OpenCPN mappenscan ..."
+msgstr "Voeg map toe ..."
 #
 msgid "Add a directory containing chart files"
-msgstr ""
+msgstr "Voeg een map met kaartbestanden toe"
 #
 #
 msgid "Add new"
 msgstr "Nieuw toevoegen"
 #
 msgid "Address"
-msgstr ""
+msgstr "Adres"
+#
+msgid "Advanced"
+msgstr "Uitgebreid"
 #
 #
 #
 msgid "Aground"
 msgstr "aan de grond"
+#
+#
 #
 #
 #
@@ -921,6 +910,14 @@ msgstr "Navigatiehulpmiddel"
 #
 #
 #
+#
+msgid "All"
+msgstr "alles"
+#
+#
+#
+#
+#
 msgid "All Active Charts"
 msgstr "Alle actieve kaarten"
 #
@@ -928,20 +925,22 @@ msgstr "Alle actieve kaarten"
 #
 #
 #
-#, fuzzy
 msgid "All Available Charts"
-msgstr "Alle actieve kaarten"
+msgstr "Alle beschikbare kaarten"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "All Charts"
-msgstr "Kaarten"
+msgstr "Alle kaarten"
 #
-msgid "All but"
-msgstr ""
+#
+#
+#
+#
+msgid "Altitude"
+msgstr "Hoogte"
 #
 msgid ""
 "An NMEA sentence is generally 3 characters long (like RMC, GGA etc.) It can "
@@ -950,15 +949,42 @@ msgid ""
 "out all the sentences with certain TALKER prefix (like GP, AI etc.). The "
 "filter accepts just these three formats."
 msgstr ""
+"Een NMEA string is in het algemeen 3 karakters lang (zoals RMC, GGA etc). De "
+"string kan ook een twee-letter prefix hebben die de bron (de TALKER) van het "
+"bericht aangeeft (de complete string ziet er dan bijvoorbeeld uit als GPGGA "
+"of AITXT). U kunt alle strings met een bepaalde TALKER prefix (zoals GP, AI "
+"etc) eruit filteren. Het filter accepteert alleen deze drie formats."
+#
+msgid "Anchorage Area: Anchorage closed"
+msgstr "Ankergebied: gesloten"
+#
+msgid "Anchorage Area: Anchorage open"
+msgstr "Ankergebied: open"
+#
+msgid "Anchorage Area: Anchoring prohibited"
+msgstr "Ankergebied: ankeren verboden"
+#
+msgid "Anchorage Area: Deep draft anchorage"
+msgstr "Ankergebied: voor grote diepgang"
+#
+msgid "Anchorage Area: Shallow draft anchorage"
+msgstr "Ankergebied: voor geringe diepgang"
+#
+msgid "Anchorage Area: Vessel transfer operations"
+msgstr "Ankergebied: voor overslagactiviteiten"
 #
 msgid "Anchorage created "
 msgstr "Ankerplaats gemaakt"
 #
 msgid "Answering 'No' will create a new waypoint at the same location."
 msgstr ""
+"Het antwoord 'Nee' resulteert in het maken van een nieuw waypoint op dezelfde "
+"locatie."
 #
 msgid "Answering 'No' will create all new waypoints for this route."
 msgstr ""
+"Het antwoord 'Nee' resulteert in het maken van alle nieuwe routepunten voor "
+"deze route."
 #
 #
 #
@@ -968,7 +994,7 @@ msgid "Append Waypoint"
 msgstr "Routepunt toevoegen"
 #
 msgid "Apply"
-msgstr ""
+msgstr "Toepassen"
 #
 #
 #
@@ -995,9 +1021,15 @@ msgstr "Weet u zeker dat u <ALLE> markeringspunten wilt verwijderen?"
 #
 #
 #
-#, fuzzy
+msgid "Are you sure you want to delete the selected object(s)"
+msgstr "Weet u zeker dat u de geselecteerde objecten wilt verwijderen?"
+#
+#
+#
+#
+#
 msgid "Are you sure you want to delete this route?"
-msgstr "Weet u zeker dat u deze track wilt verwijderen?"
+msgstr "Weet u zeker dat u deze route wilt verwijderen?"
 #
 #
 #
@@ -1018,6 +1050,9 @@ msgstr "Weet u zeker dat u dit markeringspunt wilt verwijderen?"
 msgid "Assumed 1 Mile Point"
 msgstr "Verondersteld 1 NM punt"
 #
+msgid "Assumed Magnetic Variation, deg."
+msgstr "     Magnetische variatie in ° (geschat)"
+#
 #
 #
 #
@@ -1030,7 +1065,7 @@ msgstr "ten anker"
 #
 #
 msgid "AtoN"
-msgstr "Navigatiehulpmiddellen"
+msgstr "Navigatiehulpmiddelen"
 #
 #
 #
@@ -1053,8 +1088,10 @@ msgstr "Automatische dagelijkse tracks"
 #
 #
 #
-msgid "Avg. speed (Kts)"
+msgid "Avg. speed"
 msgstr "Gemiddelde vaart (knopen)"
+#
+#
 #
 #
 #
@@ -1065,15 +1102,12 @@ msgstr "B"
 #
 #
 #
-msgid "Barge, tanker, chemical"
-msgstr "duwbak, chemisch"
-#
-#
-#
 #
 #
 msgid "Base"
 msgstr "basis"
+#
+#
 #
 #
 #
@@ -1093,9 +1127,8 @@ msgstr "basis"
 #
 #
 #
-#, fuzzy
 msgid "Baudrate"
-msgstr "NMEA baud rate"
+msgstr "Baudrate:"
 #
 #
 #
@@ -1141,8 +1174,18 @@ msgstr "Koers"
 #
 #
 #
+#
+#
+msgid "Bearing (M)"
+msgstr "Peiling (M)"
+#
+#
+#
 msgid "Black"
 msgstr "zwart"
+#
+msgid "Blacklisted plugin detected..."
+msgstr "Foute plugin gedetecteerd ..."
 #
 #
 #
@@ -1160,6 +1203,8 @@ msgstr "Grenzen"
 #
 #
 #
+#
+#
 msgid "Brg"
 msgstr "Peiling"
 #
@@ -1167,18 +1212,8 @@ msgstr "Peiling"
 msgid "Buddy"
 msgstr "Buddy"
 #
-#
-#
-msgid "Bulk carrier maritime"
-msgstr "bulkcarrier (zee)"
-#
-#
-#
-msgid "Bunkership"
-msgstr "bunkerschip"
-#
 msgid "Buoy/Light Labels"
-msgstr ""
+msgstr "Boei/Licht labels"
 #
 #
 #
@@ -1191,13 +1226,11 @@ msgstr "&Kleur: "
 #
 #
 #
-#, fuzzy
 msgid "CM93 Detail Level"
-msgstr "Max. details hier"
+msgstr "CM93 detailniveau"
 #
 #
 #
-#, fuzzy
 msgid "CM93 Offset Dialog..."
 msgstr "CM93 offsets ..."
 #
@@ -1205,9 +1238,10 @@ msgstr "CM93 offsets ..."
 #
 #
 #
-#, fuzzy
 msgid "COG Predictor Length (min)"
-msgstr "     Lengte koers/vaart-vector (in tijdminuten): "
+msgstr "Lengte koers/vaart-vector (in tijdminuten): "
+#
+#
 #
 #
 #
@@ -1241,6 +1275,8 @@ msgstr "CPA/TCPA Waarschuwingen"
 #
 #
 #
+#
+#
 msgid "Call"
 msgstr "C/S"
 #
@@ -1250,6 +1286,9 @@ msgstr "C/S"
 #
 msgid "Cancel"
 msgstr "Annuleer"
+#
+msgid "Cancellation - cancel area as identified by Message Linkage ID"
+msgstr "Intrekking - van gebied zoals genoemd in Message Linking ID "
 #
 #
 #
@@ -1316,6 +1355,73 @@ msgstr "cardinaal W baken"
 msgid "Cargo Ship"
 msgstr "vrachtschip"
 #
+msgid "Caution Area: Cluster of fishing vessels"
+msgstr "Waarschuwingsgebied: concentratie van visserschepen"
+#
+msgid "Caution Area: Derelicts (drifting objects)"
+msgstr "Waarschuwingsgebied: afval (drijvende objecten)"
+#
+msgid "Caution Area: Divers down"
+msgstr "Waarschuwingsgebied: duikwerkzaamheden"
+#
+msgid "Caution Area: Dredge operations"
+msgstr "Waarschuwingsgebied: baggerwerkzaamheden"
+#
+msgid "Caution Area: Fairway closed"
+msgstr "Waarschuwingsgebied: vaarweg afgesloten"
+#
+msgid "Caution Area: Fishery - nets in water"
+msgstr "Waarschuwingsgebied: visserij - netten in het water"
+#
+msgid "Caution Area: Harbour closed"
+msgstr "Waarschuwingsgebied: haven afgesloten"
+#
+msgid "Caution Area: Marine event"
+msgstr "Waarschuwingsgebied: maritieme gebeurtenis"
+#
+msgid "Caution Area: Marine mammals habitat (implies whales NOT observed)"
+msgstr ""
+"Waarschuwingsgebied: habitat zeezoogdieren (walvissen NIET waargenomen) "
+#
+msgid "Caution Area: Marine mammals in area - reduce speed"
+msgstr "Waarschuwingsgebied: zeezoogdieren aanwezig - verminder vaart"
+#
+msgid "Caution Area: Marine mammals in area - report sightings"
+msgstr "Waarschuwingsgebied: zeezoogdieren aanwezig - rapporteer waarnemingen"
+#
+msgid "Caution Area: Marine mammals in area - stay clear"
+msgstr "Waarschuwingsgebied: zeezoogdieren aanwezig - niet benaderen"
+#
+msgid "Caution Area: Protected habitat - no fishing or anchoring"
+msgstr "Waarschuwingsgebied: beschermde habitat - niet vissen of ankeren"
+#
+msgid "Caution Area: Protected habitat - reduce speed"
+msgstr "Waarschuwingsgebied: beschermde habitat - verminder vaart"
+#
+msgid "Caution Area: Protected habitat - stay clear"
+msgstr "Waarschuwingsgebied: beschermde habitat - niet benaderen"
+#
+msgid "Caution Area: Risk (define in Associated text field)"
+msgstr "Waarschuwingsgebied: risico (definieer in tekstveld)"
+#
+msgid "Caution Area: Seaplane operations"
+msgstr "Waarschuwingsgebied: watervliegtuigactiviteiten"
+#
+msgid "Caution Area: Survey operations"
+msgstr "Waarschuwingsgebied: hydrografische werkzaamheden"
+#
+msgid "Caution Area: Swim area"
+msgstr "Waarschuwingsgebied: zwemgebied"
+#
+msgid "Caution Area: Traffic congestion"
+msgstr "Waarschuwingsgebied: belemmering zeeverkeer"
+#
+msgid "Caution Area: Underwater operation"
+msgstr "Waarschuwingsgebied: onderwaterwerkzaamheden"
+#
+msgid "Caution Area: Underwater vehicle operation"
+msgstr "Waarschuwingsgebied: werkzaamheden onderzeevaartuigen  "
+#
 #
 #
 #
@@ -1328,11 +1434,13 @@ msgstr "Cel"
 msgid "Cell Scale"
 msgstr "Celschaal"
 #
+#
+#
 msgid "Center View"
-msgstr ""
+msgstr "Centreer beeld op positie"
 #
 msgid "Center View..."
-msgstr ""
+msgstr "Centreer beeld ..."
 #
 #
 #
@@ -1355,6 +1463,45 @@ msgstr "Toon dieptes in"
 msgid "Chart Display Options"
 msgstr "Weergaveopties Kaart"
 #
+msgid "Chart Feature: Bridge closed"
+msgstr "Kaartgegeven: brug gesloten"
+#
+msgid "Chart Feature: Bridge fully open"
+msgstr "Kaartgegeven: brug geheel open"
+#
+msgid "Chart Feature: Bridge partially open"
+msgstr "Kaartgegeven: brug deels open"
+#
+msgid "Chart Feature: Channel obstruction"
+msgstr "Kaartgegeven: vaarwegobstructie"
+#
+msgid "Chart Feature: Reduced vertical clearance"
+msgstr "Kaartgegeven: verminderde verticale doorgang"
+#
+msgid "Chart Feature: Semi-submerged object"
+msgstr "Kaartgegeven: object half onder water"
+#
+msgid "Chart Feature: Shoal area"
+msgstr "Kaartgegeven: gebied met ondieptes"
+#
+msgid "Chart Feature: Shoal area due east"
+msgstr "Kaartgegeven: gebied met ondieptes aan oostzijde"
+#
+msgid "Chart Feature: Shoal area due north"
+msgstr "Kaartgegeven: gebied met ondieptes aan noordzijde"
+#
+msgid "Chart Feature: Shoal area due south"
+msgstr "Kaartgegeven: gebied met ondieptes aan zuidzijde"
+#
+msgid "Chart Feature: Shoal area due west"
+msgstr "Kaartgegeven: gebied met ondieptes aan westzijde"
+#
+msgid "Chart Feature: Submerged object"
+msgstr "Kaartgegeven: object onder water"
+#
+msgid "Chart Feature: Sunken vessel"
+msgstr "Kaartgegeven: gezonken vaartuig"
+#
 #
 #
 #
@@ -1366,9 +1513,8 @@ msgstr "Kaartgroepen"
 #
 #
 #
-#, fuzzy
 msgid "Chart Information Objects"
-msgstr "Markeringspunt-informatie"
+msgstr "Toon kaartinformatie-objecten"
 #
 #
 #
@@ -1379,9 +1525,8 @@ msgstr "Kaart afdrukken"
 #
 #
 #
-#, fuzzy
 msgid "Chart Up Mode"
-msgstr "Noord-Boven presentatie"
+msgstr "Kaartoriëntatie-Boven presentatie"
 #
 #
 #
@@ -1408,11 +1553,20 @@ msgstr "Kaarten"
 #
 #
 #
+msgid "Choose Font Color..."
+msgstr "Kies letterkleur ..."
+#
+#
+#
+#
+#
 msgid "Choose Font..."
 msgstr "Kies lettertype ..."
 #
 msgid "Choose Format for Copy"
-msgstr ""
+msgstr "Kies format voor het kopiëren"
+#
+#
 #
 #
 #
@@ -1425,6 +1579,8 @@ msgstr "Kies een bestand"
 #
 #
 #
+#
+#
 msgid "Class"
 msgstr "Klasse"
 #
@@ -1432,9 +1588,10 @@ msgstr "Klasse"
 #
 #
 #
-#, fuzzy
+#
+#
 msgid "Clear"
-msgstr "Wis alles"
+msgstr "Wissen"
 #
 #
 #
@@ -1449,6 +1606,9 @@ msgstr "Wis alles"
 #
 msgid "Clear Anchor Watch"
 msgstr "Deactiveer ankerwacht"
+#
+msgid "Clearance granted - proceed to berth"
+msgstr "Toestemming - vaar naar ligplaats"
 #
 #
 #
@@ -1475,8 +1635,17 @@ msgstr "Sluiten"
 #
 #
 #
+#
+#
 msgid "CoG"
 msgstr "COG"
+#
+#
+#
+#
+#
+msgid "Color"
+msgstr "Kleur"
 #
 #
 #
@@ -1497,15 +1666,14 @@ msgid "Combo!"
 msgstr "Combo!"
 #
 msgid "Confirm deletion of tracks and routes"
-msgstr ""
+msgstr "Bevestig het verwijderen van tracks en routes"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Connections"
-msgstr "Opties Lettertype"
+msgstr "Verbindingen"
 #
 #
 #
@@ -1526,33 +1694,37 @@ msgstr "Console waarde"
 msgid "Constrained by draught"
 msgstr "beperkt door diepgang"
 #
-#
-#
-msgid "Container vessel"
-msgstr "containerschip"
-#
 msgid "Control checksum"
-msgstr ""
+msgstr "Checksum"
 #
-msgid "Copy"
-msgstr ""
+msgid "Copy As KML"
+msgstr "Kopiëren als KML"
 #
 msgid "Copy Log File to Clipboard"
-msgstr ""
+msgstr "Kopieer het log-bestand naar het Klembord"
 #
 msgid "Copy Settings File to Clipboard"
-msgstr ""
+msgstr "Kopieer het instellingenbestand naar het Klembord"
 #
-msgid "Copy..."
-msgstr ""
+msgid "Copy as KML"
+msgstr "Kopiëren als KML"
+#
+msgid "Copy as KML..."
+msgstr "Kopiëren als KML ..."
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Course"
-msgstr "Koers-Boven presentatie"
+msgstr "Koers"
+#
+#
+#
+#
+#
+msgid "Course (M)"
+msgstr "Koers (M)"
 #
 #
 #
@@ -1565,15 +1737,13 @@ msgstr "Koers-Boven presentatie"
 #
 #
 #
-#, fuzzy
 msgid "Course Up Mode"
 msgstr "Koers-Boven presentatie"
 #
 #
 #
-#, fuzzy
 msgid "Course-Up Mode Display Update Period (sec)"
-msgstr "    Schermverversing bij Koers-Boven presentatie elke (seconden)"
+msgstr "     Schermverversing bij Koers-Boven presentatie elke (sec):"
 #
 #
 #
@@ -1586,21 +1756,15 @@ msgstr "Maak route"
 #
 #
 #
-#, fuzzy
+msgid "Create WPT"
+msgstr "Maak routepunt"
+#
+#
+#
+#
+#
 msgid "Create Waypoint"
-msgstr "Routepunt geheel verwijderen"
-#
-#
-#
-msgid "Cruise ship"
-msgstr "cruise schip"
-#
-#
-#
-#
-#
-msgid "Current"
-msgstr "Getijstroom"
+msgstr "Maak routepunt"
 #
 #
 #
@@ -1623,8 +1787,15 @@ msgstr "DSC"
 #
 #
 #
+msgid "DSC Distress"
+msgstr "DSC Nood"
+#
+#
+#
+#
+#
 msgid "DSC Position Report"
-msgstr "DSC positierapport"
+msgstr "DSC Positierapport"
 #
 #
 #
@@ -1665,23 +1836,24 @@ msgstr "donkergeel"
 #
 #
 #
-#, fuzzy
 msgid "Data Connections"
-msgstr "Opties Lettertype"
+msgstr "Gegevensverbindingen"
 #
 #
 #
 #
 #
-#, fuzzy
-msgid "Data Source :"
-msgstr "NMEA databron"
+#
+msgid "DataPort"
+msgstr "Datapoort:"
+#
+msgid "Daytime"
+msgstr "Overdag"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "De-Cluttered Text"
 msgstr "Schoon tekst op"
 #
@@ -1694,7 +1866,6 @@ msgstr "Deactiveren"
 #
 #
 #
-#, fuzzy
 msgid "Decimal Degrees"
 msgstr "decimale graden"
 #
@@ -1721,7 +1892,6 @@ msgstr "standaard kleur "
 #
 #
 #
-#, fuzzy
 msgid "Degrees, Decimal Minutes"
 msgstr "graden, decimale minuten"
 #
@@ -1735,7 +1905,7 @@ msgstr "graden, minuten, seconden"
 #
 #
 msgid "Delete"
-msgstr "Verwijder"
+msgstr "Verwijderen"
 #
 #
 #
@@ -1762,9 +1932,8 @@ msgstr "Routepunt geheel verwijderen"
 #
 #
 #
-#, fuzzy
 msgid "Delete..."
-msgstr "Verwijder"
+msgstr "Verwijderen ..."
 #
 #
 #
@@ -1789,9 +1958,8 @@ msgstr "Dieptegrenzen (m) "
 #
 #
 #
-#, fuzzy
 msgid "Depth Soundings"
-msgstr "Toon dieptes"
+msgstr "Toon kaartdieptes"
 #
 #
 #
@@ -1811,9 +1979,8 @@ msgstr "Bestemming"
 #
 #
 #
-#, fuzzy
 msgid "Directories"
-msgstr "Actieve Kaartmap"
+msgstr "Mappen"
 #
 #
 #
@@ -1834,7 +2001,7 @@ msgstr "Deactiveer kaartsamenvoeging bij 'volledig scherm'"
 #
 #
 msgid "Display"
-msgstr "Weergaveopties AIS Objecten"
+msgstr "Weergaveopties"
 #
 #
 #
@@ -1847,9 +2014,15 @@ msgstr "Weergavecategorie"
 #
 #
 #
-#, fuzzy
 msgid "Display Options"
-msgstr "Weergaveopties Kaart"
+msgstr "Weergaveopties Eigen Vaartuig"
+#
+#
+#
+#
+#
+msgid "Display parameters"
+msgstr "Weergaveparameters"
 #
 #
 #
@@ -1862,17 +2035,22 @@ msgstr "Verheid"
 #
 #
 #
-#, fuzzy
 msgid "Distance Between Rings"
-msgstr "   Afstand tussen cirkels: "
+msgstr "Afstand tussen cirkels: "
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Distance Unit"
-msgstr "Verheid"
+msgstr "Afstandseenheid:"
+#
+#
+#
+#
+#
+msgid "Distance from Ownship"
+msgstr "Afstand van eigen vaartuig"
 #
 #
 #
@@ -1881,10 +2059,51 @@ msgstr "Verheid"
 msgid "Distress"
 msgstr "Nood"
 #
+msgid "Distress Area: Person overboard"
+msgstr "Noodgebied: man overboord"
+#
+msgid "Distress Area: Pollution response area"
+msgstr "Noodgebied: vervuilingsbestrijding"
+#
+msgid "Distress Area: SAR area"
+msgstr "Noodgebied: opsporing en redding"
+#
+msgid "Distress Area: Vessel abandoning ship"
+msgstr "Noodgebied: vaartuig 'schip verlaten'"
+#
+msgid "Distress Area: Vessel collision"
+msgstr "Noodgebied: vaartuig aanvaring"
+#
+msgid "Distress Area: Vessel disabled and adrift"
+msgstr "Noodgebied: vaartuig onmanoevreerbaar"
+#
+msgid "Distress Area: Vessel fire/explosion"
+msgstr "Noodgebied: vaartuig brand/explosie"
+#
+msgid "Distress Area: Vessel flooding"
+msgstr "Noodgebied: vaartuig lek"
+#
+msgid "Distress Area: Vessel grounding"
+msgstr "Noodgebied: vaartuig aan de grond"
+#
+msgid "Distress Area: Vessel listing/capsizing"
+msgstr "Noodgebied: vaartuig slagzij/kapseizend"
+#
+msgid "Distress Area: Vessel requests medical assistance"
+msgstr "Noodgebied: vaartuig vraagt medische assistentie"
+#
+msgid "Distress Area: Vessel sinking"
+msgstr "Noodgebied: vaartuig zinkend"
+#
+msgid "Distress Area: Vessel under assault"
+msgstr "Noodgebied: vaartuig onder aanval"
+#
 msgid ""
-"Do you also want to toggle the visibility of shared waypoints being part of "
-"this route?"
+"Do you also want to make the shared waypoints being part of this route "
+"invisible?"
 msgstr ""
+"Wilt u ook de gedeelde markeringspunten die deel uitmaken van deze route "
+"onzichtbaat maken?"
 #
 #
 #
@@ -1915,22 +2134,14 @@ msgstr "Plaats MOB markeringspunt hier"
 #
 #
 #
-#, fuzzy
 msgid "Drop Mark"
 msgstr "Plaats markeringspunt hier"
 #
 msgid "Drop Sentences"
-msgstr ""
+msgstr "Wijs Onderstaande Strings Af"
 #
 msgid "Drop sentences"
-msgstr ""
-#
-#
-#
-#
-#
-msgid "E&xport All..."
-msgstr "E&xporteer alles ..."
+msgstr "Wijs onderstaande strings af"
 #
 #
 #
@@ -1965,6 +2176,9 @@ msgstr "Aanpassen"
 msgid "Elapsed time : "
 msgstr "Verstreken tijd:"
 #
+msgid "Elements to print..."
+msgstr "Af te drukken onderdelen ..."
+#
 #
 #
 #
@@ -1983,13 +2197,11 @@ msgstr "Activeer kaartsamenvoeging"
 #
 #
 #
-#, fuzzy
 msgid "Enable Target Alert Acknowledge timeout (min)"
-msgstr "Activeer time-out voor CPA/TCPA waarschuwing na bevestiging (minuten)"
+msgstr "Activeer time-out voor CPA/TCPA waarschuwing na bevestiging (minuten):"
 #
 #
 #
-#, fuzzy
 msgid "Enable Transparent Toolbar"
 msgstr "Transparante werkbalk"
 #
@@ -2010,17 +2222,36 @@ msgid "Enter Group Name"
 msgstr "Voer groepnaam in"
 #
 msgid "Enter the NMEA sentence"
-msgstr ""
+msgstr "Voer de NMEA string in"
 #
 msgid "Enter the NMEA sentence (2, 3 or 5 characters)"
-msgstr ""
+msgstr "Voer de NMEA string in (2, 3 of 5 karakters)"
+#
+msgid "Environmental Caution Area: Hazardous sea ice"
+msgstr "Weerwaarschuwing: gevaarlijk zeeijs"
+#
+msgid "Environmental Caution Area: Heavy icing"
+msgstr "Weerwaarschuwing: veel ijsaanzetting"
+#
+msgid "Environmental Caution Area: High waves"
+msgstr "Weerwaarschuwing: hoge golven"
+#
+msgid "Environmental Caution Area: High wind"
+msgstr "Weerwaarschuwing: veel wind"
+#
+msgid "Environmental Caution Area: Restricted visibility (fog, rain, etc.)"
+msgstr "Weerwaarschuwing: beperkt zicht (mist, regen, etc.)"
+#
+msgid "Environmental Caution Area: Storm front (line squall)"
+msgstr "Weerwaarschuwing: stormfront (buienlijn)"
+#
+msgid "Environmental Caution Area: Storm warning (storm cell or line of storms)"
+msgstr "Weerwaarschuwing: storm (cel of stormenlijn)"
+#
+msgid "Environmental Caution Area: Strong currents"
+msgstr "Weerwaarschuwing: sterke stroom"
 #
 #
-#
-#
-#
-msgid "Error on Route Upload.  Please check logfiles..."
-msgstr "Fout bij laden van route. Raadpleeg logbestanden ..."
 #
 #
 #
@@ -2030,12 +2261,31 @@ msgid "Error on Waypoint Upload.  Please check logfiles..."
 msgstr "Fout bij laden van markeringspunten. Raadpleeg logbestanden ..."
 #
 msgid "Error!"
-msgstr ""
+msgstr "Fout!"
 #
 #
 #
 msgid "Estimated time : "
 msgstr "Geschatte tijd:"
+#
+msgid "EvTwilight"
+msgstr "Avondschemering"
+#
+#
+#
+#
+#
+#
+#
+msgid "Export"
+msgstr "Exporteren"
+#
+#
+#
+#
+#
+msgid "Export All Visible..."
+msgstr "Exporteer wat zichtbaar is ..."
 #
 #
 #
@@ -2043,6 +2293,13 @@ msgstr "Geschatte tijd:"
 #
 msgid "Export GPX file"
 msgstr "Exporteer GPX-bestand"
+#
+#
+#
+#
+#
+msgid "Extend"
+msgstr "Uitbreiden"
 #
 #
 #
@@ -2067,9 +2324,8 @@ msgstr "Uitgebreid"
 #
 #
 #
-#, fuzzy
 msgid "Extended Light Sectors"
-msgstr "sectorlicht"
+msgstr "Toon verlengde lichtsectoren"
 #
 #
 #
@@ -2083,11 +2339,6 @@ msgstr "vis/v"
 #
 msgid "Failed to initialize the user interface. "
 msgstr "Kon de gebruikersinterface niet initialiseren. "
-#
-#
-#
-msgid "Fast ship"
-msgstr "snel schip"
 #
 #
 #
@@ -2105,32 +2356,20 @@ msgstr "voet"
 #
 #
 #
-msgid "Ferry"
-msgstr "veerboot"
-#
-#
-#
 msgid "Filter NMEA Course and Speed data"
-msgstr "Filter NMEA koers- en vaartgegevens"
+msgstr "Filter NMEA koers- en vaartgegevens."
 #
 #
 #
-#, fuzzy
 msgid "Filter period (sec)"
-msgstr "    Filterperiode (seconden)"
+msgstr "Filterperiode (sec):"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Filters"
-msgstr "&kilometer"
-#
-#
-#
-msgid "Fishing boat"
-msgstr "vissersschip"
+msgstr "Filters"
 #
 #
 #
@@ -2143,10 +2382,10 @@ msgid "Fixed Structure"
 msgstr "platform"
 #
 msgid "Fonts"
-msgstr ""
+msgstr "Lettertypes"
 #
 msgid "For this leg the Great Circle route is "
-msgstr ""
+msgstr "Voor dit routedeel is de grootcirkel"
 #
 #
 #
@@ -2156,34 +2395,28 @@ msgid "Force Full Database Rebuild"
 msgstr "Forceer volledige herbouw van database"
 #
 msgid "Format uploads for Furuno GP3X"
-msgstr ""
+msgstr "Format voor Furuno GP3X uploads"
 #
-#
-#
-msgid "Freightbarge"
-msgstr "vrachtduwbak (VDB)"
-#
-#
-#
-msgid "Freightbarge with containers"
-msgstr "vrachtduwbak met containers"
+msgid "From"
+msgstr "Van"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Full Route"
-msgstr "Route splitsen"
+msgstr "Volledige route"
 #
 msgid "GPS Offset from Bow (m)"
-msgstr ""
+msgstr "GPS-offset vanaf boeg (m)"
 #
 msgid "GPS Offset from Midship (m)"
-msgstr ""
+msgstr "GPS-offset vanaf middenlijn (m)"
 #
 msgid "GPSD"
-msgstr ""
+msgstr "GPSD"
+#
+#
 #
 #
 msgid "GPSGate Buddy"
@@ -2204,30 +2437,16 @@ msgstr "GUID"
 #
 #
 #
-msgid "Gas tanker"
-msgstr "gas-tankschip"
 #
-#
-#
-#
-#
-#
-#, fuzzy
 msgid "General"
-msgstr "AIS Algemeen"
+msgstr "NMEA Algemeen"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "General Options"
 msgstr "Opties Gebruikersinterface"
-#
-#
-#
-msgid "General cargo Vessel maritime"
-msgstr "vrachtschip (zee) "
 #
 #
 #
@@ -2256,11 +2475,8 @@ msgstr "HSV"
 #
 #
 #
-msgid "HW"
-msgstr "HW"
-#
 msgid "Heading"
-msgstr ""
+msgstr "Koers"
 #
 #
 #
@@ -2280,15 +2496,34 @@ msgstr "Hier"
 #
 #
 #
-#, fuzzy
+msgid "Hide AIS Targets"
+msgstr "Verberg AIS objecten"
+#
+#
+#
+#
+#
+msgid "Hide All Tracks"
+msgstr "Verberg alle tracks"
+#
+#
+#
+#
+#
 msgid "Hide Target CPA"
 msgstr "Verberg CPA van AIS object"
 #
 #
 #
-#, fuzzy
+#
+#
+msgid "Hide Target Track"
+msgstr "Verberg track AIS object"
+#
+#
+#
 msgid "Hide This Chart"
-msgstr "Niet tonen op kaart"
+msgstr "Verberg deze kaart"
 #
 #
 #
@@ -2299,9 +2534,9 @@ msgstr "Verberg namen"
 #
 #
 #
-#, fuzzy
 msgid "Hide anchored/moored targets, speed max (kn)"
-msgstr "Onderdruk geankerde en gemeerde objecten"
+msgstr ""
+"Verberg geankerde en gemeerde objecten als vaart minder is dan (knopen):"
 #
 #
 #
@@ -2309,7 +2544,7 @@ msgid "Hide from chart"
 msgstr "Niet tonen op kaart"
 #
 msgid "High"
-msgstr ""
+msgstr "Hoog"
 #
 #
 #
@@ -2325,11 +2560,6 @@ msgstr "Markeer tracks"
 #
 #
 #
-msgid "Hydrofoil"
-msgstr "draagvleugelboot"
-#
-#
-#
 #
 #
 msgid "I&mport GPX..."
@@ -2337,9 +2567,10 @@ msgstr "I&mporteer GPX-bestand ..."
 #
 #
 #
-#, fuzzy
+#
+#
 msgid "IMO"
-msgstr "IMO:\n"
+msgstr "IMO"
 #
 #
 #
@@ -2350,12 +2581,14 @@ msgstr "Icoon"
 #
 msgid "If checked, only the sentences with a valid checksum are passed through"
 msgstr ""
+"Indien gecontroleerd worden alleen strings met een geldige checksum "
+"geaccepteerd"
 #
 msgid "Ignore Sentences"
-msgstr ""
+msgstr "Negeer Onderstaande Strings"
 #
 msgid "Ignore sentences"
-msgstr ""
+msgstr "Negeer onderstaande strings"
 #
 #
 #
@@ -2368,23 +2601,35 @@ msgstr "Importeer GPX-bestand"
 #
 #
 #
-#, fuzzy
 msgid "Important Text Only"
 msgstr "Toon alleen belangrijke tekst"
 #
-msgid "In: None"
-msgstr ""
+msgid "Information: Icebreaker waiting area"
+msgstr "Informatie: ijsbrekerwachtgebied"
+#
+msgid "Information: Location of response units"
+msgstr "Informatie: positie van reactie-eenheden"
+#
+msgid "Information: Pilot boarding position"
+msgstr "Informatie: positie loods overnemen"
+#
+msgid "Information: Places of refuge"
+msgstr "Informatie: schuilplaatsen"
+#
+msgid "Information: Position of icebreakers"
+msgstr "Informatie: positie van ijsbrekers"
 #
 #
 #
 #
 #
-#, fuzzy
+#
+#
 msgid "Inland Blue Flag"
-msgstr "Blauwe Bord binnenwateren     Toon\n"
+msgstr "Blauwe Bord binnenwateren"
 #
 msgid "Input filtering"
-msgstr ""
+msgstr "Input filter"
 #
 #
 #
@@ -2392,6 +2637,19 @@ msgstr ""
 #
 msgid "Insert Waypoint"
 msgstr "Routepunt tussenvoegen"
+#
+msgid ""
+"Instruction: Await instructions prior to proceeding beyond this point/juncture"
+msgstr "Aanwijzing: wacht op instructies voor dit punt voorbij te varen"
+#
+msgid "Instruction: Contact Port Administration at this point/juncture"
+msgstr "Aanwijzing: neem op dit punt contact op met havenautoriteit"
+#
+msgid "Instruction: Contact VTS at this point/juncture"
+msgstr "Aanwijzing: neem op dit punt contact op met VTS"
+#
+msgid "Instruction: Do not proceed beyond this point/juncture"
+msgstr "Aanwijzing: vaar dit punt niet voorbij"
 #
 #
 #
@@ -2405,25 +2663,21 @@ msgstr "afz. gvr"
 msgid "Isolated Danger"
 msgstr "afzonderlijk gevaar"
 #
-msgid "Just "
-msgstr ""
-#
 msgid "KML Standard (Google Earth and others)"
-msgstr ""
+msgstr "KML standaard (Google Earth en andere)"
 #
 msgid "KML with extended waypoint data (QtVlm)"
-msgstr ""
+msgstr "KML met uitgebreide waypoint gegevens (QtVlm)"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Kilometers"
-msgstr "&kilometer"
+msgstr "kilometer"
 #
-msgid "Kts"
-msgstr ""
+msgid "Knots"
+msgstr "knopen"
 #
 #
 #
@@ -2435,10 +2689,8 @@ msgstr "ovh/v"
 msgid "LMT @ Location"
 msgstr "Lokale Middelbare Tijd"
 #
-#
-#
-msgid "LW"
-msgstr "LW"
+msgid "LMT @ Track Start"
+msgstr "LMT @ trackstart"
 #
 #
 #
@@ -2468,6 +2720,37 @@ msgstr "Kaartlaag-naam"
 #
 #
 #
+#
+#
+msgid "Layer Route"
+msgstr "Laag-route"
+#
+#
+#
+#
+#
+msgid "Layer Route: "
+msgstr "Laag-route: "
+#
+msgid "Layer Routepoint"
+msgstr "Laag-routepunt"
+#
+#
+#
+#
+#
+msgid "Layer Track"
+msgstr "Laag-track"
+#
+#
+#
+#
+#
+msgid "Layer Waypoint"
+msgstr "Laag-markeringspunt"
+#
+#
+#
 msgid "Layers"
 msgstr "Kaartlagen"
 #
@@ -2491,8 +2774,10 @@ msgstr "geleidelicht/laag"
 msgid "Leading Light Rear"
 msgstr "geleidelicht/hoog"
 #
+#
+#
 msgid "Left"
-msgstr ""
+msgstr "Links"
 #
 #
 #
@@ -2512,19 +2797,11 @@ msgstr "Routedeel: van "
 #
 #
 #
-#, fuzzy
-msgid "Legend"
-msgstr "Console legenda"
-#
-#
-#
-#
-#
 msgid "Length"
 msgstr "Verheid"
 #
 msgid "Length Over All (m)"
-msgstr ""
+msgstr "Lengte over alles (m)"
 #
 #
 #
@@ -2544,7 +2821,6 @@ msgstr "licht"
 #
 #
 #
-#, fuzzy
 msgid "Light Descriptions"
 msgstr "Toon vuureigenschappen"
 #
@@ -2567,8 +2843,12 @@ msgstr "sectorlicht"
 #
 #
 #
+#
+#
 msgid "Limit range: NM"
 msgstr "Beperk afstand: NM"
+#
+#
 #
 #
 #
@@ -2581,6 +2861,8 @@ msgstr "Link"
 #
 #
 #
+#
+#
 msgid "Link Properties"
 msgstr "Link-eigenschappen"
 #
@@ -2588,8 +2870,12 @@ msgstr "Link-eigenschappen"
 #
 #
 #
+#
+#
 msgid "Link description"
 msgstr "Link-omschrijving"
+#
+#
 #
 #
 msgid "Link not complete, can't be saved."
@@ -2612,11 +2898,6 @@ msgstr "Links zijn geopend in de standaard browser."
 #
 #
 #
-msgid "Liquified gas tanker"
-msgstr "gastanker (zee)"
-#
-#
-#
 #
 #
 msgid "List contents"
@@ -2626,14 +2907,15 @@ msgstr "Toon inhoud"
 #
 #
 #
-#, fuzzy
 msgid "Loaded Charts"
-msgstr "papieren kaart"
+msgstr "Geladen Kaarten"
 #
 #
 #
 msgid "Local @ PC"
 msgstr "Computertijd"
+#
+#
 #
 #
 msgid "Local file..."
@@ -2643,7 +2925,6 @@ msgstr "Lokaal bestand ..."
 #
 #
 #
-#, fuzzy
 msgid "Lock Waypoints (Unless waypoint property dialog visible)"
 msgstr ""
 "Zet alle routepunten vast, tenzij een routepunt-eigenschappenscherm zichtbaar "
@@ -2683,9 +2964,8 @@ msgstr "Verdwenen AIS Objecten"
 #
 #
 #
-#, fuzzy
 msgid "Low"
-msgstr "sleep"
+msgstr "Laag"
 #
 #
 #
@@ -2723,6 +3003,8 @@ msgstr "MAN OVERBOORD"
 #
 #
 #
+#
+#
 msgid "MMSI"
 msgstr "MMSI"
 #
@@ -2754,30 +3036,10 @@ msgstr "nautische standaard"
 #
 #
 #
-msgid "Mark Information"
-msgstr "Markeringspunt-informatie"
-#
-#
-#
-#
-#
-msgid "Mark Properties"
-msgstr "Markeringspunt-eigenschappen"
-#
-#
-#
-#
-#
-msgid "Mark Properties, Layer: "
-msgstr "Markeringspunt-eigenschappen, laag:"
-#
-#
-#
-#
-#
-#, fuzzy
 msgid "Mark targets as lost after (min)"
 msgstr "Markeer object als verdwenen na (minuten): "
+#
+#
 #
 #
 #
@@ -2797,9 +3059,8 @@ msgstr "Max. details hier"
 #
 #
 #
-#, fuzzy
 msgid "Measure"
-msgstr "Meten Uit"
+msgstr "Meten Aan"
 #
 #
 #
@@ -2819,7 +3080,7 @@ msgid "Medical Transport"
 msgstr "hospitaalschip"
 #
 msgid "Medium"
-msgstr ""
+msgstr "Gemiddeld"
 #
 #
 #
@@ -2832,23 +3093,15 @@ msgstr "Mercator"
 #
 #
 #
-#, fuzzy
 msgid "Merge waypoint?"
-msgstr "Hernoem routepunten?"
+msgstr "Routepunt samenvoegen?"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Merge waypoints?"
-msgstr "Hernoem routepunten?"
-#
-msgid "Message accepted"
-msgstr ""
-#
-msgid "Message filtered and dropped"
-msgstr ""
+msgstr "Routepunten samenvoegen?"
 #
 #
 #
@@ -2868,10 +3121,13 @@ msgid "Military Vessel"
 msgstr "militair vaartuig"
 #
 msgid "Minimum Screen Size (mm)"
-msgstr ""
+msgstr "Minimum schermafmeting (mm)"
 #
 msgid "Miscellaneous Options"
-msgstr ""
+msgstr "Overige Opties"
+#
+msgid "MoTwilight"
+msgstr "Ochtendschemering"
 #
 #
 #
@@ -2880,64 +3136,8 @@ msgstr "gemeerd"
 #
 #
 #
-msgid "Motor freighter"
-msgstr "motorvrachtschip"
 #
 #
-#
-msgid "Motor freighter pushing at least one tank-ship"
-msgstr "lang samenstel, min. 1 MTS"
-#
-#
-#
-msgid "Motor freighter pushing one or more freighters"
-msgstr "lang samenstel, MVS"
-#
-#
-#
-msgid "Motor freighter with one or more ships alongside"
-msgstr "breed samenstel, MVS"
-#
-#
-#
-msgid "Motor freighter with tanker"
-msgstr "breed samenstel, min. 1 MTS"
-#
-#
-#
-msgid "Motor freighter, tug"
-msgstr "slepend MVS"
-#
-#
-#
-msgid "Motor tanker"
-msgstr "motortankschip"
-#
-#
-#
-msgid "Motor tanker, dry cargo as if liquid (e.g. cement)"
-msgstr "motortankschip, droge lading"
-#
-#
-#
-msgid "Motor tanker, liquid cargo, type C"
-msgstr "motortankschip, vloeibare lading, type C"
-#
-#
-#
-msgid "Motor tanker, liquid cargo, type N"
-msgstr "motortankschip, vloeibare lading, type N"
-#
-#
-#
-msgid "Motor tanker, tug"
-msgstr "slepend MTS"
-#
-#
-#
-#
-#
-#, fuzzy
 msgid "Move Boat Here"
 msgstr "Plaats schip hier"
 #
@@ -2945,21 +3145,20 @@ msgstr "Plaats schip hier"
 #
 #
 #
-#, fuzzy
 msgid "Move Waypoint"
-msgstr "Naar punt"
+msgstr "Verplaats routepunt "
+#
+msgid "Mph"
+msgstr "mph"
 #
 msgid "NMEA"
-msgstr ""
+msgstr "NMEA"
 #
 msgid "NMEA 0183"
-msgstr ""
+msgstr "NMEA 0183"
 #
 msgid "NMEA 2000"
-msgstr ""
-#
-msgid "NMEA Debug Window"
-msgstr ""
+msgstr "NMEA 2000"
 #
 #
 #
@@ -2982,13 +3181,24 @@ msgstr "NM"
 msgid "Name"
 msgstr "Naam"
 #
+msgid "National text on chart"
+msgstr "Nationale tekst op kaart"
 #
 #
 #
 #
-#, fuzzy
+#
 msgid "Nautical Miles"
-msgstr "&zeemijl (NM of NMi)"
+msgstr "zeemijl (NM of NMi)"
+#
+#
+#
+#
+#
+msgid "Nautical miles"
+msgstr "zeemijl (NM of NMi)"
+#
+#
 #
 #
 #
@@ -3001,31 +3211,21 @@ msgstr "Nav. status"
 #
 #
 #
-#, fuzzy
 msgid "Navigate To Here"
-msgstr "Weergaveoptie Navigatiegegevens"
+msgstr "Zet koers uit naar hier"
 #
 msgid "Navigate To This"
-msgstr ""
-#
-#
-#
-#
-#
-#, fuzzy
-msgid "Net"
-msgstr ">>"
+msgstr "Zet koers uit hier naar toe"
 #
 msgid "Network"
-msgstr ""
+msgstr "Netwerk"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "New Chart Group"
-msgstr "Kaartgroepen"
+msgstr "Nieuwe kaartgroep"
 #
 #
 msgid "New Group..."
@@ -3033,24 +3233,16 @@ msgstr "Nieuwe groep ..."
 #
 #
 #
-#
-#
-msgid "Next"
-msgstr ">>"
-#
-#
-#
 msgid "Next tide event"
 msgstr "Volgend HW/LW"
 #
-msgid "No"
-msgstr ""
+msgid "Nighttime"
+msgstr "'s-Nachts"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "No CPA Calculation if target range is greater than (NMi)"
 msgstr "Geen CPA berekening als afstand groter is dan (zeemijl): "
 #
@@ -3065,19 +3257,18 @@ msgstr "Geen kaart beschikbaar"
 #
 #
 #
-#, fuzzy
 msgid ""
 "No Charts Installed.\n"
 "Please select chart folders in Options > Charts."
 msgstr ""
 " Geen kaarten geïnstalleerd.\n"
-" Selecteer kaartenmap via Toolbox -> Kaarten"
+" Selecteer kaartenmap via Optionele Instellingen -> Kaarten"
 #
 msgid "No, I don't want to hide it."
-msgstr ""
+msgstr "Nee, ik wil dit niet verbergen."
 #
 msgid "No, and permanently remove the option to hide it."
-msgstr ""
+msgstr "Nee, en verwijder de optie om dit te verbergen permanent."
 #
 #
 #
@@ -3085,11 +3276,10 @@ msgid "No. of items"
 msgstr "Aantal items"
 #
 msgid "None"
-msgstr ""
+msgstr "Geen"
 #
 #
 #
-#, fuzzy
 msgid "North Up Mode"
 msgstr "Noord-Boven presentatie"
 #
@@ -3110,25 +3300,14 @@ msgstr "OK"
 #
 #
 msgid "Object Query"
-msgstr "Objectgegevens"
+msgstr "Kaartobjectgegevens"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Object Query..."
-msgstr "Objectgegevens"
-#
-#
-#
-msgid "Object, not otherwise specified"
-msgstr "object, niet nader gespecificeerd"
-#
-#
-#
-msgid "Object, towed, not otherwise specified"
-msgstr "gesleept object"
+msgstr "Kaartobjectgegevens ..."
 #
 #
 #
@@ -3143,6 +3322,9 @@ msgstr "Objectgegevens"
 #
 msgid "Ok"
 msgstr "OK"
+#
+msgid "Old log will be moved to opencpn.log.log"
+msgstr "Het oude logbestand wordt verplaatst naar opencpn.log.log"
 #
 #
 #
@@ -3168,7 +3350,7 @@ msgstr "OpenCPN kaart toevoegen ..."
 #
 #
 msgid "OpenCPN Chart Scan...."
-msgstr "OpenCPN kaart scan ..."
+msgstr "OpenCPN kaartscan ..."
 #
 #
 #
@@ -3212,9 +3394,8 @@ msgstr "OpenCPN verwijder markeringspunt"
 #
 #
 #
-#, fuzzy
 msgid "OpenCPN Route"
-msgstr "OpenCPN Maak route"
+msgstr "OpenCPN route"
 #
 #
 #
@@ -3227,9 +3408,8 @@ msgstr "OpenCPN Maak route"
 #
 #
 #
-#, fuzzy
 msgid "OpenCPN Route Delete"
-msgstr "OpenCPN Maak route"
+msgstr "OpenCPN verwijdert route"
 #
 #
 #
@@ -3242,9 +3422,8 @@ msgstr "OpenCPN S57 SENC Maak bestand ..."
 #
 #
 #
-#, fuzzy
 msgid "OpenCPN Track"
-msgstr "OpenCPN verwijdert track"
+msgstr "OpenCPN track"
 #
 #
 #
@@ -3257,9 +3436,8 @@ msgstr "OpenCPN verwijdert track"
 #
 #
 #
-#, fuzzy
 msgid "OpenCPN Waypoint"
-msgstr "OpenCPN verwijder markeringspunt"
+msgstr "OpenCPN verwijdert markeringspunt"
 #
 #
 #
@@ -3272,7 +3450,6 @@ msgstr "OpenCPN kan niet starten."
 #
 #
 #
-#, fuzzy
 msgid "OpenCPN info"
 msgstr "OpenCPN info"
 #
@@ -3281,31 +3458,19 @@ msgstr "OpenCPN info"
 #
 #
 msgid "Options"
-msgstr "Opties"
+msgstr "Optionele Instellingen"
 #
-#
-#
-#
-#
-msgid "Other"
-msgstr "andere"
+msgid "Other - Define in associated text field"
+msgstr "Overig - Definieer in tekstveld"
 #
 msgid "Output"
-msgstr ""
-#
-#
-#
-#
-#
-#, fuzzy
-msgid "Output Message"
-msgstr "OpenCPN bericht"
+msgstr "Output"
 #
 msgid "Output filtering"
-msgstr ""
+msgstr "Output filter"
 #
 msgid "Output on this port ( as Autopilot or NMEA Repeater)"
-msgstr ""
+msgstr "Output naar deze poort (bijvoorbeeld autopilot of NMEA repeater)"
 #
 #
 #
@@ -3325,9 +3490,8 @@ msgstr "Vervang huidig bestand?"
 #
 #
 #
-#, fuzzy
 msgid "Own Ship"
-msgstr " Schip: "
+msgstr " Eigen Vaartuig"
 #
 #
 #
@@ -3350,9 +3514,8 @@ msgstr "papieren kaart"
 #
 #
 #
-#, fuzzy
 msgid "Parameters"
-msgstr "meter"
+msgstr "Parameters"
 #
 #
 #
@@ -3366,40 +3529,24 @@ msgstr "passagierschip"
 #
 #
 #
-msgid "Passenger ship without accomodation"
-msgstr "passagierschip zonder accomodatie"
 #
 #
-#
-msgid "Passenger ship, ferry, cruise ship, red cross ship"
-msgstr "passagierschip binnenvaart"
-#
-#
-#
-#
-#
-#, fuzzy
 msgid "Paste Route"
-msgstr "Maak route"
+msgstr "Plak route"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Paste Track"
-msgstr "&Exporteer track ..."
+msgstr "Plak track"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Paste Waypoint"
-msgstr "Activeer markeringspunt"
-#
-msgid "Pause"
-msgstr ""
+msgstr "Plak markeringspunt"
 #
 #
 #
@@ -3424,14 +3571,13 @@ msgstr "Verwachte vaart"
 #
 #
 #
-msgid "Plan speed (Kts)"
-msgstr "Verwachte vaart (knopen)"
+msgid "Plan speed"
+msgstr "Verwachte vaart"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Play Ships Bells"
 msgstr "Glazen slaan"
 #
@@ -3439,8 +3585,8 @@ msgstr "Glazen slaan"
 #
 #
 #
-msgid "Play Sound on CPA/TCPA Alerts"
-msgstr "CPA/TCPA waarschuwing"
+msgid "Play Sound on CPA/TCPA Alerts and DSC/SART emergencies."
+msgstr "Geluidsmelding bij CPA/TCPA waarschuwingen en DSC/SART noodberichten"
 #
 #
 #
@@ -3456,16 +3602,30 @@ msgstr "Start OpenCPN opnieuw om de nieuwe taalkeuze te activeren."
 msgid "Pleasure craft"
 msgstr "pleziervaartuig"
 #
+#, c-format
+msgid ""
+"PlugIn %s (%s), version %i.%i was detected.\n"
+" This version is known to be unstable and will not be loaded.\n"
+" Please update this PlugIn at the opencpn.org website."
+msgstr ""
+"Plugin %s (%s), versie %i.%i is gedetecteerd. Deze versie is onstabiel\n"
+"en zal niet worden geladen. Ga naar de plugin downloadpagina van\n"
+"opencpn.org en download de laatste stabiele versie van deze plugin."
+#
+#, c-format
+msgid ""
+"PlugIn %s (%s), version %i.%i was detected.\n"
+" This version is known to be unstable.\n"
+" Please update this PlugIn at the opencpn.org website."
+msgstr ""
+"Plugin %s (%s), versie %i.%i is gedetecteerd. Deze versie is\n"
+" onstabiel. Ga naar de plugin downloadpagina van opencpn.org\n"
+"en download de laatste stabiele versie van deze plugin."
 #
 #
-msgid "Pleasure craft, longer than 20 metres"
-msgstr "grote recreatievaart > 20 m"
 #
 #
 #
-#
-#
-#, fuzzy
 msgid "Plugins"
 msgstr "PlugIns"
 #
@@ -3493,7 +3653,7 @@ msgstr "Polyconisch"
 #
 #
 msgid "Port"
-msgstr "bakboord"
+msgstr "Poort:"
 #
 #
 #
@@ -3548,25 +3708,8 @@ msgstr "aanbevolen vaarwater 'stuurboordszijde'"
 #
 #
 #
-msgid "Prepare GPS for Route/Waypoint upload and press Send..."
-msgstr ""
-"Maak GPS systeem gereed voor ontvangen van route en routepunten en druk op "
-"Zenden ..."
-#
-#
-#
-#
-#
-#, fuzzy
 msgid "Preserve Scale when Switching Charts"
 msgstr "Behoud zoom-factor wanneer kaart wordt gewisseld"
-#
-#
-#
-#
-#
-msgid "Prev"
-msgstr "<<"
 #
 #
 #
@@ -3579,15 +3722,61 @@ msgstr "Voorbeeld: "
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+msgid "Print"
+msgstr "Afdrukken"
+#
+#
+#
+#
+#
 msgid "Print Chart"
 msgstr "Afdrukken kaart"
 #
+#
+#
+#
+#
+msgid "Print Route"
+msgstr "Route afdrukken"
+#
+#
+#
+#
+#
+msgid "Print Route Selection"
+msgstr "Routeselectie afdrukken"
+#
 msgid "Priority"
-msgstr ""
+msgstr "Prioriteit:"
+#
+#
 #
 #
 msgid "Problem discovered"
 msgstr "Probleem ontdekt"
+#
+msgid "Proceed to this location - await instructions"
+msgstr "Vaar naar deze positie - wacht op instructies"
 #
 #
 #
@@ -3602,13 +3791,6 @@ msgstr "Verwerken markeringspunten ..."
 #
 #
 #
-msgid "Progress..."
-msgstr "Voortgang ..."
-#
-#
-#
-#
-#
 msgid "Properties"
 msgstr "Eigenschappen"
 #
@@ -3616,120 +3798,25 @@ msgstr "Eigenschappen"
 #
 #
 #
-#, fuzzy
 msgid "Properties..."
-msgstr "&Eigenschappen ..."
+msgstr "Eigenschappen ..."
 #
 msgid "Protocol"
-msgstr ""
-#
-#
-#
-msgid "Pushboat, single"
-msgstr "duwboot losvarend"
-#
-#
-#
-msgid "Pushtow, eight barges at least one tanker or gas barge"
-msgstr "duwboot 8 DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, eight cargo barges"
-msgstr "duwboot met 8 vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, five barges at least one tanker or gas barge"
-msgstr "duwboot 5 DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, five cargo barges"
-msgstr "duwboot met 5 vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, four barges at least one tanker or gas barge"
-msgstr "duwboot 4 DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, four cargo barges"
-msgstr "duwboot met 4 vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, nine or more barges"
-msgstr "duwboot met 9+ vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, nine or more barges at least one tanker or gas barge"
-msgstr "duwboot 9+ DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, one cargo barge"
-msgstr "duwboot met 1 vrachtduwbak"
-#
-#
-#
-msgid "Pushtow, one tank/gas barge"
-msgstr "duwboot 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, seven barges at least one tanker or gas barge"
-msgstr "duwboot 7 DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, seven cargo barges"
-msgstr "duwboot met 7 vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, six barges at least one tanker or gas barge"
-msgstr "duwboot 6 DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, six cargo barges"
-msgstr "duwboot met 6 vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, three barges at least one tanker or gas barge"
-msgstr "duwboot 3 DB - min. 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, three cargo barges"
-msgstr "duwboot met 3 vrachtduwbakken"
-#
-#
-#
-msgid "Pushtow, two barges at least one tanker or gas barge"
-msgstr "duwboot 2 DB - 1 (G) TDB"
-#
-#
-#
-msgid "Pushtow, two cargo barges"
-msgstr "duwboot met 2 vrachtduwbakken"
+msgstr "Protocol:"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Question"
-msgstr "Testen"
+msgstr "Vraag"
 #
 #
 #
 msgid "RACON"
 msgstr "RACON"
+#
+#
 #
 #
 #
@@ -3751,10 +3838,10 @@ msgid "Real (On Position)"
 msgstr "werkelijk (op positie)"
 #
 msgid "Real Scale Bitmap"
-msgstr ""
+msgstr "Real Scale Bitmap"
 #
 msgid "Real Scale Vector"
-msgstr ""
+msgstr "Real Scale Vector"
 #
 #
 #
@@ -3772,25 +3859,27 @@ msgstr "Vernieuw de kaartendatabase vanuit configuratiebestand ..."
 #
 #
 #
+#
+#
+msgid "Recorded points"
+msgstr "Opgeslagen routepunten"
+#
+#
+#
 msgid "Red"
 msgstr "rood"
 #
-#
-#
-msgid "Red cross ship"
-msgstr "rode kruis schip"
-#
 msgid "Redo"
-msgstr ""
+msgstr "Opnieuw"
 #
 msgid "Reduce Data Precision"
-msgstr ""
+msgstr "Reduceer gegevensnauwkeurigheid"
 #
 msgid "Reduce Data..."
-msgstr ""
+msgstr "Reduceer gegevens ..."
 #
 msgid "Reduced Detail at Small Scale"
-msgstr ""
+msgstr "Reduceer detail bij kleine schaal"
 #
 #
 #
@@ -3806,43 +3895,32 @@ msgstr "referentiepunt "
 #
 #
 #
-#
-#
-msgid "Reference Station :"
-msgstr "Referentiestation: "
-#
-#
-#
 msgid "Remaining time : "
 msgstr "Resterende tijd:"
 #
 #
 #
-#, fuzzy
 msgid "Remove Chart"
-msgstr "<--Verwijder"
+msgstr "Verwijderen kaart"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Remove Connection"
-msgstr "Opties Lettertype"
+msgstr "Verwijderen verbinding"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Remove Selected"
-msgstr "&Verwijderen selectie"
+msgstr "Verwijderen selectie"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Remove from Route"
 msgstr "Routepunt uit route weghalen"
 #
@@ -3850,7 +3928,6 @@ msgstr "Routepunt uit route weghalen"
 #
 #
 #
-#, fuzzy
 msgid "Remove lost targets after (min)"
 msgstr "Verwijder verdwenen objecten na (minuten): "
 #
@@ -3862,17 +3939,22 @@ msgid "Rename Waypoints?"
 msgstr "Hernoem routepunten?"
 #
 #
-#, c-format
-msgid "RenderHPGL: The '%s' instruction is not implemented."
-msgstr "RenderHPGL: de '%s' instructie is niet uitgevoerd."
 #
 msgid "Report Age"
-msgstr ""
+msgstr "Rapportage-leeftijd"
 #
 #
-#, fuzzy
+#
+#
 msgid "Report as of"
-msgstr "Rapporteer vanaf: %d:%d UTC "
+msgstr "Rapporteer vanaf:  "
+#
+msgid "Report from ship: Icing info"
+msgstr "Scheepsrapport: info ijsafzetting"
+#
+msgid ""
+"Report from ship: Miscellaneous information - define in Associated text field"
+msgstr "Scheepsrapport: diverse informatie - definieer in tekstveld"
 #
 #
 #
@@ -3894,13 +3976,31 @@ msgstr "gereserveerd 13"
 msgid "Reserved 14"
 msgstr "gereserveerd 14"
 #
+msgid "Restricted Area: Active military OPAREA"
+msgstr "Beperkt gebied:actief  militair oefen- of operatiegebied"
+#
+msgid "Restricted Area: Drifting Mines"
+msgstr "Beperkt gebied: drijvende mijnen"
+#
+msgid "Restricted Area: Entry approval required prior to transit"
+msgstr "Beperkt gebied: toestemming noodzakelijk vóór transit"
+#
+msgid "Restricted Area: Entry prohibited"
+msgstr "Beperkt gebied: toegang verboden"
+#
+msgid "Restricted Area: Firing - danger area."
+msgstr "Beperkt gebied: schietgevaar"
+#
+msgid "Restricted Area: Fishing prohibited"
+msgstr "Beperkt gebied: vissen verboden"
+#
+msgid "Restricted Area: No anchoring."
+msgstr "Beperkt gebied: niet ankeren"
+#
 #
 #
 msgid "Restricted Manoeuvrability"
 msgstr "beperkt manoeuvreerbaar"
-#
-msgid "Resume"
-msgstr ""
 #
 #
 #
@@ -3920,24 +4020,27 @@ msgstr "Haal de initiele taalselectie op uit het Windows register"
 #
 #
 #
-#, fuzzy
 msgid "Reverse..."
-msgstr "&Omdraaien"
+msgstr "Omdraaien ..."
 #
 #
 #
 #
 #
-#, fuzzy
+#
+#
 msgid "Right"
-msgstr "licht"
+msgstr "Rechts"
+#
+msgid "Rogue or suspicious vessel"
+msgstr "Verdacht vaartuig"
 #
 #
 #
 #
 #
 msgid "Rollover"
-msgstr "Toon bij aanwijzen"
+msgstr "Toon Bij Aanwijzen"
 #
 #
 #
@@ -3964,15 +4067,15 @@ msgstr "Routenaam"
 #
 #
 #
+msgid "Route Print"
+msgstr "Route afdrukken"
+#
+#
+#
+#
+#
 msgid "Route Properties"
 msgstr "Route-eigenschappen"
-#
-#
-#
-#
-#
-msgid "Route Uploaded successfully."
-msgstr "Route goed geladen."
 #
 #
 #
@@ -3987,6 +4090,15 @@ msgstr "Maak route van track"
 #
 msgid "Route: "
 msgstr "Route:"
+#
+msgid "Route: Alternative route"
+msgstr "Route: alternatieve route"
+#
+msgid "Route: Recommended route"
+msgstr "Route: aanbevolen route"
+#
+msgid "Route: Recommended route through ice"
+msgstr "Route: aanbevolen route door ijs"
 #
 #
 #
@@ -4005,10 +4117,15 @@ msgstr "Routes"
 msgid "S/V"
 msgstr "zei/s"
 #
+msgid "SAR Aircraft"
+msgstr ""
+#
 #
 #
 msgid "SAR/V"
 msgstr "red/v"
+#
+#
 #
 #
 #
@@ -4028,11 +4145,10 @@ msgid "Safe Water"
 msgstr "veilig vaarwater"
 #
 #
-#, fuzzy
+#
+#
 msgid "Safety Broadcast Message"
-msgstr ""
-"Veiligheidsbericht:\n"
-"  "
+msgstr "Veiligheidsbericht:  "
 #
 #
 #
@@ -4050,25 +4166,25 @@ msgstr "zeilschip"
 #
 #
 #
-#, fuzzy, c-format
+#, c-format
 msgid "Scale %4.0f"
-msgstr "Kaart met grotere schaal"
+msgstr "Schaal %4.0f"
 #
 #
 #
 #
 #
-#, fuzzy, c-format
+#, c-format
 msgid "Scale %4.0f (%1.1fx)"
-msgstr "Schaal 1 : %8.0f | Zoom-factor: %4.1f"
+msgstr "Schaal %4.0f (%1.1fx)"
 #
 #
 #
 #
 #
-#, fuzzy, c-format
+#, c-format
 msgid "Scale %4.0f (%1.2fx)"
-msgstr "Schaal 1 : %8.0f | Zoom-factor: %4.2f"
+msgstr "Schaal %4.0f (%1.2fx)"
 #
 #
 #
@@ -4095,7 +4211,16 @@ msgid "Search and Rescue Vessel"
 msgstr "reddingvaartuig"
 #
 msgid "Seatalk"
-msgstr ""
+msgstr "Seatalk"
+#
+msgid "Security Alert - Level 1"
+msgstr "Veiligheidswaarschuwing - nivo 1"
+#
+msgid "Security Alert - Level 2"
+msgstr "Veiligheidswaarschuwing - nivo 2"
+#
+msgid "Security Alert - Level 3"
+msgstr "Veiligheidswaarschuwing - nivo 3"
 #
 msgid "See the log file at "
 msgstr "Zie het logbestand "
@@ -4122,26 +4247,14 @@ msgid "Select Sound File"
 msgstr "Selecteer geluidbestand"
 #
 msgid "Select Tide/Current Data"
-msgstr ""
+msgstr "Selecteer getijhoogte en -stroom gegevens"
 #
 msgid ""
 "Select the maximum error allowed (in meters)\n"
 "after data reduction:"
 msgstr ""
-#
-#
-#
-#
-#
-msgid "Send"
-msgstr "Zend"
-#
-#
-#
-#
-#
-msgid "Send Route To GPS"
-msgstr "Zend route naar GPS"
+"Selecteer de maximaal toegestane fout (in meters)\n"
+"na gegevensreductie:"
 #
 #
 #
@@ -4154,28 +4267,23 @@ msgstr "Zend naar GPS ..."
 #
 #
 #
-#, fuzzy
 msgid "Send to GPS"
-msgstr "&Zend naar GPS ..."
+msgstr "Zend naar GPS"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Sentence Filter"
-msgstr "&Stille waarschuwing"
+msgstr "Stringfilter"
 #
 msgid "Serial"
-msgstr ""
+msgstr "Serieel"
 #
 #
-#
-msgid "Service vessel, police patrol, port service"
-msgstr "dienstvaartuig"
 #
 msgid "Set"
-msgstr ""
+msgstr "Instellen"
 #
 #
 #
@@ -4206,15 +4314,16 @@ msgid "Shift to Smaller Scale Chart"
 msgstr "Gebruik kaart met kleinere schaal"
 #
 msgid "Ship Icon Type"
-msgstr ""
+msgstr "Type scheepsicoon:"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Ships"
-msgstr " Schip: "
+msgstr ""
+"Eigen Vaartuig en\n"
+"AIS Objecten"
 #
 #
 #
@@ -4227,6 +4336,13 @@ msgstr "korte streep"
 #
 #
 #
+msgid "Show"
+msgstr "Toon"
+#
+#
+#
+#
+#
 msgid "Show AIS Targets"
 msgstr "Toon AIS objecten"
 #
@@ -4234,9 +4350,15 @@ msgstr "Toon AIS objecten"
 #
 #
 #
-#, fuzzy
 msgid "Show AIS targets real size"
-msgstr "Toon AIS objecten"
+msgstr "Toon AIS-objecten in werkelijke grootte"
+#
+#
+#
+#
+#
+msgid "Show All Tracks"
+msgstr "Toon alle tracks"
 #
 #
 #
@@ -4273,6 +4395,9 @@ msgstr "Toon getijstroom-iconen"
 msgid "Show Depth Units"
 msgstr "Toon diepte-eenheid"
 #
+msgid "Show Distance from each Waypoint to the next one."
+msgstr "Toon afstand van elk routepunt naar het volgende."
+#
 #
 #
 #
@@ -4288,28 +4413,29 @@ msgid "Show Grid"
 msgstr "Toon geografisch grid"
 #
 msgid "Show Highway"
-msgstr ""
+msgstr "Toon 'Snelweg'"
 #
 #
 #
 #
 #
 msgid "Show Lat/Long as"
-msgstr "    Toon positie in"
+msgstr "    Toon positie in:"
+#
+msgid "Show Magnetic bearings and headings"
+msgstr "Toon peilingen en koersen t.o.v. magnetische noorden"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Show NMEA Debug Window"
-msgstr "Toon GPS/NMEA gegevensscherm"
+msgstr "Toon NMEA debug window"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Show Skewed Raster Charts as North-Up"
 msgstr "Toon scheve rasterkaarten Noord-Boven"
 #
@@ -4324,7 +4450,6 @@ msgstr "Toon statusbalk"
 #
 #
 #
-#, fuzzy
 msgid "Show Target CPA"
 msgstr "Toon CPA van AIS object"
 #
@@ -4332,9 +4457,15 @@ msgstr "Toon CPA van AIS object"
 #
 #
 #
-#, fuzzy
+msgid "Show Target Track"
+msgstr "Toon track van AIS object"
+#
+#
+#
+#
+#
 msgid "Show This Chart"
-msgstr "Toon op kaart"
+msgstr "Toon deze kaart"
 #
 #
 #
@@ -4352,7 +4483,6 @@ msgstr "Toon getijhoogte-iconen"
 #
 #
 #
-#, fuzzy
 msgid "Show Toolbar in Fullscreen Mode"
 msgstr "Toon werkbalk bij 'volledig scherm'"
 #
@@ -4364,8 +4494,56 @@ msgid "Show WPT names"
 msgstr "Toon namen"
 #
 #
+#
+#
+#
+msgid "Show Waypoint description."
+msgstr "Toon routepuntbeschrijving."
+#
+#
+#
+#
+#
+msgid "Show Waypoint name."
+msgstr "Toon markeringspunt-naam."
+#
+#
+#
+#
+#
+msgid "Show Waypoint position."
+msgstr "Toon routepuntpositie."
+#
+#
 msgid "Show area notices (from AIS binary messages)"
 msgstr "Toon gebiedsberichten (binaire AIS meldingen)"
+#
+msgid "Show course from each Waypoint to the next one. "
+msgstr "Toon koers van elk routepunt naar het volgende."
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+msgid "Show distance as"
+msgstr "    Toon afstand in:"
 #
 #
 #
@@ -4373,6 +4551,9 @@ msgstr "Toon gebiedsberichten (binaire AIS meldingen)"
 #
 msgid "Show name"
 msgstr "Toon naam"
+#
+msgid "Show names with AIS targets at scale greater than 1:"
+msgstr "Toon namen bij AIS-objecten met een schaal > 1:"
 #
 #
 #
@@ -4386,23 +4567,28 @@ msgstr "Toon op kaart"
 #
 #
 msgid "Show radar rings"
-msgstr "Toon afstandscirkels"
+msgstr "Aantal te tonen afstandscirkels:"
 #
 #
 #
 #
 #
-#, fuzzy
+msgid "Show speed as"
+msgstr "    Toon vaart in:"
+#
+#
+#
+#
+#
 msgid "Show target COG predictor arrow, length (min)"
-msgstr "Toon koers/vaart-vectoren"
+msgstr "Toon koers/vaart-vectoren met lengte van (tijdminuten):"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Show target tracks, length (min)"
-msgstr "Toon objecttracks"
+msgstr "Toon objecttracks met lengte van (tijdminuten):"
 #
 #
 #
@@ -4420,9 +4606,10 @@ msgstr "vereenvoudigd"
 #
 #
 #
-#, fuzzy
 msgid "Smooth Panning / Zooming"
-msgstr "Activeer soepel pannen en zoomen"
+msgstr "Gebruik soepel pannen en zoomen"
+#
+#
 #
 #
 #
@@ -4461,7 +4648,6 @@ msgstr "markering bijzondere betekenis"
 #
 #
 #
-#, fuzzy
 msgid "Speed"
 msgstr "Verwachte vaart"
 #
@@ -4471,6 +4657,13 @@ msgstr "Verwachte vaart"
 #
 msgid "Speed (Kts)"
 msgstr "Vaart"
+#
+#
+#
+#
+#
+msgid "Split"
+msgstr "Splitsen"
 #
 #
 #
@@ -4505,12 +4698,18 @@ msgstr "'stuurboordszijde' markering"
 msgid "Start"
 msgstr "Start"
 #
+msgid "Statistics"
+msgstr "Statistiek"
+#
 #
 #
 #
 #
 msgid "StatusBar"
 msgstr "Statusbalk"
+#
+msgid "Statute miles"
+msgstr "statute mile"
 #
 #
 #
@@ -4526,8 +4725,21 @@ msgstr "'stuurboordszijde'"
 #
 #
 #
+msgid "Style"
+msgstr "Stijl"
+#
+#
+#
+#
+#
 msgid "Style:"
 msgstr "Stijl:"
+#
+msgid "Sunrise"
+msgstr "Zonsopkomst"
+#
+msgid "Sunset"
+msgstr "Zonsondergang"
 #
 #
 #
@@ -4547,9 +4759,10 @@ msgstr "gesymboliseerd"
 #
 #
 #
-#, fuzzy
 msgid "TCP"
-msgstr "TCPA"
+msgstr "TCP"
+#
+#
 #
 #
 #
@@ -4560,33 +4773,10 @@ msgstr "TCPA"
 #
 #
 #
-msgid "Tankbarge"
-msgstr "tankduwbak (TDB)"
-#
-#
-#
-msgid "Tankbarge, dry cargo as if liquid (e.g. cement)"
-msgstr "tankduwbak (TDB), droge lading"
-#
-#
-#
-msgid "Tankbarge, gas"
-msgstr "gas-tankduwbak (GTDB)"
-#
-#
-#
-msgid "Tankbarge, liquid cargo, type C"
-msgstr "tankduwbak (TDB), vloeibare lading, type C"
-#
-#
-#
-msgid "Tankbarge, liquid cargo, type N"
-msgstr "tankduwbak (TDB), vloeibare lading, type N"
-#
-#
-#
 msgid "Tanker"
 msgstr "tanker (geen gas) (zee)"
+#
+#
 #
 #
 #
@@ -4597,17 +4787,17 @@ msgstr "Objectaantal"
 #
 #
 #
-#, fuzzy
 msgid "Target List..."
-msgstr "AIS objectlijst"
+msgstr "AIS objectenlijst ..."
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Target Query..."
 msgstr "AIS objectgegevens"
+#
+#
 #
 #
 #
@@ -4653,6 +4843,8 @@ msgstr "Test waarschuwinggeluid"
 #
 #
 #
+#
+#
 msgid "Testing"
 msgstr "Testen"
 #
@@ -4660,22 +4852,23 @@ msgid ""
 "The Man Over Board button could be an important safety feature.\n"
 "Are you sure you want to hide it?"
 msgstr ""
+"De Man Over Boord knop is heeft een belangijke veiligheidsfunctionaliteit.\n"
+"Weet u zeker dat u deze wilt verbergen?"
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "The Open Source Chart Plotter/Navigator"
-msgstr ""
-"\n"
-"        OpenCPN ...  een Open Source kaartplotter- en navigatieapplicatie "
+msgstr "De Open Source kaartplotter- en navigatieapplicatie "
 #
 #, c-format
 msgid ""
 "The amount of data used by the track\n"
 " was reduced by %d%%."
 msgstr ""
+"De hoeveel track-gegevens is\n"
+"gereduceerd met %d%%."
 #
 #
 msgid ""
@@ -4724,12 +4917,14 @@ msgid "The necessary configuration files were not found. "
 msgstr "De noodzakelijke configuratiebestanden zijn niet gevonden."
 #
 msgid "The settings for own ship real size are not correct:"
-msgstr ""
+msgstr "De instellingen voor de afmetingen van uw schip zijn niet juist:"
 #
 msgid ""
 "The waypoint you want to delete is used in a route, do you really want to "
 "delete it?"
 msgstr ""
+"Het waypoint dat u wilt verwijderen wordt gebruikt in een route. Weet u zeker "
+"dat u het wilt verwijderen?"
 #
 #
 #
@@ -4743,18 +4938,29 @@ msgid ""
 "pasting. Would you like to just merge the pasted data into them?\n"
 "\n"
 msgstr ""
+"Er zijn bestaande markeringspunten met dezelfde locatie als sommige van de "
+"markeringspunten die u wilt plakken. Wilt u toch de markeringspunt-gegevens "
+"samenvoegen?\n"
+"\n"
 #
 msgid ""
 "There are some waypoints used in routes or anchor alarms. Do you want to "
 "delete them as well? This will change the routes and disable the anchor "
 "alarms. Answering No keeps the waypoints used in routes or alarms."
 msgstr ""
+"Enkele markeringspunten worden gebruikt in routes of voor ankeralarms. Wilt u "
+"deze ook verwijderen? Daardoor zullen de routes veranderen en de ankeralarms "
+"deactiveren. Het antwoord 'Nee' behoudt de markeringspunten die worden "
+"gebruikt in routes of alarms."
 #
 msgid ""
 "There is an existing waypoint at the same location as the one you are "
 "pasting. Would you like to merge the pasted data with it?\n"
 "\n"
 msgstr ""
+"Er is een bestaand waypoint op dezelfde locatie als het waypoint dat u wilt "
+"plakken. Wilt u toch de waypoint gegevens samenvoegen?\n"
+"\n"
 #
 #
 #
@@ -4782,11 +4988,6 @@ msgstr "Dit routepunt is deel van een kaartlaag en kan niet worden gewijzigd"
 #
 #
 #
-msgid "Tide"
-msgstr "Getijhoogte"
-#
-#
-#
 msgid "TideCurrentGraphRollover"
 msgstr "Info getijgrafiek bij aanwijzen"
 #
@@ -4806,8 +5007,22 @@ msgstr "Vaartijd"
 #
 #
 #
+#
+#
+msgid "Time enroute"
+msgstr "Vaartijd"
+#
+#
+#
+msgid "Time shown as"
+msgstr "Tijd in "
+#
+#
+#
 msgid "Times shown as"
 msgstr "Tijden in "
+#
+#
 #
 #
 #
@@ -4834,8 +5049,8 @@ msgstr "Naar punt"
 #
 #
 #
-msgid "Today"
-msgstr "Vandaag"
+msgid "To route"
+msgstr "Naar route"
 #
 #
 #
@@ -4848,18 +5063,18 @@ msgstr "Tracking Aan/Uit"
 #
 #
 #
-msgid "Tomorrow"
-msgstr "Morgen"
+msgid "Toggle track"
+msgstr "Track Aan/Uit"
 #
 #
 #
 #
 #
 msgid "ToolTips"
-msgstr "Tooltips"
+msgstr "Tips"
 #
 msgid "Toolbar and Window Style"
-msgstr "Toolbar en Window stijl"
+msgstr "Werkbalk- en Windowstijl"
 #
 #
 #
@@ -4879,6 +5094,13 @@ msgstr "Totale lengte:"
 #
 #
 #
+msgid "Total distance"
+msgstr "Totale verheid (NM)"
+#
+#
+#
+#
+#
 msgid "Tow"
 msgstr "sleep"
 #
@@ -4886,9 +5108,8 @@ msgstr "sleep"
 #
 #
 #
-#, fuzzy
 msgid "Track"
-msgstr "Tracks"
+msgstr "Track"
 #
 #
 #
@@ -4901,6 +5122,8 @@ msgstr "Track-naam"
 #
 #
 #
+#
+#
 msgid "Track Properties"
 msgstr "Track-eigenschappen"
 #
@@ -4908,9 +5131,16 @@ msgstr "Track-eigenschappen"
 #
 #
 #
-#, fuzzy
+#, c-format
+msgid "Track Properties, Layer: %d"
+msgstr "Track-eigenschappen, laag: %d"
+#
+#
+#
+#
+#
 msgid "Tracking Precision"
-msgstr "Track-eigenschappen"
+msgstr "    Tracking-nauwkeurigheid:"
 #
 #
 #
@@ -4920,10 +5150,10 @@ msgid "Tracks"
 msgstr "Tracks"
 #
 msgid "Transmit Sentences"
-msgstr ""
+msgstr "Zend Onderstaande Strings"
 #
 msgid "Transmit sentences"
-msgstr ""
+msgstr "Zend alleen onderstaande strings"
 #
 #
 #
@@ -4932,6 +5162,16 @@ msgstr ""
 msgid "Transverse Mercator"
 msgstr "Transversale Mercator"
 #
+msgid "Treat WPL sentences as APRS position reports"
+msgstr "Verwerk WPL-strings als APRS-positierapporten"
+#
+#
+#
+#
+#
+msgid "Trk"
+msgstr "Track"
+#
 #
 #
 msgid "Tug"
@@ -4939,41 +5179,8 @@ msgstr "sleepboot"
 #
 #
 #
-msgid "Tug freighter, coupled"
-msgstr "gekoppelde sleep-vrachtschepen"
-#
-#
-#
-msgid "Tug, assisting a vessel or linked combination"
-msgstr "sleepboot assisterend"
-#
-#
-#
-msgid "Tug, freighter"
-msgstr "sleep-vrachtschip"
-#
-#
-#
-msgid "Tug, freighter/tanker, coupled"
-msgstr "gekoppelde sleep-sch. min. 1 SL-TS"
-#
-#
-#
-msgid "Tug, one or more tows"
-msgstr "sleepboot, 1 of meer aanhangen"
-#
-#
-#
-msgid "Tug, single"
-msgstr "sleepboot, losvarend"
-#
-#
-#
-msgid "Tug, tanker"
-msgstr "sleep-tankschip"
-#
 msgid "Turn Rate"
-msgstr ""
+msgstr "Draaisnelheid"
 #
 #
 #
@@ -4983,7 +5190,9 @@ msgid "Type"
 msgstr "Type"
 #
 msgid "UDP"
-msgstr ""
+msgstr "UDP"
+#
+#
 #
 #
 msgid "URL"
@@ -5000,16 +5209,15 @@ msgstr "UTC"
 #
 #
 #
-#, fuzzy
-msgid "Unavailable"
-msgstr "COG: niet beschikbaar"
-#
-#
-#
-#
-#
 msgid "Undefined"
 msgstr "niet gedefinieerd"
+#
+#
+#
+#
+#
+msgid "Undefined (default)"
+msgstr "niet gedefinieerd (standaard)"
 #
 #
 #
@@ -5022,12 +5230,9 @@ msgid "Underway"
 msgstr "varend"
 #
 msgid "Undo"
-msgstr ""
+msgstr "Herstel"
 #
 #
-#
-msgid "Unit carrier maritime"
-msgstr "containerschip (zee)"
 #
 #
 #
@@ -5060,19 +5265,27 @@ msgstr "niet gedefinieerd"
 #
 #
 msgid "Update Control"
-msgstr "Update Kaartmappen"
+msgstr "Kaartmappen Bijwerken"
 #
 msgid "Use Accelerated Graphics (OpenGL)"
-msgstr ""
+msgstr "Gebruik 'Accelerated Graphics' (OpenGL)"
 #
 #
 #
 #
 #
-#, fuzzy
-msgid "Use Garmin GRMN/GRMN (Host) mode for uploads"
-msgstr ""
-"Gebruik Garmin GRMN/GRMN (Host) modus voor laden van routepunten en routes"
+msgid "Use Garmin (GRMN) mode for input"
+msgstr "Gebruik Garmin (GRMN) modus voor invoer"
+#
+#
+#
+#
+#
+msgid "Use Garmin GRMN (Host) mode for uploads"
+msgstr "Gebruik Garmin GRMN (Host) modus voor uploads"
+#
+msgid "Use magnetic bearings in output sentence ECAPB"
+msgstr "Gebruik peilingen t.o.v. magnetische noorden in outputbericht ECAPB"
 #
 #
 #
@@ -5108,6 +5321,13 @@ msgstr "Gebruiker's Y offset (meter)"
 #
 #
 #
+msgid "VTS active target"
+msgstr "VTS actief object"
+#
+#
+#
+#
+#
 msgid "Vector Charts"
 msgstr "Vectorkaarten"
 #
@@ -5136,17 +5356,8 @@ msgstr "vaartuig slepend"
 msgid "Vessel Towing, Long"
 msgstr "vaartuig slepend, lang"
 #
-#
-#
-msgid "Vessel, type unknown"
-msgstr "vaartuig, type onbekend"
-#
-#
-#
-msgid ""
-"Vessel, work maintainance craft, floating derrick, cable-ship, buoy-ship, "
-"dredge"
-msgstr "werkvaartuig"
+msgid "Vessel requesting non-distress assistance"
+msgstr "Vaartuig verzoekt assistentie (niet in nood)"
 #
 #
 #
@@ -5164,7 +5375,7 @@ msgid "Virtual (On Position)"
 msgstr "virtueel (op positie)"
 #
 msgid "Visible buttons"
-msgstr ""
+msgstr "Zichtbare knoppen"
 #
 #
 #
@@ -5177,17 +5388,25 @@ msgstr "WAV bestanden (*.wav)|*.wav|Alle bestanden (*.*)|*.*"
 #
 #
 #
-#, fuzzy
 msgid "Warn if CPA less than (NMi)"
-msgstr "Waarschuw als kortste naderingsafstand minder is dan (zeemijl):"
+msgstr "Waarschuw als kortste naderingsafstand minder is dan (zeemijl): "
 #
 #
 #
 #
 #
-#, fuzzy
 msgid "Waypoint"
-msgstr "Markeringspunten"
+msgstr "Markeringspunt"
+#
+msgid "Waypoint Arrival Circle Radius (NMi)"
+msgstr "Straal van routepuntaankomstcirkel (zeemijl)"
+#
+#
+#
+#
+#
+msgid "Waypoint Information"
+msgstr "Markeringspunt-informatie"
 #
 #
 #
@@ -5195,6 +5414,22 @@ msgstr "Markeringspunten"
 #
 msgid "Waypoint Name"
 msgstr "Markeringspunt-naam"
+#
+#
+#
+#
+#
+msgid "Waypoint Properties"
+msgstr "Routepunteigenschappen"
+#
+#
+#
+#
+#
+msgid "Waypoint Properties, Layer: "
+msgstr "Markeringspunt-eigenschappen, laag:"
+#
+#
 #
 #
 #
@@ -5244,8 +5479,12 @@ msgstr "Als het lettertype onderstreept is."
 msgid "White"
 msgstr "wit"
 #
+#
+msgid "Width"
+msgstr "Breedte"
+#
 msgid "Width Over All (m)"
-msgstr ""
+msgstr "Breedte over alles (m)"
 #
 #
 msgid "Width:"
@@ -5257,10 +5496,10 @@ msgid "Wing In Ground Effect"
 msgstr "WIG-tuig (grondeffect)"
 #
 msgid "Would you like include the Great Circle routing points for this leg?"
-msgstr ""
+msgstr "Wilt u voor dit routedeel grootcirkel routepunten opnemen?"
 #
 msgid "Wrong length of the NMEA filter value"
-msgstr ""
+msgstr "Foute lengte van de NMEA filterwaarde"
 #
 #
 #
@@ -5288,22 +5527,21 @@ msgstr "ple/v"
 msgid "Yellow"
 msgstr "geel"
 #
-msgid "Yes"
-msgstr ""
-#
 msgid "Yes, hide it."
-msgstr ""
+msgstr "Ja, verberg dit."
 #
 msgid ""
 "You can't hide the last tool from the toolbar\n"
-"as this would make is inaccessible."
+"as this would make it inaccessible."
 msgstr ""
+"U kunt de laatste knop van de werkbalk niet verbergen,\n"
+"deze zou daardoor niet meer toegankelijk zijn."
 #
 msgid "You must enter the address..."
-msgstr ""
+msgstr "U moet het adres invoeren ..."
 #
 msgid "You must select or enter the port..."
-msgstr ""
+msgstr "U moet de haven selecteren of invoeren ..."
 #
 #
 #
@@ -5323,9 +5561,8 @@ msgstr "Zoom Uit"
 #
 #
 #
-#, fuzzy
 msgid "Zoom to Cursor"
-msgstr "&In schermcentrum"
+msgstr "Zoom op cursorpositie"
 #
 #
 #
@@ -5353,16 +5590,56 @@ msgstr "_B"
 msgid "_plus"
 msgstr "_plus"
 #
+msgid "cm"
+msgstr "cm"
+#
+msgid "fa"
+msgstr "va"
+#
+#
+#
+msgid "ft"
+msgstr "Voet"
 #
 #
 #
 #
-#, fuzzy
+#
+#
+#
 msgid "in"
-msgstr "Link"
+msgstr "in"
+#
+msgid "km"
+msgstr "km"
+#
+msgid "km/h"
+msgstr "km/u"
+#
+msgid "kts"
+msgstr "Knopen"
+#
+msgid "m"
+msgstr "m"
+#
+msgid "m/s"
+msgstr "m/s"
+#
+msgid "mi"
+msgstr "mi"
 #
 msgid "min"
-msgstr ""
+msgstr "min"
+#
+msgid "mph"
+msgstr "mph"
+#
+#
+#
+#
+#
+msgid "track"
+msgstr "track"
 #
 #
 #
@@ -5377,6 +5654,14 @@ msgstr "WGS Y offset"
 #
 msgid "wxFB Website"
 msgstr "wxFB website"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5411,6 +5696,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "\n"
 #~ "\n"
@@ -5419,6 +5712,14 @@ msgstr "wxFB website"
 #~ "\n"
 #~ "\n"
 #~ "\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5437,6 +5738,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "      COG arrow predictor length (Minutes):"
 #~ msgstr "     Vectorlengte (in tijdminuten): "
 #
@@ -5446,8 +5755,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "      Max moored target speed (Kts.):"
 #~ msgstr "     Max. vaart geankerde objecten (knopen): "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5475,8 +5800,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "   Chart projection is UNKNOWN, assuming Mercator: "
 #~ msgstr " Onbekende kaartprojectie (aanname is Mercator): "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5531,8 +5872,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "   PlugInManager: Cannot load symbol create_pi: "
 #~ msgstr "   PlugInManager: Kan symbool create_pi niet laden: "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5567,8 +5924,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "  Could not open AIS serial port '"
 #~ msgstr " Kan de AIS poort niet openen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5581,9 +5954,31 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid " </b>in<b> "
+#~ msgstr " </b>in<b> "
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #~ msgid " COG: %03d Deg."
 #~ msgstr "COG: %03d°"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5597,12 +5992,76 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid " is %5g"
+#~ msgstr " is %5g"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "&Acknowledge"
+#~ msgstr "&Bevestig"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "&Export Track..."
+#~ msgstr "&Exporteer track ..."
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "&Jump To"
+#~ msgstr "&Spring naar"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "&Silence Alert"
+#~ msgstr "&Stille waarschuwing"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "'\n"
 #~ " Suggestion: Try 'xxx.xxx.xxx.xxx' notation"
 #~ msgstr ""
 #~ "'\n"
 #~ "Suggestie: probeer 'xxx.xxx.xxx.xxx' notatie."
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5629,8 +6088,30 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "(m)"
 #~ msgstr "(m)"
+#
+#
+#
+#
+#~ msgid ", Out: None"
+#~ msgstr ", Uit: geen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5641,6 +6122,14 @@ msgstr "wxFB website"
 #
 #~ msgid ":               "
 #~ msgstr ":       "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5660,6 +6149,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "<--Remove"
 #~ msgstr "<--Verwijder"
 #
@@ -5668,8 +6165,18 @@ msgstr "wxFB website"
 #
 #
 #
-#~ msgid "AIS Data Port"
-#~ msgstr "AIS poort"
+#
+#
+#~ msgid "AIS Alert"
+#~ msgstr "AIS waarschuwing"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5697,8 +6204,40 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#~ msgid "AISTargetAlert"
+#~ msgstr "AIS objectwaarschuwing"
+#
+#
+#
+#
+#~ msgid "Accept"
+#~ msgstr "Accepteren"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Activate CM93 Offset"
 #~ msgstr "Activeer CM93 offsets"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5723,8 +6262,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Active Charts"
 #~ msgstr "Actieve Kaarten"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5740,13 +6295,37 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Add this chart to quilt."
 #~ msgstr "Voeg deze kaart toe aan samenvoeging."
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Add-->"
 #~ msgstr "Toevoegen-->"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5777,8 +6356,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "All files (*.*)|*.*"
 #~ msgstr "Alle bestanden (*.*)|*.*"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5794,8 +6389,32 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Available Chart Directories"
 #~ msgstr "Beschikbare Kaartmappen"
+#
+#
+#
+#
+#
+#
+#~ msgid "Barge, tanker, chemical"
+#~ msgstr "duwbak, chemisch"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5832,8 +6451,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Bearing:                %03d Deg.\n"
 #~ msgstr "Peiling:                  %03d°\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5850,9 +6485,41 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Bulk carrier maritime"
+#~ msgstr "bulkcarrier (zee)"
+#
+#
+#
+#
+#
+#
+#~ msgid "Bunkership"
+#~ msgstr "bunkerschip"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #~ msgid "CM93"
 #~ msgstr "CM93"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5867,8 +6534,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "CM93 Offset Display"
 #~ msgstr "CM93 Offsets Weergave"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5883,8 +6566,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "CM93 Zoom Detail"
 #~ msgstr "CM93 zoomdetail"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5903,8 +6602,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "CPA:                 %6.1f NM\n"
 #~ msgstr "CPA:                 %6.1f NM\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5929,8 +6644,31 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "CallSign:             "
 #~ msgstr "Roepnaam:         "
+#
+#
+#
+#
+#~ msgid "Can't send waypoint. Found no serial data port with output defined."
+#~ msgstr ""
+#~ "Kan routepunt niet verzenden. De opgegeven seriële poort is niet gevonden."
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5960,8 +6698,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Chart Display Filters"
 #~ msgstr "Filters Kaartweergave"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5970,8 +6724,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Chart Groups...New Group"
 #~ msgstr "Kaartgroepen ... Nieuwe groep"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -5989,6 +6759,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Class:                "
 #~ msgstr "Klasse:       "
 #
@@ -5997,8 +6775,47 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Container vessel"
+#~ msgstr "containerschip"
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Copy"
+#~ msgstr "Kopiëren"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Could not resolve TCP/IP host '"
 #~ msgstr "Kan TCP/IP host niet vinden"
+#
+#
+#
+#
+#~ msgid "Couldn't load sound data from '%s'."
+#~ msgstr "Kan dieptegegevens niet laden van '%s'"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6017,8 +6834,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Course:                 000 Deg.\n"
 #~ msgstr "Koers:               000°\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6035,9 +6868,53 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Cruise ship"
+#~ msgstr "cruise schip"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Current"
+#~ msgstr "Getijstroom"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #~ msgid "Cursor: "
 #~ msgstr "POS cursor: "
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Data Source :"
+#~ msgstr "Databron:"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6074,6 +6951,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Default dataset"
 #~ msgstr "standaard gegevens "
 #
@@ -6081,8 +6966,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Deg"
 #~ msgstr "°"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6108,8 +7009,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Delete Route"
 #~ msgstr "Route verwijderen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6126,8 +7043,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Delete Track"
 #~ msgstr "Track verwijderen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6145,8 +7078,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Destination:          "
 #~ msgstr "Bestemming:          "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6156,6 +7105,34 @@ msgstr "wxFB website"
 #, fuzzy
 #~ msgid "Display Style"
 #~ msgstr "Stijl Kaartweergave"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Drop"
+#~ msgstr "Plaats markeringspunt hier"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "E&xport All..."
+#~ msgstr "E&xporteer alles ..."
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6173,8 +7150,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "ETA:"
 #~ msgstr "ETA:"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6211,6 +7204,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "ETE/Timestamp"
 #~ msgstr "Vaartijd/Tijdstip"
 #
@@ -6218,8 +7219,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Enable Manual CM93 Offsets"
 #~ msgstr "Activeer handmatige CM93 offsets"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6236,8 +7253,74 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#~ msgid "Error on Route Upload.  Please check logfiles..."
+#~ msgstr "Fout bij laden van route. Raadpleeg logbestanden ..."
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Etc."
 #~ msgstr "Overig"
+#
+#
+#
+#
+#
+#
+#~ msgid "Fast ship"
+#~ msgstr "snel schip"
+#
+#
+#
+#
+#
+#
+#~ msgid "Ferry"
+#~ msgstr "veerboot"
+#
+#
+#
+#
+#
+#
+#~ msgid "Fishing boat"
+#~ msgstr "vissersschip"
+#
+#
+#
+#
+#
+#
+#~ msgid "Freightbarge"
+#~ msgstr "vrachtduwbak (VDB)"
+#
+#
+#
+#
+#
+#
+#~ msgid "Freightbarge with containers"
+#~ msgstr "vrachtduwbak met containers"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6255,8 +7338,19 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "GPS"
 #~ msgstr "GPS"
+#
+#
+#
 #
 #
 #
@@ -6271,8 +7365,42 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "GPSD Data Server"
 #~ msgstr "GPSD dataserver"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Gas tanker"
+#~ msgstr "gas-tankschip"
+#
+#
+#
+#
+#
+#
+#~ msgid "General cargo Vessel maritime"
+#~ msgstr "vrachtschip (zee) "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6298,13 +7426,45 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Go To Mark/WP"
 #~ msgstr "Ga naar markeringspunt/routepunt"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Groups"
 #~ msgstr "Groepen"
+#
+#
+#
+#
+#
+#
+#~ msgid "HW"
+#~ msgstr "HW"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6330,8 +7490,32 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Heading:                %03d Deg.\n"
 #~ msgstr "Peiling:                  %03d°\n"
+#
+#
+#
+#
+#
+#
+#~ msgid "Hydrofoil"
+#~ msgstr "draagvleugelboot"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6350,6 +7534,30 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "In"
+#~ msgstr "In"
+#
+#
+#
+#
+#~ msgid "In: None"
+#~ msgstr "In: geen"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Inland Blue Flag        Clear\n"
 #~ msgstr "Blauwe Bord binnenwateren     Verwijder\n"
 #
@@ -6359,8 +7567,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Jump To"
 #~ msgstr "Spring naar"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6384,8 +7608,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Jump To Position..."
 #~ msgstr "Spring naar positie ..."
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6396,6 +7636,32 @@ msgstr "wxFB website"
 #, fuzzy
 #~ msgid "Jump To..."
 #~ msgstr "Spring naar"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Just "
+#~ msgstr "Precies"
+#
+#
+#
+#
+#
+#
+#~ msgid "LW"
+#~ msgstr "LW"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6424,8 +7690,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Last Position Report Time:  "
 #~ msgstr "Laatste rapportagetijdstip: "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6442,8 +7724,42 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#~ msgid "Legend"
+#~ msgstr "Console legenda"
+#
+#
+#
+#
+#
+#
+#~ msgid "Liquified gas tanker"
+#~ msgstr "gastanker (zee)"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "META Objects"
 #~ msgstr "Toon metagegevens"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6488,6 +7804,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Mark Icon"
 #~ msgstr "Markeringspunt-icoon"
 #
@@ -6511,8 +7835,34 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Mark Name"
 #~ msgstr "Markeringspunt-naam"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Mark Properties"
+#~ msgstr "Markeringspunt-eigenschappen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6547,8 +7897,36 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Measure....."
 #~ msgstr "Meten Aan"
+#
+#
+#
+#
+#~ msgid "Message accepted"
+#~ msgstr "Bericht geaccepteerd"
+#
+#
+#
+#
+#~ msgid "Message filtered and dropped"
+#~ msgstr "Bericht gefilterd en afgewezen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6564,8 +7942,118 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Motor freighter"
+#~ msgstr "motorvrachtschip"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor freighter pushing at least one tank-ship"
+#~ msgstr "lang samenstel, min. 1 MTS"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor freighter pushing one or more freighters"
+#~ msgstr "lang samenstel, MVS"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor freighter with one or more ships alongside"
+#~ msgstr "breed samenstel, MVS"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor freighter with tanker"
+#~ msgstr "breed samenstel, min. 1 MTS"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor freighter, tug"
+#~ msgstr "slepend MVS"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor tanker"
+#~ msgstr "motortankschip"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor tanker, dry cargo as if liquid (e.g. cement)"
+#~ msgstr "motortankschip, droge lading"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor tanker, liquid cargo, type C"
+#~ msgstr "motortankschip, vloeibare lading, type C"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor tanker, liquid cargo, type N"
+#~ msgstr "motortankschip, vloeibare lading, type N"
+#
+#
+#
+#
+#
+#
+#~ msgid "Motor tanker, tug"
+#~ msgstr "slepend MTS"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "NMEA Data Source"
 #~ msgstr "NMEA databron"
+#
+#
+#
+#
+#~ msgid "NMEA Debug Window"
+#~ msgstr "NMEA Debug Window"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6575,6 +8063,14 @@ msgstr "wxFB website"
 #
 #~ msgid "NMEA Options"
 #~ msgstr "NMEA Opties"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6593,8 +8089,34 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Navigational Status:  "
 #~ msgstr "Navigatiestatus: "
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Net"
+#~ msgstr "Net"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6627,9 +8149,57 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#~ msgid "Next"
+#~ msgstr ">>"
+#
+#
+#
+#
+#~ msgid "No"
+#~ msgstr "Nee"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #, fuzzy
 #~ msgid "Number of Radar Rings"
 #~ msgstr "   Aantal te tonen cirkels: "
+#
+#
+#
+#
+#
+#
+#~ msgid "Object, not otherwise specified"
+#~ msgstr "object, niet nader gespecificeerd"
+#
+#
+#
+#
+#
+#
+#~ msgid "Object, towed, not otherwise specified"
+#~ msgstr "gesleept object"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6684,12 +8254,53 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "OpenCPN PlugIn Base Class\n"
 #~ "PlugInManager created this base class"
 #~ msgstr ""
 #~ "OpenCPN PlugIn Basis Klasse\n"
 #~ "PlugInManager heeft deze klasse gecreëerd."
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Other"
+#~ msgstr "andere"
+#
+#
+#
+#
+#~ msgid "Out"
+#~ msgstr "Uit"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Output Message"
+#~ msgstr "Output bericht"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6705,6 +8316,36 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Passenger ship without accomodation"
+#~ msgstr "passagierschip zonder accomodatie"
+#
+#
+#
+#
+#
+#
+#~ msgid "Passenger ship, ferry, cruise ship, red cross ship"
+#~ msgstr "passagierschip binnenvaart"
+#
+#
+#
+#
+#~ msgid "Pause"
+#~ msgstr "Pauzeer"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #, fuzzy
 #~ msgid "Place Trackpoints at distance interval (NMi)"
 #~ msgstr "Plaats trackpunten met afstandinterval van (zeemijl): "
@@ -6714,9 +8355,43 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #, fuzzy
 #~ msgid "Place Trackpoints at time interval (sec)"
 #~ msgstr "Plaats trackpunten met tijdinterval van (seconden):"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Plan speed (Kts)"
+#~ msgstr "Verwachte vaart (knopen)"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pleasure craft, longer than 20 metres"
+#~ msgstr "grote recreatievaart > 20 m"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6744,6 +8419,14 @@ msgstr "wxFB website"
 #
 #~ msgid "PlugInManager searching for PlugIns in location "
 #~ msgstr "PlugInManager zoekt naar PlugIns op lokatie"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6798,8 +8481,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "PlugInManager: Initializing PlugIn: "
 #~ msgstr "PlugInManager: Initialiseert PlugIn: "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6854,8 +8553,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "PlugInManager: UnLoading PlugIn: "
 #~ msgstr "PlugInManager: Verwijdert PlugIn: "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6892,12 +8607,28 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "Position Report Age:       %3d Sec.\n"
 #~ "\n"
 #~ msgstr ""
 #~ "Ouderdom rapportage:           %3d sec\n"
 #~ "\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6943,6 +8674,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "Possible libgps API version mismatch.\n"
 #~ "libgps did not reasonably respond to version request\n"
@@ -6961,6 +8700,10 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Prepare GPS for Route/Waypoint upload and press Send..."
+#~ msgstr ""
+#~ "Maak GPS systeem gereed voor ontvangen van route en routepunten en druk op "
+#~ "Zenden ..."
 #
 #
 #
@@ -6969,10 +8712,178 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Prev"
+#~ msgstr "<<"
 #
 #
-#~ msgid "Printing"
-#~ msgstr "Weergaveoptie Afdrukken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Progress..."
+#~ msgstr "Voortgang ..."
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushboat, single"
+#~ msgstr "duwboot losvarend"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, eight barges at least one tanker or gas barge"
+#~ msgstr "duwboot 8 DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, eight cargo barges"
+#~ msgstr "duwboot met 8 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, five barges at least one tanker or gas barge"
+#~ msgstr "duwboot 5 DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, five cargo barges"
+#~ msgstr "duwboot met 5 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, four barges at least one tanker or gas barge"
+#~ msgstr "duwboot 4 DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, four cargo barges"
+#~ msgstr "duwboot met 4 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, nine or more barges"
+#~ msgstr "duwboot met 9+ vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, nine or more barges at least one tanker or gas barge"
+#~ msgstr "duwboot 9+ DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, one cargo barge"
+#~ msgstr "duwboot met 1 vrachtduwbak"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, one tank/gas barge"
+#~ msgstr "duwboot 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, seven barges at least one tanker or gas barge"
+#~ msgstr "duwboot 7 DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, seven cargo barges"
+#~ msgstr "duwboot met 7 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, six barges at least one tanker or gas barge"
+#~ msgstr "duwboot 6 DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, six cargo barges"
+#~ msgstr "duwboot met 6 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, three barges at least one tanker or gas barge"
+#~ msgstr "duwboot 3 DB - min. 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, three cargo barges"
+#~ msgstr "duwboot met 3 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, two barges at least one tanker or gas barge"
+#~ msgstr "duwboot 2 DB - 1 (G) TDB"
+#
+#
+#
+#
+#
+#
+#~ msgid "Pushtow, two cargo barges"
+#~ msgstr "duwboot met 2 vrachtduwbakken"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6981,6 +8892,14 @@ msgstr "wxFB website"
 #
 #~ msgid "Radar rings"
 #~ msgstr "Weergaveopties Afstandcirkels"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -6999,6 +8918,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Range:                %5.1f NM\n"
 #~ msgstr "Afstand:                %5.1f NM\n"
 #
@@ -7008,8 +8935,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Raster"
 #~ msgstr "Raster"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7028,8 +8971,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Rate Of Turn            %3d Deg./Min. Right\n"
 #~ msgstr "Draaisnelheid:             %3d°/min. SB\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7048,8 +9007,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Rate Of Turn:       > 5 Deg./30 s. Left\n"
 #~ msgstr "Draaisnelheid:             > 5°/30 sec. BB\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7066,6 +9041,38 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Red cross ship"
+#~ msgstr "rode kruis schip"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Reference Station :"
+#~ msgstr "Referentiestation: "
+#
+#
+#
+#
+#~ msgid "Reject"
+#~ msgstr "Verwerp"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #, fuzzy
 #~ msgid "Remove this chart from quilt"
 #~ msgstr "Verwijder deze kaart uit samenvoeging."
@@ -7075,8 +9082,37 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Remove this chart from quilt."
 #~ msgstr "Verwijder deze kaart uit samenvoeging."
+#
+#
+#
+#
+#
+#~ msgid "RenderHPGL: The '%s' instruction is not implemented."
+#~ msgstr "RenderHPGL: de '%s' instructie is niet uitgevoerd."
+#
+#
+#
+#
+#~ msgid "Resume"
+#~ msgstr "Vervolgen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7110,19 +9146,26 @@ msgstr "wxFB website"
 #
 #
 #
-#
-#
-#~ msgid "Route Distance: "
-#~ msgstr "Totale verheid (NM):"
-#
-#
-#
-#
-#
-#
-#
 #~ msgid "Route Properties..."
 #~ msgstr "Route-eigenschappen ..."
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Route Uploaded successfully."
+#~ msgstr "Route goed geladen."
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7140,8 +9183,62 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Select Chart Types for Quilting"
 #~ msgstr "Selecteer kaarttypen voor samenvoeging"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Send"
+#~ msgstr "Zend"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Send Route To GPS"
+#~ msgstr "Zend route naar GPS"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Send to GPS ( "
+#~ msgstr "Zend naar GPS ("
+#
+#
+#
+#
+#
+#
+#~ msgid "Service vessel, police patrol, port service"
+#~ msgstr "dienstvaartuig"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7167,6 +9264,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Settings"
 #~ msgstr "Schermweergave"
 #
@@ -7176,8 +9281,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Show ATON labels"
 #~ msgstr "Toon labels bij navigatiesymbolen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7216,6 +9337,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Show Track icon"
 #~ msgstr "Toon track-icoon"
 #
@@ -7223,8 +9352,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Show layers initially"
 #~ msgstr "Toon kaartlagen initieel"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7247,12 +9392,28 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "Size:                 %dm x %dm x %4.1fm\n"
 #~ "\n"
 #~ msgstr ""
 #~ "Grootte:                %dm x %dm x %4.1fm\n"
 #~ "\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7275,12 +9436,28 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "Size:                 ---m x ---m x %4.1fm\n"
 #~ "\n"
 #~ msgstr ""
 #~ "Grootte:                ---m x ---m x %4.1fm\n"
 #~ "\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7303,12 +9480,28 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid ""
 #~ "Size:               %5.1fm x %4.1fm x %4.1fm\n"
 #~ "\n"
 #~ msgstr ""
 #~ "Grootte:                %5.1fm x %4.1fm x %4.1fm\n"
 #~ "\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7327,12 +9520,42 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "Sound file '%s' is in unsupported format."
+#~ msgstr "Format van dieptebestand '%s' wordt niet ondersteund"
+#
+#
+#
+#
+#
+#
+#~ msgid "Special Position Report"
+#~ msgstr "Speciaal Positierapport"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
 #
 #~ msgid "Speed:                  Unavailable\n"
 #~ msgstr "Vaart:            niet beschikbaar\n"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7349,9 +9572,33 @@ msgstr "wxFB website"
 #
 #
 #
+#~ msgid "T"
+#~ msgstr "Naar"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #~ msgid "TCP/IP WiFi Data Server"
 #~ msgstr "TCP/IP WiFi dataserver"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7370,8 +9617,64 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "TCPA:                 %02d:%02d Hr:Min\n"
 #~ msgstr "TCPA:                 %02d:%02d uur:min\n"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tankbarge"
+#~ msgstr "tankduwbak (TDB)"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tankbarge, dry cargo as if liquid (e.g. cement)"
+#~ msgstr "tankduwbak (TDB), droge lading"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tankbarge, gas"
+#~ msgstr "gas-tankduwbak (GTDB)"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tankbarge, liquid cargo, type C"
+#~ msgstr "tankduwbak (TDB), vloeibare lading, type C"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tankbarge, liquid cargo, type N"
+#~ msgstr "tankduwbak (TDB), vloeibare lading, type N"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7388,6 +9691,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#~ msgid "Tide"
+#~ msgstr "Getijhoogte"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #, fuzzy
 #~ msgid "Tide & Current Dataset Selection"
 #~ msgstr "Getijden && Stromen"
@@ -7396,9 +9717,45 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #, fuzzy
 #~ msgid "Tide/Current Data Selector"
 #~ msgstr "Info getijgrafiek bij aanwijzen"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Today"
+#~ msgstr "Vandaag"
+#
+#
+#
+#
+#
+#
+#
+#
+#~ msgid "Tomorrow"
+#~ msgstr "Morgen"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7415,6 +9772,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Track Properties..."
 #~ msgstr "Track-eigenschappen ..."
 #
@@ -7424,8 +9789,80 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "TrueScale: %8.0f             "
 #~ msgstr "Schaal 1 : %8.0f         "
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug freighter, coupled"
+#~ msgstr "gekoppelde sleep-vrachtschepen"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug, assisting a vessel or linked combination"
+#~ msgstr "sleepboot assisterend"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug, freighter"
+#~ msgstr "sleep-vrachtschip"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug, freighter/tanker, coupled"
+#~ msgstr "gekoppelde sleep-sch. min. 1 SL-TS"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug, one or more tows"
+#~ msgstr "sleepboot, 1 of meer aanhangen"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug, single"
+#~ msgstr "sleepboot, losvarend"
+#
+#
+#
+#
+#
+#
+#~ msgid "Tug, tanker"
+#~ msgstr "sleep-tankschip"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7444,8 +9881,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "UN Ship Type:         "
 #~ msgstr "VN scheepstype: "
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7466,6 +9919,14 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Unable to load libgps"
 #~ msgstr "Kan libgps niet laden."
 #
@@ -7474,8 +9935,42 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#~ msgid "Unavailable"
+#~ msgstr "niet beschikbaar"
+#
+#
+#
+#
+#
+#
+#~ msgid "Unit carrier maritime"
+#~ msgstr "containerschip (zee)"
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Units"
 #~ msgstr "Eenheid voor afstandcirkels"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7490,8 +9985,42 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Use SCAMIN"
 #~ msgstr "Gebruik SCAMIN"
+#
+#
+#
+#
+#
+#
+#~ msgid "Vessel, type unknown"
+#~ msgstr "vaartuig, type onbekend"
+#
+#
+#
+#
+#
+#
+#~ msgid ""
+#~ "Vessel, work maintainance craft, floating derrick, cable-ship, buoy-ship, "
+#~ "dredge"
+#~ msgstr "werkvaartuig"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7508,8 +10037,24 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "WiFi Options"
 #~ msgstr "WiFi opties"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7522,8 +10067,30 @@ msgstr "wxFB website"
 #
 #
 #
+#
+#
+#
+#
+#
+#
+#
+#
 #~ msgid "Y Offset (Positive moves map to North) (NMi Projected) :"
 #~ msgstr "     Y offset (in NM; positief verplaatst kaart naar noorden):"
+#
+#
+#
+#
+#~ msgid "Yes"
+#~ msgstr "Ja"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #
@@ -7533,6 +10100,14 @@ msgstr "wxFB website"
 #
 #~ msgid "cm93 Detail"
 #~ msgstr "cm93 detail"
+#
+#
+#
+#
+#
+#
+#
+#
 #
 #
 #

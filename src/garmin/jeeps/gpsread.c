@@ -29,6 +29,10 @@
 #include <time.h>
 #include <errno.h>
 
+#if defined (__WIN32__)
+#include <windows.h>
+#endif
+
 
 /* @func GPS_Time_Now ***********************************************
 **
@@ -105,12 +109,12 @@ int32 GPS_Serial_Packet_Read(gpsdevh *fd, GPS_PPacket *packet)
 	    {
 		if(u != DLE)
 		{
-		    (void) fprintf(stderr,"GPS_Packet_Read: No DLE.  Data received, but probably not a garmin packet.\n");
-		    (void) fflush(stderr);
+//		    (void) fprintf(stderr,"GPS_Packet_Read: No DLE.  Data received, but probably not a garmin packet.\n");
+//		    (void) fflush(stderr);
 		    return 0;
 		}
-		++len;
-		continue;
+                ++len;
+                continue;
 	    }
 
 	    if(len==1)
@@ -180,6 +184,10 @@ int32 GPS_Serial_Packet_Read(gpsdevh *fd, GPS_PPacket *packet)
 	    }
 	    *p++ = u;
 	}
+#if defined (__WIN32__)
+    if( !GPS_Serial_Chars_Ready(fd) )
+        Sleep(1);
+#endif        
     }
 
 

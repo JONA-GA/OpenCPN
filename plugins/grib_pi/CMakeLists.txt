@@ -42,16 +42,16 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 #ADD_DEFINITIONS( "-Wall -ansi -pedantic -Wno-variadic-macros" )
 #TODO: Should we use  -fno-stack-protector
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
-IF(NOT WIN32)
- ADD_DEFINITIONS( "-Wall -O0 -fexceptions -fvisibility=hidden" )
+IF(NOT WIN32 AND NOT APPLE)
+    ADD_DEFINITIONS( "-Wall -O0 -fexceptions -fvisibility=hidden" )
+    SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bsymbolic")
+ENDIF(NOT WIN32 AND NOT APPLE)
 
- IF(NOT APPLE)
-  SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bsymbolic")
- ELSE(NOT APPLE)
-  SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
- ENDIF(NOT APPLE)
-
-ENDIF(NOT WIN32)
+IF( APPLE )
+   ADD_DEFINITIONS( "-O0 -fexceptions -fvisibility=hidden" )
+   ADD_DEFINITIONS("-Wno-unused -Wno-overloaded-virtual")
+   SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
+ENDIF( APPLE )
 
 # Add some definitions to satisfy MS
 IF(WIN32)
@@ -69,32 +69,51 @@ ENDIF(NOT DEFINED wxWidgets_USE_FILE)
 
 FIND_PACKAGE(Gettext REQUIRED)
 
-# For convenience we define the sources as a variable. You can add 
+# For convenience we define the sources as a variable. You can add
 # header files and cpp/c files and CMake will sort them out
 
 
 SET(SRC_GRIB
             src/grib_pi.h
             src/grib_pi.cpp
-            src/grib.h 
-            src/grib.cpp
-            src/icons.h 
+            src/GribOverlayFactory.cpp
+            src/GribOverlayFactory.h
+            src/GribUIDialogBase.cpp
+            src/GribUIDialogBase.h
+            src/GribUIDialog.cpp
+            src/GribUIDialog.h
+            src/GribSettingsDialog.cpp
+            src/GribSettingsDialog.h
+            src/icons.h
+            src/msg.h
+            src/email.h
+            src/email.cpp
+            src/GribTable.h
+            src/GribTable.cpp
             src/icons.cpp
-            src/GribReader.cpp 
-            src/GribRecord.cpp  
-            src/zuFile.cpp 
+            src/GribReader.cpp
+            src/GribRecord.cpp
+            src/zuFile.cpp
             src/IsoLine.cpp
+
+            ../../src/wxJSON/jsonval.cpp
+            ../../src/wxJSON/jsonreader.cpp
+            ../../src/wxJSON/jsonwriter.cpp
 )
+IF(WIN32)
+           SET(SRC_GRIB ${SRC_GRIB} src/smapi.h)
+           SET(SRC_GRIB ${SRC_GRIB} src/smapi.cpp)
+ENDIF(WIN32)
 ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_GRIB})
 
 IF(NOT UNIX)
     SET(SRC_BZIP
-            src/bzip2/bzlib.c 
-            src/bzip2/blocksort.c 
-            src/bzip2/compress.c 
-            src/bzip2/crctable.c 
-            src/bzip2/decompress.c 
-            src/bzip2/huffman.c 
+            src/bzip2/bzlib.c
+            src/bzip2/blocksort.c
+            src/bzip2/compress.c
+            src/bzip2/crctable.c
+            src/bzip2/decompress.c
+            src/bzip2/huffman.c
             src/bzip2/randtable.c
     )
     ADD_LIBRARY(LIB_BZIP ${SRC_BZIP})
@@ -139,77 +158,6 @@ ENDIF(UNIX AND NOT APPLE)
 IF(WIN32)
 INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME DESTINATION "plugins")
 ENDIF(WIN32)
- 	  	 
-# find src/ -name \*.cpp -or -name \*.c -or -name \*.h -or -name \*.hpp >po/POTFILES.in
-FIND_PROGRAM(GETTEXT_XGETTEXT_EXECUTABLE xgettext)
-IF (GETTEXT_XGETTEXT_EXECUTABLE)
-ADD_CUSTOM_COMMAND(
-   OUTPUT po/${PACKAGE_NAME}.pot.dummy
-   COMMAND ${GETTEXT_XGETTEXT_EXECUTABLE} --force-po --package-name=${PACKAGE_NAME} --package-version="${PACKAGE_VERSION}" --output=po/${PACKAGE_NAME}.pot  --keyword=_ --width=80 --files-from=${CMAKE_CURRENT_SOURCE_DIR}/po/POTFILES.in
-   DEPENDS po/POTFILES.in po/${PACKAGE_NAME}.pot
-   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-   COMMENT "grib-pot-update [${PACKAGE_NAME}]: Generated pot file."
-)
-ADD_CUSTOM_TARGET(grib-pot-update COMMENT "grib-pot-update: Done." DEPENDS po/${PACKAGE_NAME}.pot.dummy)
 
-ENDIF(GETTEXT_XGETTEXT_EXECUTABLE )
-
-MACRO(GETTEXT_UPDATE_PO _potFile)
-   SET(_poFiles ${_potFile})
-   GET_FILENAME_COMPONENT(_absPotFile ${_potFile} ABSOLUTE)
-
-   FOREACH (_currentPoFile ${ARGN})
-      GET_FILENAME_COMPONENT(_absFile ${_currentPoFile} ABSOLUTE)
-      GET_FILENAME_COMPONENT(_poBasename ${_absFile} NAME_WE)
-
-      ADD_CUSTOM_COMMAND(
-         OUTPUT ${_absFile}.dummy
-         COMMAND ${GETTEXT_MSGMERGE_EXECUTABLE} --width=80 --strict --quiet --update --backup=none --no-location -s ${_absFile} ${_absPotFile}
-         DEPENDS ${_absPotFile} ${_absFile}
-         COMMENT "grib-po-update [${_poBasename}]: Updated po file."
-      )
-
-      SET(_poFiles ${_poFiles} ${_absFile}.dummy)
-
-   ENDFOREACH (_currentPoFile )
-
-   ADD_CUSTOM_TARGET(grib-po-update COMMENT "grib-po-update: Done." DEPENDS ${_poFiles})
-ENDMACRO(GETTEXT_UPDATE_PO)
-
-IF (GETTEXT_MSGMERGE_EXECUTABLE)
-FILE(GLOB PACKAGE_PO_FILES po/*.po)
-GETTEXT_UPDATE_PO(po/${PACKAGE_NAME}.pot ${PACKAGE_PO_FILES})
-ENDIF(GETTEXT_MSGMERGE_EXECUTABLE)
-
-SET(_gmoFiles)
-MACRO(GETTEXT_BUILD_MO)
-   FOREACH (_poFile ${ARGN})
-      GET_FILENAME_COMPONENT(_absFile ${_poFile} ABSOLUTE)
-      GET_FILENAME_COMPONENT(_poBasename ${_absFile} NAME_WE)
-      SET(_gmoFile ${CMAKE_CURRENT_BINARY_DIR}/${_poBasename}.mo)
-
-      ADD_CUSTOM_COMMAND(
-         OUTPUT ${_gmoFile}
-         COMMAND ${GETTEXT_MSGFMT_EXECUTABLE} --check -o ${_gmoFile} ${_absFile}
-         DEPENDS ${_absFile}
-         COMMENT "grib-i18n [${_poBasename}]: Created mo file."
-      )
-
-IF(APPLE)
-      INSTALL(FILES ${_gmoFile} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app/Contents/Resources/${_poBasename}.lproj RENAME opencpn-${PACKAGE_NAME}.mo )
-ELSE(APPLE)
-      INSTALL(FILES ${_gmoFile} DESTINATION ${PREFIX_DATA}/locale/${_poBasename}/LC_MESSAGES RENAME opencpn-${PACKAGE_NAME}.mo )
-ENDIF(APPLE)
-
-      SET(_gmoFiles ${_gmoFiles} ${_gmoFile})
-   ENDFOREACH (_poFile )
-ENDMACRO(GETTEXT_BUILD_MO)
-
-if(GETTEXT_MSGFMT_EXECUTABLE)
-   FILE(GLOB PACKAGE_PO_FILES po/*.po)
-   GETTEXT_BUILD_MO(${PACKAGE_PO_FILES})
-   ADD_CUSTOM_TARGET(grib-i18n COMMENT "grib-i18n: Done." DEPENDS ${_gmoFiles})
-   #ADD_DEPENDENCIES(grib-i18n ${PACKAGE_PO_FILES})
-   ADD_DEPENDENCIES(${PACKAGE_NAME} grib-i18n)
-ENDIF(GETTEXT_MSGFMT_EXECUTABLE)
-
+INCLUDE("../PluginLocalization.cmake")
+PLUGIN_LOCALIZATION()

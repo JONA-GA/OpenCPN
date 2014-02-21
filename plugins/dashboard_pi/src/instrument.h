@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  * $Id: instrument.h, v1.0 2010/08/30 SethDart Exp $
  *
  * Project:  OpenCPN
@@ -37,6 +37,7 @@
 // Required GetGlobalColor
 #include "../../../include/ocpn_plugin.h"
 #include <wx/dcbuffer.h>
+#include <wx/dcgraph.h>         // supplemental, for Mac
 
 const wxString DEGREE_SIGN = wxString::Format(_T("%c"), 0x00B0); // This is the degree sign in UTF8. It should be correctly handled on both Win & Unix
 #define DefaultWidth 150
@@ -79,8 +80,11 @@ enum
     OCPN_DBP_STC_CLK = 1 << 21,
     OCPN_DBP_STC_MON = 1 << 22,
     OCPN_DBP_STC_ATMP = 1 << 23, //AirTemp
-	OCPN_DBP_STC_TWD = 1 << 24,
-	OCPN_DBP_STC_TWS2 = 1 << 25
+    OCPN_DBP_STC_TWD = 1 << 24,
+    OCPN_DBP_STC_TWS2 = 1 << 25,
+    OCPN_DBP_STC_VLW1 = 1 << 26, // Trip Log
+    OCPN_DBP_STC_VLW2 = 1 << 27,  // Sum Log
+    OCPN_DBP_STC_MDA = 1 << 28  // Bareometic pressure
 };
 
 class DashboardInstrument : public wxControl
@@ -94,6 +98,7 @@ public:
       virtual wxSize GetSize( int orient, wxSize hint ) = 0;
       void OnPaint(wxPaintEvent& WXUNUSED(event));
       virtual void SetData(int st, double data, wxString unit) = 0;
+      void SetDrawSoloInPane(bool value);
 
       int               instrumentTypeId;
 
@@ -103,6 +108,8 @@ protected:
       wxString          m_title;
 
       virtual void Draw(wxGCDC* dc) = 0;
+private:
+    bool m_drawSoloInPane;
 };
 
 class DashboardInstrument_Single : public DashboardInstrument

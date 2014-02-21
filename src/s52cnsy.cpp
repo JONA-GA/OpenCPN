@@ -45,6 +45,8 @@ bool GetDoubleAttr(S57Obj *obj, const char *AttrName, double &val);
 
 #define UNKNOWN 1e6 //HUGE_VAL   // INFINITY/NAN
 
+WX_DEFINE_ARRAY_DOUBLE(double, ArrayOfSortedDoubles);
+
 
 // size of attributes value list buffer
 #define LISTSIZE   16   // list size
@@ -55,6 +57,25 @@ wxString *CSQUAPNT01(S57Obj *obj);
 wxString *CSQUALIN01(S57Obj *obj);
 
 
+
+wxArrayPtrVoid *GetChartFloatingATONArray( ObjRazRules *rzRules )
+{
+    S57Obj *obj = rzRules->obj;
+    if( obj->m_chart_context->chart )
+        return obj->m_chart_context->chart->pFloatingATONArray;
+    else
+        return obj->m_chart_context->pFloatingATONArray;
+    
+}
+
+wxArrayPtrVoid *GetChartRigidATONArray( ObjRazRules *rzRules )
+{
+    S57Obj *obj = rzRules->obj;
+    if( obj->m_chart_context->chart )
+        return obj->m_chart_context->chart->pRigidATONArray;
+    else
+        return obj->m_chart_context->pRigidATONArray;
+}
 
 static void *CLRLIN01(void *param)
 {
@@ -150,43 +171,60 @@ static void *DATCVR01(void *param)
 
 }
 
+
+bool GetIntAttr(S57Obj *obj, const char *AttrName, int &val)
+{
+    int idx = obj->GetAttributeIndex(AttrName);
+    
+    if(idx >= 0) {
+        //      using idx to get the attribute value
+         S57attVal *v = obj->attVal->Item(idx);
+        val = *(int*)(v->value);
+        
+        return true;
+    }
+    else
+        return false;
+        
+}
+#if 0
 bool GetIntAttr(S57Obj *obj, const char *AttrName, int &val)
 {
     char *attList = (char *)calloc(obj->attList->Len()+1, 1);
     strncpy(attList, obj->attList->mb_str(), obj->attList->Len());
-
-        char *patl = attList;
-        char *patr;
-        int idx = 0;
-        while(*patl)
+    
+    char *patl = attList;
+    char *patr;
+    int idx = 0;
+    while(*patl)
+    {
+        patr = patl;
+        while(*patr != '\037')
+            patr++;
+        
+        if(!strncmp(patl, AttrName, 6))
+            break;
+        
+        patl = patr + 1;
+        idx++;
+    }
+    
+    if(!*patl)                                     // Requested Attribute not found
         {
-                patr = patl;
-                while(*patr != '\037')
-                        patr++;
-
-                if(!strncmp(patl, AttrName, 6))
-                        break;
-
-                patl = patr + 1;
-                idx++;
+            free(attList);
+            return false;                            // so don't return a value
         }
-
-        if(!*patl)                                     // Requested Attribute not found
-        {
-              free(attList);
-              return false;                            // so don't return a value
-        }
-
-//      using idx to get the attribute value
+        
+        //      using idx to get the attribute value
         wxArrayOfS57attVal      *pattrVal = obj->attVal;
-
-        S57attVal *v = pattrVal->Item(idx);
-        val = *(int*)(v->value);
-
-        free(attList);
-        return true;
+    
+    S57attVal *v = pattrVal->Item(idx);
+    val = *(int*)(v->value);
+    
+    free(attList);
+    return true;
 }
-
+#endif
 /*
 bool GetFloatAttr(S57Obj *obj, char *AttrName, float &val)
 {
@@ -227,124 +265,53 @@ bool GetFloatAttr(S57Obj *obj, char *AttrName, float &val)
 */
 bool GetDoubleAttr(S57Obj *obj, const char *AttrName, double &val)
 {
-    char *attList = (char *)calloc(obj->attList->Len()+1, 1);
-    strncpy(attList, obj->attList->mb_str(), obj->attList->Len());
-
-    char *patl = attList;
-    char *patr;
-    int idx = 0;
-    while(*patl)
-    {
-        patr = patl;
-        while(*patr != '\037')
-            patr++;
-
-        if(!strncmp(patl, AttrName, 6))
-            break;
-
-        patl = patr + 1;
-        idx++;
-    }
-
-    if(!*patl)                                        // Requested Attribute not found
-    {
-        free(attList);
-        return false;
-    }
-
+    int idx = obj->GetAttributeIndex(AttrName);
+    
+    if(idx >= 0) {
 //      using idx to get the attribute value
-    wxArrayOfS57attVal      *pattrVal = obj->attVal;
 
-    S57attVal *v = pattrVal->Item(idx);
-    val = *(double*)(v->value);
+        S57attVal *v = obj->attVal->Item(idx);
+        val = *(double*)(v->value);
 
-    free(attList);
-    return true;
+        return true;
+    }
+    else
+        return false;
 }
 
 
 bool GetStringAttr(S57Obj *obj, const char *AttrName, char *pval, int nc)
 {
-    *pval = 0;
-    char *attList = (char *)calloc(obj->attList->Len()+1, 1);
-    strncpy(attList, obj->attList->mb_str(), obj->attList->Len());
-//        char *attList = (char *)(obj->attList->);        //attList is wxString
-
-        char *patl = attList;
-        char *patr;
-        int idx = 0;
-        while(*patl)
-        {
-                patr = patl;
-                while(*patr != '\037')
-                        patr++;
-
-                if(!strncmp(patl, AttrName, 6))
-                        break;
-
-                patl = patr + 1;
-                idx++;
-        }
-
-        if(!*patl)
-        {
-              free(attList);
-              return false;
-        }
-
-//      using idx to get the attribute value
-        wxArrayOfS57attVal      *pattrVal = obj->attVal;
-
-        S57attVal *v = pattrVal->Item(idx);
+    int idx = obj->GetAttributeIndex(AttrName);
+    
+    if(idx >= 0) {
+        //      using idx to get the attribute value
+        S57attVal *v = obj->attVal->Item(idx);
 
         char *val = (char *)(v->value);
 
         strncpy(pval, val, nc);
 
-        free(attList);
         return true;
+    }
+    else
+        return false;
 }
 
 wxString *GetStringAttrWXS(S57Obj *obj, const char *AttrName)
 {
-
-    char *attList = (char *)calloc(obj->attList->Len()+1, 1);
-    strncpy(attList, obj->attList->mb_str(), obj->attList->Len());
-//        char *attList = (char *)(obj->attList->);        //attList is wxString
-
-        char *patl = attList;
-        char *patr;
-        int idx = 0;
-        while(*patl)
-        {
-                patr = patl;
-                while(*patr != '\037')
-                        patr++;
-
-                if(!strncmp(patl, AttrName, 6))
-                        break;
-
-                patl = patr + 1;
-                idx++;
-        }
-
-        if(!*patl)
-        {
-              free(attList);
-              return NULL;
-        }
-
-//      using idx to get the attribute value
-        wxArrayOfS57attVal      *pattrVal = obj->attVal;
-
-        S57attVal *v = pattrVal->Item(idx);
-
+    int idx = obj->GetAttributeIndex(AttrName);
+    
+    if(idx >= 0) {
+        //      using idx to get the attribute value
+        S57attVal *v = obj->attVal->Item(idx);
+        
         char *val = (char *)(v->value);
-
-        wxString *ret = new wxString(val,  wxConvUTF8);
-
-        free(attList);
-        return ret;
+        
+        return new wxString(val,  wxConvUTF8);
+    }
+    else
+        return NULL;
 }
 
 static int      _parseList(const char *str_in, char *buf, int buf_size)
@@ -595,14 +562,25 @@ static wxString *_UDWHAZ03(S57Obj *obj, double depth_value, ObjRazRules *rzRules
 
         // get area DEPARE & DRGARE that intersect this point/line/area
 
-        ListOfS57Obj *pobj_list = rzRules->chart->GetAssociatedObjects(obj);
+        ListOfS57Obj *pobj_list = NULL;
 
-        wxListOfS57ObjNode *node = pobj_list->GetFirst();
-        while(node)
-        {
-              S57Obj *ptest_obj = node->GetData();
-              if(GEO_LINE == ptest_obj->Primitive_type)
-              {
+        
+        if( obj->m_chart_context->chart )
+            pobj_list = obj->m_chart_context->chart->GetAssociatedObjects(obj);
+        else{
+            danger = false;
+//            wxString *ret_str = new wxString(udwhaz03str);
+//            return ret_str;
+        }
+            
+
+        if( pobj_list ){    
+            wxListOfS57ObjNode *node = pobj_list->GetFirst();
+            while(node)
+            {
+                S57Obj *ptest_obj = node->GetData();
+                if(GEO_LINE == ptest_obj->Primitive_type)
+                {
                     double drval2 = 0.0;
                     GetDoubleAttr(ptest_obj, "DRVAL2", drval2);
 
@@ -611,9 +589,9 @@ static wxString *_UDWHAZ03(S57Obj *obj, double depth_value, ObjRazRules *rzRules
                           danger = TRUE;
                           break;
                     }
-              }
-              else
-              {
+                }
+                else
+                {
                     double drval1 = 0.0;
                     GetDoubleAttr(ptest_obj, "DRVAL1", drval1);
 
@@ -622,11 +600,12 @@ static wxString *_UDWHAZ03(S57Obj *obj, double depth_value, ObjRazRules *rzRules
                           danger = TRUE;
                           break;
                     }
-              }
-              node = node->GetNext();
-        }
+                }
+                node = node->GetNext();
+            }
 
-        delete pobj_list;
+            delete pobj_list;
+        }
     }
 
     if (TRUE == danger)
@@ -656,6 +635,11 @@ static wxString *_UDWHAZ03(S57Obj *obj, double depth_value, ObjRazRules *rzRules
                 S57_setAtt(geo, "SCAMIN", "INFINITE");
             }
 */
+    }
+    // This is an enhancement to the original PLIB spec
+    //  It forces all obstructions (rocks/wrecks) to be in category "Standard", at least
+    else{
+        rzRules->obj->m_DisplayCat = STANDARD;
     }
 
 
@@ -847,12 +831,19 @@ static void *DEPCNT02 (void *param)
             }
             else
             {
-                  double next_safe_contour;
-                  if(rzRules->chart->GetNearestSafeContour(safety_contour, next_safe_contour))
-                  {
-                        if (drval1 == next_safe_contour)
+                  double next_safe_contour = 1e6;
+                  if( obj->m_chart_context->chart ){
+                      next_safe_contour = obj->m_chart_context->chart->GetCalculatedSafetyContour();
+                      if (drval1 == next_safe_contour)
                               safe = TRUE;
                   }
+                  else {
+                      next_safe_contour = obj->m_chart_context->safety_contour;
+                      
+                      if (fabs(drval1 - next_safe_contour) < 1e-4)
+                          safe = true;    
+                  }
+                  
 //                  safe = FALSE;            //for debug
                               /*
                   if (1 == S52_state)
@@ -899,13 +890,19 @@ static void *DEPCNT02 (void *param)
                   safe = TRUE;   // this is useless !?!?
             else
             {
-                  double next_safe_contour;
-                  if(rzRules->chart->GetNearestSafeContour(safety_contour, next_safe_contour))
-                  {
-                        if (valdco == next_safe_contour)
+                  double next_safe_contour = 1e6;
+                  if( obj->m_chart_context->chart ){
+                      next_safe_contour = obj->m_chart_context->chart->GetCalculatedSafetyContour();
+                      if (valdco == next_safe_contour)
                               safe = TRUE;
                   }
-
+                  else{
+                    next_safe_contour = obj->m_chart_context->safety_contour;
+                      
+                    if (fabs(valdco - next_safe_contour) < 1e-4)
+                      safe = true;
+                  }
+                             
 
 /*
                   if (valdco > safety_contour)
@@ -951,9 +948,9 @@ static void *DEPCNT02 (void *param)
                   if (safe) {
                       wxString safeCntr = _T("LS(DASH,2,DEPSC)");
                       S57Obj tempObj;
-                      tempObj.attList = new wxString();
                       LUPrec* safelup = ps52plib->S52_LUPLookup( PLAIN_BOUNDARIES, "SAFECD", &tempObj, false );
-                      if( safelup ) safeCntr = *safelup->INST;
+                      if( safelup )
+                          safeCntr = *safelup->INST;
                       rule_str = _T(";") + safeCntr;
                   }
                   else
@@ -963,9 +960,9 @@ static void *DEPCNT02 (void *param)
             if (safe) {
                 wxString safeCntr = _T("LS(SOLD,2,DEPSC)");
                 S57Obj tempObj;
-                tempObj.attList = new wxString();
                 LUPrec* safelup = ps52plib->S52_LUPLookup( PLAIN_BOUNDARIES, "SAFECN", &tempObj, false );
-                if( safelup ) safeCntr = *safelup->INST;
+                if( safelup )
+                    safeCntr = *safelup->INST;
                 rule_str = _T(";") + safeCntr;
             }
             else
@@ -1182,15 +1179,17 @@ static void *LIGHTS05 (void *param)
     GetDoubleAttr(obj, "VALNMR", valnmr);
 
 
-    char catlitstr[20];
+    char catlitstr[20] = {'\0'};
     GetStringAttr(obj, "CATLIT", catlitstr, 19);
 
-    char litvisstr[20];
+    char litvisstr[20] = {'\0'};;
     GetStringAttr(obj, "LITVIS", litvisstr, 19);
 
 
     char     catlit[LISTSIZE]  = {'\0'};
     char     litvis[LISTSIZE]  = {'\0'};
+    char     col_str[20] = {'\0'};
+    
     bool     flare_at_45       = false;
     double   sectr1            = UNKNOWN_DOUBLE;
     double   sectr2            = UNKNOWN_DOUBLE;
@@ -1229,7 +1228,6 @@ static void *LIGHTS05 (void *param)
 
     // Continuation A
 
-    char col_str[20];
     GetStringAttr(obj, "COLOUR", col_str, 19);
 
     if (strlen(col_str))
@@ -1255,7 +1253,7 @@ static void *LIGHTS05 (void *param)
 
         wxString ssym;
 
-        if(_atPtPos(obj, rzRules->chart->pFloatingATONArray, false))          // Is this LIGHTS feature colocated with ...ANY... floating aid?
+        if(_atPtPos(obj, GetChartFloatingATONArray( rzRules ), false))          // Is this LIGHTS feature colocated with ...ANY... floating aid?
         {
             flare_at_45 = false;
 
@@ -1516,7 +1514,7 @@ static void *OBSTRN04a(void *param)
 }
 */
 
-wxString *SNDFRM02(S57Obj *obj, double depth_value);
+wxString SNDFRM02(S57Obj *obj, double depth_value);
 
 static void *OBSTRN04 (void *param)
 // Remarks: Obstructions or isolated underwater dangers of depths less than the safety
@@ -1544,7 +1542,7 @@ static void *OBSTRN04 (void *param)
       double   depth_value = UNKNOWN;
       double   least_depth = UNKNOWN;
 
-      wxString *sndfrm02str = NULL;
+      wxString sndfrm02str;
       wxString *quapnt01str = NULL;
 
       GetDoubleAttr(obj, "VALSOU", valsou);
@@ -1702,7 +1700,7 @@ static void *OBSTRN04 (void *param)
              }
 
              if (sounding)
-                  obstrn04str.Append(*sndfrm02str);
+                  obstrn04str.Append(sndfrm02str);
 
              obstrn04str.Append(*quapnt01str);
 
@@ -1713,47 +1711,49 @@ static void *OBSTRN04 (void *param)
       {
              if (GEO_LINE == obj->Primitive_type)
              {
-                         goto end;
-                         /*
-            // Continuation B
-                  GString *quaposstr = S57_getAttVal(geo, "QUAPOS");
-                  int      quapos    = 0;
+                 // Continuation B
+                 
+                 quapnt01str = CSQUAPNT01(obj);
+                 
+                 if( quapnt01str->Len() > 1 ) {
+                     long quapos;
+                     quapnt01str->ToLong(&quapos);
+                     if ( 2 <= quapos && quapos < 10){
+                         if (udwhaz03str->Len())
+                             obstrn04str.Append(_T(";LC(LOWACC41)"));
+                         else
+                             obstrn04str.Append(_T(";LC(LOWACC31)"));
+                     }
+                     goto end;
+                 }
+                 
+                 if ( udwhaz03str->Len() )
+                 {
+                     obstrn04str.Append( _T("LS(DOTT,2,CHBLK)") );
+                     goto end;
+                 }
 
-                  if (NULL != quaposstr) {
-                        quapos = atoi(quaposstr->str);
-                        if ( 2 <= quapos && quapos < 10){
-                              if (NULL != udwhaz03str)
-                                    g_string_append(obstrn04str, ";LC(LOWACC41)");
-                              else
-                                    g_string_append(obstrn04str, ";LC(LOWACC31)");
-                        }
-                  }
+                 if (UNKNOWN != valsou){
+                     if (valsou <= 20.0)
+                         obstrn04str.Append( _T(";LS(DOTT,2,CHBLK)") );
+                     else
+                         obstrn04str.Append( _T(";LS(DASH,2,CHBLK)") );
+                 }
+                 else
+                     obstrn04str.Append( _T(";LS(DOTT,2,CHBLK)") );
 
-                  if (NULL != udwhaz03str)
-                        g_string_append(obstrn04str, ";LS(DOTT,2,CHBLK)");
-
-                  if (UNKNOWN != valsou)
+                 
+                 if (udwhaz03str->Len()){
+                        //  Show the isolated danger symbol at the midpoint of the line
+                    }
+                 else {
+                    if (UNKNOWN != valsou)
                         if (valsou <= 20.0)
-                              g_string_append(obstrn04str, ";LS(DOTT,2,CHBLK)");
-                  else
-                        g_string_append(obstrn04str, ";LS(DASH,2,CHBLK)");
-                  else
-                        g_string_append(obstrn04str, ";LS(DOTT,2,CHBLK)");
-
-
-                  if (NULL != udwhaz03str)
-                        g_string_append(obstrn04str, udwhaz03str->str);
-                  else {
-                        if (UNKNOWN != valsou)
-                              if (valsou <= 20.0)
-                                    g_string_append(obstrn04str, sndfrm02str->str);
-                  }
-
-                  return obstrn04str;
-                         */
+                            obstrn04str.Append(sndfrm02str);
+                 }
                }
 
-            else
+            else                // Area feature
             {
                   quapnt01str = CSQUAPNT01(obj);
 
@@ -1777,7 +1777,7 @@ static void *OBSTRN04 (void *param)
                         else
                               obstrn04str.Append(_T(";LS(DASH,2,CHBLK)"));
 
-                        obstrn04str.Append(*sndfrm02str);
+                        obstrn04str.Append(sndfrm02str);
 
                   } else {
                         int watlev = -9;
@@ -1872,7 +1872,6 @@ end:
     strcpy(r, obstrn04str.mb_str());
 
     delete udwhaz03str;
-    delete sndfrm02str;
     delete quapnt01str;
 
     return r;
@@ -2093,6 +2092,13 @@ static void *SLCONS03(void *param)
                 cmdw ="SY(LOWACC01)";
         }
     } else {
+        
+        // This instruction not found in PLIB 3.4, but seems to appear in later PLIB implementations
+        // by commercial ECDIS providers, so.....
+        if (GEO_AREA == obj->Primitive_type) {
+            slcons03 = _T("AP(CROSSX01);");
+        }
+            
         // GEO_LINE and GEO_AREA are the same
         if (bquapos) {
             if (2 <= quapos && quapos < 10)
@@ -2106,7 +2112,7 @@ static void *SLCONS03(void *param)
                 ival = 0;
                 bvalstr  = GetIntAttr(obj, "CATSLC", ival);
 
-                if (bvalstr && ( 6  == ival || 15 == ival || 16 == ival ))
+                if (bvalstr && ( 4 == ival || 6  == ival || 8  == ival || 15 == ival || 16 == ival ))
                     cmdw = "LS(SOLD,4,CSTLN)";
                 else {
                     bvalstr = GetIntAttr(obj, "WATLEV", ival);
@@ -2481,7 +2487,7 @@ static void *SNDFRM02(void *param)
 }
 */
 
-wxString *SNDFRM02(S57Obj *obj, double depth_value);
+wxString SNDFRM02(S57Obj *obj, double depth_value);
 
 static void *SOUNDG02(void *param)
 // Remarks: In S-57 soundings are elements of sounding arrays rather than individual
@@ -2508,18 +2514,17 @@ static void *SOUNDG03(void *param)
     ObjRazRules *rzRules = (ObjRazRules *)param;
     S57Obj *obj = rzRules->obj;
 
-    wxString *s = SNDFRM02(obj, obj->z);
+    wxString s = SNDFRM02(obj, obj->z);
 
-    char *r = (char *)malloc(s->Len() + 1);
-    strcpy(r, s->mb_str());
+    char *r = (char *)malloc(s.Len() + 1);
+    strcpy(r, s.mb_str());
 
-    delete s;
     return r;
 }
 
 
 
-wxString *SNDFRM02(S57Obj *obj, double depth_value_in)
+wxString SNDFRM02(S57Obj *obj, double depth_value_in)
 // Remarks: Soundings differ from plain text because they have to be readable under all
 // circumstances and their digits are placed according to special rules. This
 // conditional symbology procedure accesses a set of carefully designed
@@ -2617,26 +2622,46 @@ wxString *SNDFRM02(S57Obj *obj, double depth_value_in)
 
     // Continuation A
     if (depth_value < 10.0) {
-        // can be above water (negative)
-        int fraction = (int)ABS((depth_value - leading_digit)*10);
+        
+        //      If showing as "feet", round off to one digit only
+        if( (ps52plib->m_nDepthUnitDisplay == 0) && (depth_value > 0) ){
+            double r1 = depth_value ;
+            depth_value = wxRound( r1 ) ;
+            leading_digit = (int) depth_value;
+        }
+        
+        if (depth_value < 10.0) {
+            // can be above water (negative)
+            int fraction = (int)ABS((depth_value - leading_digit)*10);
 
 
-        sprintf(temp_str, ";SY(%s1%1i)", symbol_prefix_a, (int)ABS(leading_digit));
-        sndfrm02.Append(wxString(temp_str, wxConvUTF8));
-        sprintf(temp_str, ";SY(%s5%1i)", symbol_prefix_a, fraction);
-        if(fraction > 0)
+            sprintf(temp_str, ";SY(%s1%1i)", symbol_prefix_a, (int)ABS(leading_digit));
             sndfrm02.Append(wxString(temp_str, wxConvUTF8));
+            if(fraction > 0) {
+                sprintf(temp_str, ";SY(%s5%1i)", symbol_prefix_a, fraction);
+                sndfrm02.Append(wxString(temp_str, wxConvUTF8));
+            }
 
         // above sea level (negative)
-        if (depth_value < 0.0)
-        {
-            sprintf(temp_str, ";SY(%sA1)", symbol_prefix_a);
-            sndfrm02.Append(wxString(temp_str, wxConvUTF8));
+            if (depth_value < 0.0)
+            {
+                sprintf(temp_str, ";SY(%sA1)", symbol_prefix_a);
+                sndfrm02.Append(wxString(temp_str, wxConvUTF8));
+            }
+            goto return_point;
         }
-        goto return_point;
     }
 
     if (depth_value < 31.0) {
+        
+        //      If showing as "feet", round off to two digits only
+        if( (ps52plib->m_nDepthUnitDisplay == 0) && (depth_value > 0) ){
+            double r1 = depth_value ;
+            depth_value = wxRound( r1 ) ;
+            leading_digit = (int) depth_value;
+        }
+            
+            
         double fraction = depth_value - floor(leading_digit);
 
         if (fraction != 0.0) {
@@ -2651,9 +2676,10 @@ wxString *SNDFRM02(S57Obj *obj, double depth_value_in)
             int secnd_digit = (int)(floor(leading_digit - (first_digit * 10)));
             sprintf(temp_str, ";SY(%s1%1i)", symbol_prefix_a, secnd_digit/*(int)leading_digit*/);
             sndfrm02.Append(wxString(temp_str, wxConvUTF8));
-            sprintf(temp_str, ";SY(%s5%1i)", symbol_prefix_a, (int)fraction);
-            if((int)fraction > 0)
+            if((int)fraction > 0) {
+                sprintf(temp_str, ";SY(%s5%1i)", symbol_prefix_a, (int)fraction);
                 sndfrm02.Append(wxString(temp_str, wxConvUTF8));
+            }
 
             goto return_point;
         }
@@ -2734,16 +2760,11 @@ wxString *SNDFRM02(S57Obj *obj, double depth_value_in)
 return_point:
         sndfrm02.Append('\037');
 
-        wxString *r = new wxString(sndfrm02);
-
-/*        char *r = (char *)malloc(sndfrm02.Len() + 1);
-        strcpy(r, sndfrm02.mb_str());
-*/
         delete tecsoustr;
         delete quasoustr;
         delete statusstr;
 
-        return r;
+        return sndfrm02;
 }
 
 
@@ -2753,7 +2774,7 @@ static void *TOPMAR01 (void *param)
 // searches for platforms by looking for other objects that are located at the
 // same position.. Based on the finding whether the platform is rigid or
 // floating, the respective upright or sloping symbol is selected and presented
-// at the objects location. Buoy symbols and topmark symbols have been
+// at the objects location. Buoyf symbols and topmark symbols have been
 // carefully designed to fit to each other when combined at the same position.
 // The result is a composed symbol that looks like the traditional symbols the
 // mariner is used to.
@@ -2773,11 +2794,11 @@ static void *TOPMAR01 (void *param)
         int topshp      = (!battr) ? 0 : top_int;
 
 
-        if (TRUE == _atPtPos(obj, rzRules->chart->pFloatingATONArray, false))
+        if (TRUE == _atPtPos(obj, GetChartFloatingATONArray( rzRules ), false))
             floating = TRUE;
         else
             // FIXME: this test is wierd since it doesn't affect 'floating'
-            if (TRUE == _atPtPos(obj, rzRules->chart->pRigidATONArray, false))
+            if (TRUE == _atPtPos(obj, GetChartRigidATONArray( rzRules ), false))
                 floating = FALSE;
 
 
@@ -2933,7 +2954,7 @@ static void *WRECKS02 (void *param)
 // called by this symbology procedure.
 {
     wxString wrecks02str;
-    wxString *sndfrm02str = NULL;
+    wxString sndfrm02str;
     wxString *udwhaz03str = NULL;
     wxString *quapnt01str = NULL;
     double   least_depth = UNKNOWN;
@@ -3071,8 +3092,7 @@ static void *WRECKS02 (void *param)
 				if ( 7 == quasou ) //Fixes FS 165
 					wrecks02str.Append(_T(";SY(WRECKS07)"));
 
-                if (NULL != sndfrm02str)                          // always show valsou depth
-                        wrecks02str.Append(*sndfrm02str);
+                wrecks02str.Append(sndfrm02str);       // always show valsou depth
 ///////////////////////////////////////////
 
                 wrecks02str.Append(*udwhaz03str);
@@ -3156,7 +3176,7 @@ static void *WRECKS02 (void *param)
             if (valsou <= 20) {
                     wrecks02str.Append(*udwhaz03str);
                     wrecks02str.Append(*quapnt01str);
-                    wrecks02str.Append(*sndfrm02str);
+                    wrecks02str.Append(sndfrm02str);
 
             } else {
                 // NOTE: ??? same as above ???
@@ -3190,7 +3210,6 @@ static void *WRECKS02 (void *param)
     char *r = (char *)malloc(wrecks02str.Len() + 1);
     strcpy(r, wrecks02str.mb_str());
 
-    delete sndfrm02str;
     delete udwhaz03str;
     delete quapnt01str;
 
@@ -3316,7 +3335,7 @@ static wxString _LITDSN01(S57Obj *obj)
 
 
      // SIGGRP, (c)(c) ...
-      char grp_str[20] = {'\0'};;
+      char grp_str[20] = {'\0'};
       GetStringAttr(obj, "SIGGRP", grp_str, 19);
       if(strlen(grp_str))
       {
@@ -3358,7 +3377,7 @@ static wxString _LITDSN01(S57Obj *obj)
       }
 
       // COLOUR,
-      char col_str[20];
+      char col_str[20] = {'\0'};
 
       // Don't show for sectored lights since we are only showing one of the sectors.
       double sectrTest;

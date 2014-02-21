@@ -67,8 +67,8 @@ IF (NOT WIN32)
   SET (LIB_INSTALL_DIR "lib")
   IF (EXISTS /etc/debian_version)
     SET (PACKAGE_FORMAT "DEB")
-    SET (PACKAGE_DEPS "libc6, libwxgtk2.8-0 (>= 2.8.7.1), libglu1-mesa (>= 7.0.0), libgl1-mesa-glx (>= 7.0.0), zlib1g, bzip2, libsdl1.2debian, libtinyxml2.6.2")
-    SET (PACKAGE_RECS "xcalib")
+    SET (PACKAGE_DEPS "libc6, libwxgtk2.8-0 (>= 2.8.7.1), libglu1-mesa (>= 7.0.0), libgl1-mesa-glx (>= 7.0.0), zlib1g, bzip2, libtinyxml2.6.2, libportaudio2")
+    SET (PACKAGE_RECS "xcalib,xdg-utils")
     SET (LIB_INSTALL_DIR "lib")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "amd64")
@@ -79,7 +79,7 @@ IF (NOT WIN32)
   ENDIF (EXISTS /etc/debian_version)
   IF (EXISTS /etc/redhat-release)
     SET (PACKAGE_FORMAT "RPM")
-    SET (PACKAGE_DEPS  "wxGTK mesa-libGLU mesa-libGL gettext zlib bzip2")
+    #    SET (PACKAGE_DEPS  "wxGTK mesa-libGLU mesa-libGL gettext zlib bzip2 portaudio")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "x86_64")
       SET (LIB_INSTALL_DIR "lib64")
@@ -90,7 +90,7 @@ IF (NOT WIN32)
   ENDIF (EXISTS /etc/redhat-release)
   IF (EXISTS /etc/suse-release OR EXISTS /etc/SuSE-release)
     SET (PACKAGE_FORMAT "RPM")
-    SET (PACKAGE_DEPS  "wxWidgets-wxcontainer MesaGLw libbz2")
+    #    SET (PACKAGE_DEPS  "libwx_baseu-2_8-0-wxcontainer MesaGLw libbz2-1 portaudio")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "x86_64")
       SET (LIB_INSTALL_DIR "lib64")
@@ -104,9 +104,9 @@ IF (NOT WIN32)
   ENDIF (EXISTS /etc/gentoo-release)
   IF(APPLE)
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
-      IF (CMAKE_OSX_64)
+#      IF (CMAKE_OSX_64)
         SET(ARCH "x86_64")
-      ENDIF (CMAKE_OSX_64)
+#      ENDIF (CMAKE_OSX_64)
     ENDIF (CMAKE_SIZEOF_VOID_P MATCHES "8")
   ENDIF()
 ELSE (NOT WIN32)
@@ -115,8 +115,14 @@ ELSE (NOT WIN32)
 ENDIF (NOT WIN32)
 
 IF (CMAKE_SYSTEM_PROCESSOR MATCHES "arm*")
-  SET (ARCH "armel")
+  SET (ARCH "armhf")
 ENDIF (CMAKE_SYSTEM_PROCESSOR MATCHES "arm*")
+
+IF (ARCH MATCHES "armhf")
+  ADD_DEFINITIONS(-DARMHF)
+ENDIF (ARCH MATCHES "armhf")
+
+
 MESSAGE (STATUS "*** Build Architecture is ${ARCH}")
 SET(PACKAGE_RELEASE "1" CACHE STRING "Package release number")
 
@@ -124,7 +130,7 @@ MESSAGE (STATUS "*** Staging to build ${PACKAGE_NAME} ${PACKAGE_VERSION} ***")
 
 SET(wxWidgets_USE_LIBS base core net xml html adv aui)
 
-FIND_PACKAGE(OpenGL REQUIRED)
+FIND_PACKAGE(OpenGL)
 IF(OPENGL_GLU_FOUND)
 
     SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
@@ -133,6 +139,8 @@ IF(OPENGL_GLU_FOUND)
     MESSAGE (STATUS "Found OpenGL..." )
     MESSAGE (STATUS "    Lib: " ${OPENGL_LIBRARIES})
     MESSAGE (STATUS "    Include: " ${OPENGL_INCLUDE_DIR})
+    ADD_DEFINITIONS(-DocpnUSE_GL)
+    ADD_DEFINITIONS(-DUSE_GLU_TESS)
 
 ELSE(OPENGL_GLU_FOUND)
     MESSAGE (STATUS "OpenGL not found..." )
@@ -147,6 +155,8 @@ SET( wxWidgets_USE_STATIC OFF)
 
 FIND_PACKAGE(wxWidgets REQUIRED)
 INCLUDE(${wxWidgets_USE_FILE})
+    MESSAGE (STATUS "Found wxWidgets..." )
+    MESSAGE (STATUS "${wxWidgets_LIBRARIES}")
 
 #  Search for wxWidgets 2.9
 STRING(REGEX MATCHALL "2.9" wx_Version "${wxWidgets_INCLUDE_DIRS}")
@@ -173,13 +183,26 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 #ADD_DEFINITIONS( "-Wall -ansi -pedantic -Wno-variadic-macros" )
 #TODO: Should we use  -fno-stack-protector
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
-IF(NOT WIN32)
+IF(NOT WIN32 AND NOT APPLE )
   ADD_DEFINITIONS( "-Wall -Wno-unused -fexceptions -rdynamic" )
   ADD_DEFINITIONS( " -g -fno-strict-aliasing")
-ENDIF(NOT WIN32)
+ENDIF(NOT WIN32 AND NOT APPLE)
+
+IF( APPLE )
+  ADD_DEFINITIONS( "-Wall -Wno-unused -fexceptions -Wno-overloaded-virtual" )
+  ADD_DEFINITIONS( " -g -fno-strict-aliasing")
+  ADD_DEFINITIONS( " -Wno-deprecated -Wno-deprecated-declarations" )
+ENDIF(APPLE)
+
+#Enable CrashReporting for Windows
+IF(WIN32)
+    ADD_DEFINITIONS(-DOCPN_USE_CRASHRPT)
+    INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/buildwin/crashrpt)
+    SET(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1401.lib)
+    SET(CMAKE_EXE_LINKER_FLAGS /DEBUG)
+ENDIF(WIN32)
 
 # Add some definitions to satisfy MS
-ADD_DEFINITIONS(-DUSE_GLU_TESS)
 IF(WIN32)
     ADD_DEFINITIONS(-D__MSVC__)
     ADD_DEFINITIONS(-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
@@ -191,6 +214,8 @@ SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/build)
 
 # Let cmake find additional modules private to opencpn
 SET(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/")
+
+IF (NOT WIN32 AND NOT APPLE)
 
 FIND_PACKAGE(GTK2 2.6)
 IF (GTK2_FOUND)
@@ -208,6 +233,24 @@ IF (GTK2_FOUND)
 ELSE(GTK2_FOUND)
     MESSAGE (STATUS "GTK2 Not found...")
 ENDIF (GTK2_FOUND)
+
+IF(UNIX)
+INCLUDE("FindPortaudio.cmake")
+IF (PORTAUDIO_FOUND)
+    MESSAGE (STATUS "Portaudio Found")
+    INCLUDE_DIRECTORIES(${PORTAUDIO_INCLUDE_DIRS})
+    SET(EXTRA_LIBS ${EXTRA_LIBS} ${PORTAUDIO_LIBRARIES})
+    ADD_DEFINITIONS(${PORTAUDIO_DEFINITIONS})
+    ADD_DEFINITIONS(-DOCPN_USE_PORTAUDIO)
+ELSE (PORTAUDIO_FOUND)
+    MESSAGE (STATUS "Portaudio Not Found...")
+ENDIF (PORTAUDIO_FOUND)
+
+#SET(EXTRA_LIBS ${EXTRA_LIBS} "/usr/lib/i386-linux-gnu/libportaudio.so.2.0.0")
+#ADD_DEFINITIONS(-DOCPN_USE_PORTAUDIO)
+ENDIF(UNIX)
+
+ENDIF (NOT WIN32 AND NOT APPLE)
 
 FIND_PACKAGE(Gettext REQUIRED)
 
@@ -260,6 +303,8 @@ SET(SRC_NMEA0183
 		src/nmea0183/gsv.cpp
 		src/nmea0183/GPwpl.cpp
 		src/nmea0183/GPwpl.hpp
+        src/nmea0183/apb.cpp
+        src/nmea0183/apb.hpp
 	)
 ADD_LIBRARY(NMEA0183 ${SRC_NMEA0183})
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/nmea0183)
@@ -289,8 +334,8 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/nmea0183)
 
 
 SET(HDRS
-        include/ocpn_types.h
-        include/ocpndc.h
+                include/ocpn_types.h
+                include/ocpndc.h
 		include/chart1.h
 		include/bbox.h
 		include/ocpn_pixel.h
@@ -298,6 +343,46 @@ SET(HDRS
 		include/chartdbs.h
 		include/chartimg.h
 		include/chcanv.h
+		include/timers.h
+		include/emboss_data.h
+		include/AISTargetQueryDialog.h
+		include/AIS_Bitstring.h
+		include/AISTargetListDialog.h
+		include/OCPNListCtrl.h
+		include/AISTargetAlertDialog.h
+		include/AIS_Decoder.h
+		include/AIS_Target_Data.h
+		include/CM93DSlide.h
+		include/GoToPositionDialog.h
+		include/RolloverWin.h
+		include/S57QueryDialog.h
+		include/S57ObjectDesc.h
+		include/S57Light.h
+		include/s57RegistrarMgr.h
+		include/S57ClassRegistrar.h
+		include/MarkIcon.h
+		include/SendToGpsDlg.h
+		include/TCWin.h
+		include/tide_time.h
+		include/ChInfoWin.h
+		include/ocpCursor.h
+		include/Quilt.h
+		include/Hyperlink.h
+		include/NavObjectCollection.h
+		include/RoutePoint.h
+		include/Route.h
+		include/SelectItem.h
+		include/Select.h
+		include/FontMgr.h
+		include/FontDesc.h
+		include/vector2D.h
+		include/OCPNSoundData.h
+		include/OCPN_Sound.h
+		include/NMEALogWindow.h
+		include/WindowDestroyListener.h
+		include/TTYWindow.h
+		include/TTYScroll.h
+		include/Layer.h
 		include/concanv.h
 		include/cutil.h
 		include/georef.h
@@ -305,8 +390,18 @@ SET(HDRS
 		include/routeman.h
 		include/routemanagerdialog.h
 		include/routeprop.h
+		include/routeprintout.h
+		include/PositionParser.h
+		include/printtable.h
 		include/statwin.h
 		include/tcmgr.h
+		include/Station_Data.h
+		include/IDX_entry.h
+		include/TC_Error_Code.h
+		include/TCDataFactory.h
+		include/TCDS_Ascii_Harmonic.h
+		include/TCDS_Binary_Harmonic.h
+		include/TCDataSource.h
 		include/thumbwin.h
 		include/options.h
 		include/gshhs.h
@@ -327,27 +422,74 @@ SET(HDRS
 		include/compasswin.h
 		include/geodesic.h
 		include/datastream.h
-        include/multiplexer.h
+		include/OCPN_DataStreamEvent.h
+		include/ConnectionParams.h
+		include/OCP_DataStreamInput_Thread.h
+		include/dsPortType.h
+                include/multiplexer.h
+                include/OCPNRegion.h
+                include/TrackPropDlg.h
+                include/LinkPropDlg.h
 )
 
 SET(SRCS
 		src/chart1.cpp
 		src/bbox.cpp
 		src/ocpn_pixel.cpp
-        src/ocpndc.cpp
+                src/ocpndc.cpp
 		src/chartdb.cpp
 		src/chartdbs.cpp
 		src/chartimg.cpp
 		src/chcanv.cpp
+		src/ocpCursor.cpp
+		src/TCWin.cpp
+		src/S57QueryDialog.cpp
+		src/s57RegistrarMgr.cpp
+		src/GoToPositionDialog.cpp
+		src/CM93DSlide.cpp
+		src/RolloverWin.cpp
+		src/ChInfoWin.cpp
+		src/AISTargetQueryDialog.cpp
+		src/AIS_Bitstring.cpp
+		src/AISTargetListDialog.cpp
+		src/AISTargetAlertDialog.cpp
+		src/AIS_Decoder.cpp
+		src/AIS_Target_Data.cpp
+		src/OCPNListCtrl.cpp
+		src/Quilt.cpp
+		src/Hyperlink.cpp
+		src/NavObjectCollection.cpp
+		src/RoutePoint.cpp
+		src/Route.cpp
+		src/SelectItem.cpp
+		src/Select.cpp
+		src/FontMgr.cpp
+		src/FontDesc.cpp
+		src/OCPNSoundData.cpp
+		src/OCPN_Sound.cpp
+		src/NMEALogWindow.cpp
+		src/TTYWindow.cpp
+		src/TTYScroll.cpp
+		src/SendToGpsDlg.cpp
+		src/Layer.cpp
 		src/concanv.cpp
-		src/cutil.c
-		src/georef.c
+		src/cutil.cpp
+		src/georef.cpp
 		src/navutil.cpp
 		src/routeman.cpp
 		src/routemanagerdialog.cpp
 		src/routeprop.cpp
+		src/routeprintout.cpp
+		src/PositionParser.cpp
+		src/printtable.cpp
 		src/statwin.cpp
 		src/tcmgr.cpp
+		src/Station_Data.cpp
+		src/IDX_entry.cpp
+		src/TCDataFactory.cpp
+		src/TCDS_Ascii_Harmonic.cpp
+		src/TCDS_Binary_Harmonic.cpp
+		src/TCDataSource.cpp
 		src/thumbwin.cpp
 		src/options.cpp
 		src/gshhs.cpp
@@ -367,7 +509,14 @@ SET(SRCS
 		src/compasswin.cpp
 		src/geodesic.cpp
 		src/datastream.cpp
-        src/multiplexer.cpp
+		src/OCPN_DataStreamEvent.cpp
+		src/ConnectionParams.cpp
+		src/OCP_DataStreamInput_Thread.cpp
+                src/multiplexer.cpp
+                src/pugixml.cpp
+                src/OCPNRegion.cpp
+                src/TrackPropDlg.cpp
+                src/LinkPropDlg.cpp
     )
 
 IF(wx_Version MATCHES "2.9")
@@ -384,6 +533,16 @@ SET(SRC_TINYXML
             src/tinyxmlparser.cpp
             include/tinyxml.h
       )
+
+IF(OPENGL_GLU_FOUND)
+  SET(HDRS ${HDRS} include/glChartCanvas.h
+                   include/glTextureDescriptor.h
+        )
+  SET(SRCS ${SRCS} src/glChartCanvas.cpp
+                   src/glTextureDescriptor.cpp
+        )
+ENDIF(OPENGL_GLU_FOUND)
+
 
 IF(TINYXML_FOUND)
     message (STATUS "Building with tinyxml includes")
@@ -497,9 +656,9 @@ IF (USE_GARMINHOST)
                   src/garmin/jeeps/gpscom.c
                   src/garmin/jeeps/gpsmath.c
                   src/garmin/jeeps/gpsmem.c
-	              src/garmin/jeeps/gpsprot.c
+	          src/garmin/jeeps/gpsprot.c
                   src/garmin/jeeps/gpsread.c
-	              src/garmin/jeeps/gpsdevice.c
+	          src/garmin/jeeps/gpsdevice.c
                   src/garmin/jeeps/gpsdevice_ser.c
                   src/garmin/jeeps/gpsdevice_usb.c
                   src/garmin/jeeps/gpsrqst.c
@@ -646,6 +805,17 @@ IF(APPLE)
     )
 ENDIF(APPLE)
 
+#  Mac has trouble finding libgobject-2.0.dylib
+#  We look for it explicitely
+IF(xAPPLE)
+#       Assume pkg-config is available.
+    INCLUDE( FindPkgConfig )
+    PKG_SEARCH_MODULE( GOBJECT REQUIRED gobject-2.0 )
+#    MESSAGE (STATUS "    GOBJECT: " ${GOBJECT_LDFLAGS})
+
+    SET(EXTRA_LIBS ${EXTRA_LIBS} ${GOBJECT_LDFLAGS})
+    SET(EXTRA_LIBS ${EXTRA_LIBS} "iconv")
+ENDIF(xAPPLE)
 
 IF(WIN32)
     IF(MSVC)
@@ -685,6 +855,16 @@ SET_SOURCE_FILES_PROPERTIES(
            data/doc/help_web.html PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/doc )
 
 SET_SOURCE_FILES_PROPERTIES(
+           data/doc/help_en_US.html PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/doc )
+
+FILE(GLOB DOC_FILES "${CMAKE_SOURCE_DIR}/data/doc/images/*")
+FOREACH (_currentDocFile ${DOC_FILES})
+  SET_SOURCE_FILES_PROPERTIES(
+           ${_currentDocFile}
+           PROPERTIES MACOSX_PACKAGE_LOCATION "SharedSupport/doc/images" )
+ENDFOREACH (_currentDocFile )
+
+SET_SOURCE_FILES_PROPERTIES(
            buildosx/opencpn.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources )
 
 SET_SOURCE_FILES_PROPERTIES(
@@ -702,6 +882,8 @@ ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
       data/license.txt
       ${SOUND_FILES}
       data/doc/help_web.html
+      data/doc/help_en_US.html
+      ${DOC_FILES}
       buildosx/opencpn.icns
       buildosx/MainMenu.xib
       )
@@ -920,11 +1102,19 @@ ENDIF(GETTEXT_MSGFMT_EXECUTABLE)
 
 
 
-# On Windows builds, copy the wxWidgets dlls and  to the executable directory
+# On Windows builds, copy the wxWidgets dlls and helpers to the executable directory
 IF(WIN32 AND NOT UNIX)
 INSTALL(DIRECTORY wxWidgets/ DESTINATION "." )
 INSTALL(DIRECTORY buildwin/vc10/ DESTINATION ".\\\\vc10" )
 #INSTALL(DIRECTORY buildwin/NSIS_Unicode/Bitmaps/ DESTINATION ".\\\\NSISBmps" ) #Gunther
+
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1401.dll DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashSender1401.exe DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/crashrpt_lang.ini DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/dbghelp.dll DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/PrivacyPolicy.txt DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/ocpn_gltest1.exe DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+
 ENDIF(WIN32 AND NOT UNIX)
 
 
@@ -1037,6 +1227,10 @@ IF(UNIX AND NOT APPLE)
     SET(CPACK_RPM_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}")
     SET(CPACK_RPM_PACKAGE_ARCHITECTURE  ${ARCH})
     SET(CPACK_RPM_PACKAGE_REQUIRES  ${PACKAGE_DEPS})
+    SET(CPACK_RPM_USER_BINARY_SPECFILE "${CMAKE_SOURCE_DIR}/opencpn.spec.in")
+    SET(CPACK_OPENCPN_RPM_BINDIR "${CMAKE_INSTALL_PREFIX}/${PREFIX_BIN}")
+    SET(CPACK_OPENCPN_RPM_LIBDIR "${PREFIX_LIB}")
+    SET(CPACK_OPENCPN_RPM_DATADIR "${CMAKE_INSTALL_PREFIX}/${PREFIX_DATA}")
     SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenSource Chart Plotter/Navigator")
     SET(CPACK_PACKAGE_DESCRIPTION "OpenCPN is a concise ChartPlotter/Navigator. The application supports: GPS/GPDS Position Input, BSB Raster Chart Display, S57 Vector ENChart Display, AIS Input Decoding, Waypoint Autopilot Navigation .")
     SET(CPACK_SET_DESTDIR ON)
@@ -1064,7 +1258,9 @@ IF(WIN32 AND NOT UNIX)
  configure_file("${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_TURKISH.nsh.in" "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_TURKISH.nsh" @ONLY)
 ENDIF(WIN32 AND NOT UNIX)
 
-configure_file(version.h.in ${CMAKE_SOURCE_DIR}/include/version.h) #Gunther
+IF(NOT SKIP_VERSION_CONFIG)
+   configure_file(version.h.in ${CMAKE_SOURCE_DIR}/include/version.h)
+ENDIF(NOT SKIP_VERSION_CONFIG)
 
 # this dummy target is necessary to make sure the ADDITIONAL_MAKE_CLEAN_FILES directive is executed.
 # apparently, the base CMakeLists.txt file must have "some" target to activate all the clean steps.
@@ -1077,6 +1273,7 @@ INCLUDE(CPack)
 IF(APPLE)
 # -- Run the BundleUtilities cmake code
   SET(CPACK_BUNDLE_PLIST "${CMAKE_SOURCE_DIR}/buildosx/Info.plist")
+  SET(MACOSX_BUNDLE_BUNDLE_NAME "OpenCPN")
 
   SET(APPS "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app")
   SET(DIRS "")

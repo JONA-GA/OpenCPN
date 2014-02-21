@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  Chart Symbols
@@ -21,9 +21,7 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- *
- */
+ **************************************************************************/
 
 #include "wx/wxprec.h"
 
@@ -233,9 +231,11 @@ void ChartSymbols::ProcessLookups( TiXmlElement* lookupNodes )
                 goto nextNode;
             }
             if( nodeType == _T("attrib-code") ) {
-                if( !lookup.attributeCodeArray ) lookup.attributeCodeArray = new wxArrayString();
+                if( !lookup.attributeCodeArray )
+                    lookup.attributeCodeArray = new wxArrayString();
                 wxString value = wxString( subNode->GetText(), wxConvUTF8 );
-                if( value == _T("ORIENT") ) value << _T(" ");
+                if( value.length() == 6 )
+                    value << _T(" ");
                 lookup.attributeCodeArray->Add( value );
                 goto nextNode;
             }
@@ -260,7 +260,7 @@ void ChartSymbols::BuildLookup( Lookup &lookup )
     LUP->DPRI = lookup.displayPrio;
     LUP->RPRI = lookup.radarPrio;
     LUP->TNAM = lookup.tableName;
-    LUP->OBCL[7] = 0;
+    LUP->OBCL[6] = 0;
     strncpy( LUP->OBCL, lookup.name.mb_str(), 7 );
 
     LUP->ATTCArray = lookup.attributeCodeArray;
@@ -739,7 +739,7 @@ void ChartSymbols::BuildSymbol( ChartSymbol& symbol )
 
 }
 
-bool ChartSymbols::LoadConfigFile( s52plib* plibArg, wxString s52ilePath )
+bool ChartSymbols::LoadConfigFile(s52plib* plibArg, const wxString & s52ilePath)
 {
     TiXmlDocument doc;
 
@@ -853,7 +853,7 @@ wxColor ChartSymbols::GetwxColor( const char *colorName, int fromTable )
     return GetwxColor( key, fromTable );
 }
 
-int ChartSymbols::FindColorTable( wxString& tableName )
+int ChartSymbols::FindColorTable(const wxString & tableName)
 {
     for( unsigned int i = 0; i < colorTables->GetCount(); i++ ) {
         colTable *ct = (colTable *) colorTables->Item( i );

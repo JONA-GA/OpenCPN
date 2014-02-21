@@ -1,11 +1,11 @@
 /******************************************************************************
  *
- * Project:  OpenCP
+ * Project:  OpenCPN
  * Purpose:  Optimized wxBitmap Object
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,7 +20,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  ***************************************************************************
  *
  */
@@ -120,6 +120,59 @@ static int HandleXError( Display *dpy, XErrorEvent *event )
     return 0;
 }
 #endif
+
+
+
+//---------------------------------------------------------------------------------------------------------
+//              Private Memory Management
+//---------------------------------------------------------------------------------------------------------
+
+static void *x_malloc(size_t t)
+{
+    void *pr = malloc( t );
+
+    //      malloc fails
+    if( NULL == pr ) {
+        wxLogMessage( _T("x_malloc...malloc fails with request of %d bytes."), t );
+
+        // Cat the /proc/meminfo file
+
+        char *p;
+        char buf[2000];
+        int len;
+
+        int fd = open( "/proc/meminfo", O_RDONLY );
+
+        if( fd == -1 ) exit( 1 );
+
+        len = read( fd, buf, sizeof( buf ) - 1 );
+        if( len <= 0 ) {
+            close( fd );
+            exit( 1 );
+        }
+        close( fd );
+        buf[len] = 0;
+
+        p = buf;
+        while( *p ) {
+//                        printf("%c", *p++);
+        }
+
+        exit( 0 );
+        return NULL;                            // for MSVC
+    }
+
+    else {
+        if( t > malloc_max ) {
+            malloc_max = t;
+//                      wxLogMessage(_T("New malloc_max: %d", malloc_max));
+        }
+
+        return pr;                                      // good return
+    }
+
+}
+
 
 //----------------------------------------------------------------------
 //      ocpnXImage Implementation

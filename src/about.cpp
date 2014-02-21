@@ -44,6 +44,8 @@
 #include "chart1.h"
 #include "chcanv.h"
 #include "styles.h"
+#include "version.h"
+
 
 wxString str_version_start = wxT("\n      Version ");
 wxString str_version_major = wxString::Format(wxT("%i"),VERSION_MAJOR);
@@ -59,7 +61,7 @@ extern ocpnStyle::StyleManager* g_StyleManager;
 char AboutText[] =
 {
   "\n                                         OpenCPN\n\n\
-                       (c) 2000-2011 The OpenCPN Authors\n"
+                       (c) 2000-2013 The OpenCPN Authors\n"
 };
 
 char OpenCPNInfo[] = {"\n\n\
@@ -281,18 +283,18 @@ void about::CreateControls()
 
 
     //  Main Notebook
-    wxNotebook* itemNotebook4 = new wxNotebook( itemDialog1, ID_NOTEBOOK_HELP, wxDefaultPosition,
+    pNotebook = new wxNotebook( itemDialog1, ID_NOTEBOOK_HELP, wxDefaultPosition,
             wxSize( -1, -1 ), wxNB_TOP );
-    itemNotebook4->InheritAttributes();
-    aboutSizer->Add( itemNotebook4, 0, wxALIGN_CENTER_VERTICAL | wxEXPAND | wxALL, 5 );
+    pNotebook->InheritAttributes();
+    aboutSizer->Add( pNotebook, 0, wxALIGN_CENTER_VERTICAL | wxEXPAND | wxALL, 5 );
 
     aboutSizer->Add( buttonSizer, 0, wxALL, 0 );
 
     //    About Panel
-    itemPanelAbout = new wxPanel( itemNotebook4, -1, wxDefaultPosition, wxDefaultSize,
+    itemPanelAbout = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
             wxSUNKEN_BORDER | wxTAB_TRAVERSAL );
     itemPanelAbout->InheritAttributes();
-    itemNotebook4->AddPage( itemPanelAbout, _("About") );
+    pNotebook->AddPage( itemPanelAbout, _("About") );
 
     wxBoxSizer* itemBoxSizer6 = new wxBoxSizer( wxVERTICAL );
     itemPanelAbout->SetSizer( itemBoxSizer6 );
@@ -303,10 +305,10 @@ void about::CreateControls()
     itemBoxSizer6->Add( pAboutTextCtl, 0, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
 
     //     Authors Panel
-    itemPanelAuthors = new wxPanel( itemNotebook4, -1, wxDefaultPosition, wxDefaultSize,
+    itemPanelAuthors = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
             wxSUNKEN_BORDER | wxTAB_TRAVERSAL );
     itemPanelAuthors->InheritAttributes();
-    itemNotebook4->AddPage( itemPanelAuthors, _("Authors") );
+    pNotebook->AddPage( itemPanelAuthors, _("Authors") );
 
     wxBoxSizer* itemBoxSizer7 = new wxBoxSizer( wxVERTICAL );
     itemPanelAuthors->SetSizer( itemBoxSizer7 );
@@ -317,10 +319,10 @@ void about::CreateControls()
     itemBoxSizer7->Add( pAuthorTextCtl, 0, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
 
     //  License Panel
-    itemPanelLicense = new wxPanel( itemNotebook4, -1, wxDefaultPosition, wxDefaultSize,
+    itemPanelLicense = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
             wxSUNKEN_BORDER | wxTAB_TRAVERSAL );
     itemPanelLicense->InheritAttributes();
-    itemNotebook4->AddPage( itemPanelLicense, _("License") );
+    pNotebook->AddPage( itemPanelLicense, _("License") );
 
     wxBoxSizer* itemBoxSizer8 = new wxBoxSizer( wxVERTICAL );
     itemPanelLicense->SetSizer( itemBoxSizer8 );
@@ -340,10 +342,10 @@ void about::CreateControls()
     itemBoxSizer8->Add( pLicenseTextCtl, 0, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
 
     //     Help Panel
-    itemPanelTips = new wxPanel( itemNotebook4, -1, wxDefaultPosition, wxDefaultSize,
+    itemPanelTips = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
             wxSUNKEN_BORDER | wxTAB_TRAVERSAL );
     itemPanelTips->InheritAttributes();
-    itemNotebook4->AddPage( itemPanelTips, _("Help") );
+    pNotebook->AddPage( itemPanelTips, _("Help") );
 
     wxBoxSizer* itemBoxSizer9 = new wxBoxSizer( wxVERTICAL );
     itemPanelTips->SetSizer( itemBoxSizer9 );
@@ -404,7 +406,7 @@ void about::OnCopyClick( wxCommandEvent& event )
     }
 
     ::wxBeginBusyCursor();
-      
+
     if( wxTheClipboard->Open() ) {
         wxTextDataObject* data = new wxTextDataObject;
         data->SetText( fileContent );
@@ -433,21 +435,27 @@ void about::OnPageChange( wxNotebookEvent& event )
         help_try += def_lang_canonical;
         help_try += _T(".html");
 
-        if( ::wxFileExists( help_try ) ) wxLaunchDefaultBrowser(
-                wxString( _T("file:///") ) + help_try );
+        if( ::wxFileExists( help_try ) ) {
+            wxLaunchDefaultBrowser(wxString( _T("file:///") ) + help_try );
+            pNotebook->ChangeSelection(0);
+        }
 
         else {
             help_try = help_locn;
             help_try += _T("en_US");
             help_try += _T(".html");
 
-            if( ::wxFileExists( help_try ) ) wxLaunchDefaultBrowser(
-                    wxString( _T("file:///") ) + help_try );
+            if( ::wxFileExists( help_try ) ){
+                pNotebook->ChangeSelection(0);
+                wxLaunchDefaultBrowser( wxString( _T("file:///") ) + help_try );
+            }
             else {
                 help_try = _T("doc/help_web.html");
                 help_try.Prepend( *m_pDataLocn );
-                if( ::wxFileExists( help_try ) ) wxLaunchDefaultBrowser(
-                        wxString( _T("file:///") ) + help_try );
+                if( ::wxFileExists( help_try ) ) {
+                    pNotebook->ChangeSelection(0);
+                    wxLaunchDefaultBrowser(wxString( _T("file:///") ) + help_try );
+                 }
             }
         }
     }

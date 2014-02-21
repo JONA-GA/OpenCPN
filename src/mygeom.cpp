@@ -37,10 +37,14 @@
 
 #include "dychart.h"
 
+#include "s52s57.h"
+
 #include "mygeom.h"
 #include "georef.h"
 
 #include "triangulate.h"
+
+#ifdef ocpnUSE_GL
 
 #ifdef USE_GLU_TESS
 #ifdef __WXOSX__
@@ -49,6 +53,8 @@
 #else
 #include <GL/gl.h>
 #include <GL/glu.h>
+#endif
+
 #endif
 
 #ifdef __WXMSW__
@@ -150,7 +156,6 @@ TriPrim               *s_pTPG_Last;
 static GLUtesselator  *GLUtessobj;
 static double         s_ref_lat;
 static double         s_ref_lon;
-static bool           s_bSENC_SM;
 
 static bool           s_bmerc_transform;
 static double         s_transform_x_rate;
@@ -159,9 +164,10 @@ static double         s_transform_y_rate;
 static double         s_transform_y_origin;
 wxArrayPtrVoid        *s_pCombineVertexArray;
 
-static const double   CM93_semimajor_axis_meters = 6378388.0;            // CM93 semimajor axis
 
 #endif
+static const double   CM93_semimajor_axis_meters = 6378388.0;            // CM93 semimajor axis
+static bool           s_bSENC_SM;
 
 static int            tess_orient;
 static wxMemoryOutputStream *ostream1;
@@ -225,6 +231,9 @@ bool ispolysame(polyout *p1, polyout *p2)
 {
     int i2;
 
+    if(p1->index_hash != p2->index_hash)
+        return false;
+    
     if(p1->nvert != p2->nvert)
         return false;
 
@@ -250,6 +259,28 @@ bool ispolysame(polyout *p1, polyout *p2)
     return true;
 }
 
+/**
+ * Returns TRUE if the ring has clockwise winding.
+ *
+ * @return TRUE if clockwise otherwise FALSE.
+ */
+
+bool isRingClockwise(wxPoint2DDouble *pp, int nPointCount)
+
+{
+    double dfSum = 0.0;
+    
+    for( int iVert = 0; iVert < nPointCount-1; iVert++ )
+    {
+        dfSum += pp[iVert].m_x * pp[iVert+1].m_y
+        - pp[iVert].m_y * pp[iVert+1].m_x;
+    }
+    
+    dfSum += pp[nPointCount-1].m_x * pp[0].m_y
+    - pp[nPointCount-1].m_y * pp[0].m_x;
+    
+    return dfSum < 0.0;
+}
 
 //------------------------------------------------------------------------------
 //          Extended_Geometry Implementation
@@ -294,15 +325,19 @@ PolyTessGeo::PolyTessGeo(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double
     m_ref_lat = ref_lat;
     m_ref_lon = ref_lon;
 
-    if(bUseInternalTess)
+    if(bUseInternalTess){
+        printf("internal tess\n");
         ErrorCode = PolyTessGeoTri(poly, bSENC_SM, ref_lat, ref_lon);
-    else
+    }
+    else {
 #ifdef USE_GLU_TESS
-        ErrorCode = PolyTessGeoGL(poly, bSENC_SM, ref_lat, ref_lon);
+//printf("USE_GLU_TESS tess\n");
+ErrorCode = PolyTessGeoGL(poly, bSENC_SM, ref_lat, ref_lon);
 #else
-        ErrorCode = PolyTessGeoTri(poly, bSENC_SM, ref_lat, ref_lon);
+//printf("PolyTessGeoTri tess\n");
+ErrorCode = PolyTessGeoTri(poly, bSENC_SM, ref_lat, ref_lon);
 #endif
-
+    }
 }
 
 
@@ -412,15 +447,22 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index)
             m_buf_ptr += byte_size;
 
             //  Read the triangle primitive bounding box as lat/lon
-            tp->p_bbox = new wxBoundingBox;
             double *pbb = (double *)m_buf_ptr;
-            double minx = *pbb++;
-            double maxx = *pbb++;
-            double miny = *pbb++;
-            double maxy = *pbb++;
-            tp->p_bbox->SetMin(minx, miny);
-            tp->p_bbox->SetMax(maxx, maxy);
-
+            
+#ifdef ARMHF
+            double abox[4];
+            memcpy(&abox[0], pbb, 4 * sizeof(double));
+            tp->minx = abox[0];
+            tp->maxx = abox[1];
+            tp->miny = abox[2];
+            tp->maxy = abox[3];
+#else            
+            tp->minx = *pbb++;
+            tp->maxx = *pbb++;
+            tp->miny = *pbb++;
+            tp->maxy = *pbb;
+#endif
+            
             m_buf_ptr += 4 * sizeof(double);
 
         }
@@ -444,7 +486,30 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index)
 //      Using internal Triangle tesselator
 int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon)
 {
-
+    //  Make a quick sanity check of the polygon coherence
+    bool b_ok = true;
+    OGRLineString *tls = poly->getExteriorRing();
+    if(!tls) {
+        b_ok = false;
+    }
+    else {
+        int tnpta  = poly->getExteriorRing()->getNumPoints();
+        if(tnpta < 3 )
+            b_ok = false;
+    }
+    
+    
+    for( int iir=0 ; iir < poly->getNumInteriorRings() ; iir++)
+    {
+        int tnptr = poly->getInteriorRing(iir)->getNumPoints();
+        if( tnptr < 3 )
+            b_ok = false;
+    }
+    
+    if( !b_ok )
+        return ERROR_BAD_OGRPOLY;
+    
+    
     m_pxgeom = NULL;
 
     int iir, ip;
@@ -786,8 +851,6 @@ int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat,
             }
             //  Calculate bounding box as lat/lon
 
-            pTP->p_bbox = new wxBoundingBox;
-
             float sxmax = -179;                   // this poly BBox
             float sxmin = 170;
             float symax = -90;
@@ -806,8 +869,10 @@ int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat,
                 symin = fmin(yd, symin);
             }
 
-            pTP->p_bbox->SetMin(sxmin, symin);
-            pTP->p_bbox->SetMax(sxmax, symax);
+            pTP->minx = sxmin;
+            pTP->miny = symin;
+            pTP->maxx = sxmax;
+            pTP->maxy = symax;
 
         }
         pr = (polyout *)pr->poly_next;
@@ -833,6 +898,440 @@ int PolyTessGeo::PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat,
 
     return 0;
 }
+
+
+//      Perform deferred polygon tesselation
+//      Using internal Triangle tesselator
+int PolyTessGeo::BuildTessTri(void)
+{
+    
+    int iir, ip;
+    
+    tess_orient = TESS_HORZ;                    // prefer horizontal tristrips
+    
+     
+    //      Get total number of contours
+    ncnt = m_pxgeom->n_contours;
+    int nint = ncnt-1;
+    
+    //      Allocate cntr array
+    int *cntr = (int *)malloc(ncnt * sizeof(int));
+    
+    //      Get total number of points(vertices)
+    int npta  = m_pxgeom->contour_array[0];
+    cntr[0] = npta;
+    npta += 2;                            // fluff
+    
+    for( iir=0 ; iir < ncnt-1 ; iir++)
+    {
+        int nptr = m_pxgeom->contour_array[iir+1];
+        cntr[iir+1] = nptr;
+        
+        npta += nptr + 2;             // fluff
+    }
+    
+    
+    pt *geoPt = (pt*)calloc((npta + 1) * sizeof(pt), 1);     // vertex array
+    
+    //      Create input structures
+    
+    //    Exterior Ring
+    int npte  = cntr[0];
+    
+    pt *ppt = geoPt;
+    ppt->x = 0.;
+    ppt->y = 0.;
+    ppt++;                                            // vertex 0 is unused
+    
+ 
+    double x0, y0, x, y;
+    OGRPoint p;
+ 
+    wxPoint2DDouble *pp = m_pxgeom->vertex_array;
+    pp++;       // skip 0?
+    
+ //  Check and account for winding direction of ring
+    bool cw = isRingClockwise( pp, npte );
+    
+    if(!cw)
+    {
+        x0 = pp->m_x;
+        y0 = pp->m_y;
+    }
+    else
+    {
+        x0 = pp[npte-1].m_x;
+        y0 = pp[npte-1].m_y;
+    }
+ 
+    
+    //  Transcribe points to vertex array, in proper order with no duplicates
+    for(ip = 0 ; ip < npte ; ip++)
+    {
+        
+        int pidx;
+        if(cw)                                  // outer contour must be converted to ccw
+            pidx = npte - ip - 1;
+        
+        else
+            pidx = ip;
+        
+        x = pp[pidx].m_x;
+        y = pp[pidx].m_y;
+        
+        if((fabs(x-x0) > EQUAL_EPS) || (fabs(y-y0) > EQUAL_EPS))
+        {
+            ppt->x = x;
+            ppt->y = y;
+            
+            ppt++;
+        }
+        else
+            cntr[0]--;
+        
+        x0 = x;
+        y0 = y;
+    }
+    
+ 
+    int index_offset = npte;
+ 
+    //  Now the interior contours
+    for(iir=0 ; iir < nint ; iir++)
+    {
+        int npti  = m_pxgeom->contour_array[iir+1];
+ 
+        //  Check and account for winding direction of ring
+//        bool cw = false; //!(poly->getInteriorRing(iir)->isClockwise() == 0);
+        bool cw = isRingClockwise( &pp[index_offset], npti );
+        
+        if(cw)
+        {
+            x0 = pp[index_offset].m_x;
+            y0 = pp[index_offset].m_y;
+        }
+        else
+        {
+            x0 = pp[index_offset + npti-1].m_x;
+            y0 = pp[index_offset + npti-1].m_y;
+        }
+ 
+ 
+        //  Transcribe points to vertex array, in proper order with no duplicates
+        for(int ip = 0 ; ip < npti ; ip++)
+        {
+            OGRPoint p;
+            int pidx;
+            if(!cw)                               // interior contours must be converted to cw
+                pidx = npti - ip - 1;
+            else
+                pidx = ip;
+            
+            x = pp[pidx + index_offset].m_x;
+            y = pp[pidx + index_offset].m_y;
+            
+            if((fabs(x-x0) > EQUAL_EPS) || (fabs(y-y0) > EQUAL_EPS))
+            {
+                ppt->x = x; 
+                ppt->y = y;
+                ppt++;
+            }
+            else
+                cntr[iir+1]--;
+            
+            x0 = x;
+            y0 = y;
+            
+        }
+        
+        index_offset += npti;
+        
+    }
+    
+    polyout *polys = triangulate_polygon(ncnt, cntr, (double (*)[2])geoPt);
+    
+    
+    //  Check the triangles
+    //  Especially looking for poorly formed polys
+    //  These may come from several sources, all
+    //  of which should be considered latent bugs in the trapezator.
+    
+    //  Known to occur:
+    //  Trapezator fails if any two inner contours share a common vertex.
+    //  Found on US5VA19M.000
+    
+    polyout *pck = polys;
+    while(NULL != pck)
+    {
+        if(pck->is_valid)
+        {
+            int *ivs = pck->vertex_index_list;
+            
+            for(int i3 = 0 ; i3 < pck->nvert-1 ; i3++)
+            {
+                int ptest = ivs[i3];
+                for(int i4=i3+1 ; i4 < pck->nvert ; i4++)
+                {
+                    if(ptest == ivs[i4])
+                    {
+                        pck->is_valid = false;
+                    }
+                }
+            }
+        }
+        
+        pck = (polyout *)pck->poly_next;
+    }
+    
+    
+    //  Walk the list once to get poly count
+    polyout *pr;
+    pr = polys;
+    int npoly0 = 0;
+    while(NULL != pr)
+    {
+        pr = (polyout *)pr->poly_next;
+        npoly0++;
+    }
+    
+    //  Check the list for duplicates
+
+    pr = polys;
+    for(int idt = 0 ; idt<npoly0-1 ; idt++)
+    {
+        polyout *p1 = pr;
+        
+        polyout *p2 = (polyout *)pr->poly_next;
+        while(NULL != p2)
+        {
+            if(p1->is_valid && p2->is_valid)
+            {
+                if(ispolysame(p1, p2))
+                    p1->is_valid = false;
+            }
+            p2 = (polyout *)p2->poly_next;
+        }
+        
+        pr = (polyout *)pr->poly_next;
+    }
+
+    //  Walk the list again to get unique poly count
+    pr = polys;
+    int npoly = 0;
+    while(NULL != pr)
+    {
+        if(pr->is_valid)
+            npoly++;
+        pr = (polyout *)pr->poly_next;
+        
+    }
+    
+    
+    
+    //  Create the data structures
+    
+    m_nvertex_max = 0;
+    
+    m_ppg_head = new PolyTriGroup;
+    m_ppg_head->m_bSMSENC = s_bSENC_SM;
+    
+    m_ppg_head->nContours = ncnt;
+    
+    m_ppg_head->pn_vertex = cntr;             // pointer to array of poly vertex counts
+    
+    
+    bool bSENC_SM = false;
+    double ref_lat = 0.;
+    double ref_lon = 0.;
+    
+    //  Transcribe the raw geometry buffer
+    //  Converting to float as we go, and
+    //  allowing for tess_orient
+    
+    nwkb = (npta +1) * 2 * sizeof(float);
+    m_ppg_head->pgroup_geom = (float *)malloc(nwkb);
+    float *vro = m_ppg_head->pgroup_geom;
+    float tx,ty;
+    
+    for(ip = 1 ; ip < npta + 1 ; ip++)
+    {
+        if(TESS_HORZ == tess_orient)
+        {
+            ty = geoPt[ip].y;
+            tx = geoPt[ip].x;
+        }
+        else
+        {
+            tx = geoPt[ip].x;
+            ty = geoPt[ip].y;
+        }
+        
+        if(bSENC_SM)
+        {
+            //  Calculate SM from chart common reference point
+            double easting, northing;
+            toSM(ty, tx, ref_lat, ref_lon, &easting, &northing);
+            *vro++ = easting;              // x
+            *vro++ = northing;             // y
+        }
+        else
+        {
+            *vro++ = tx;                  // lon
+            *vro++ = ty;                  // lat
+        }
+        
+    }
+    
+    
+    
+    //  Now the Triangle Primitives
+    
+    TriPrim *pTP = NULL;
+    TriPrim *pTP_Head = NULL;
+    TriPrim *pTP_Last = NULL;
+    
+    pr = polys;
+    while(NULL != pr)
+    {
+        if(pr->is_valid)
+        {
+            pTP = new TriPrim;
+            if(NULL == pTP_Last)
+            {
+                pTP_Head = pTP;
+                pTP_Last = pTP;
+            }
+            else
+            {
+                pTP_Last->p_next = pTP;
+                pTP_Last = pTP;
+            }
+            
+            pTP->p_next = NULL;
+            pTP->type = PTG_TRIANGLES;
+            pTP->nVert = pr->nvert;
+            
+            if(pr->nvert > m_nvertex_max)
+                m_nvertex_max = pr->nvert;                         // keep track of largest vertex count
+                
+                //  Convert to SM
+                pTP->p_vertex = (double *)malloc(pr->nvert * 2 * sizeof(double));
+            double *pdd = pTP->p_vertex;
+            int *ivr = pr->vertex_index_list;
+            if(bSENC_SM)
+            {
+                for(int i=0 ; i<pr->nvert ; i++)
+                {
+                    int ivp = ivr[i];
+                    double dlon = geoPt[ivp].x;
+                    double dlat = geoPt[ivp].y;
+                    
+                    double easting, northing;
+                    toSM(dlat, dlon, ref_lat, ref_lon, &easting, &northing);
+                    *pdd++ = easting;
+                    *pdd++ = northing;
+                }
+            }
+            
+            else
+            {
+                for(int i=0 ; i<pr->nvert ; i++)
+                {
+                    int ivp = ivr[i];
+                    
+                    memcpy(pdd++, &geoPt[ivp].x, sizeof(double));
+                    memcpy(pdd++, &geoPt[ivp].y, sizeof(double));
+                }
+            }
+            //  Calculate bounding box as lat/lon
+///
+            float sxmax = -179;             
+            float sxmin = 170;
+            float symax = -90;
+            float symin = 90;
+
+            for(int iv=0 ; iv < pr->nvert ; iv++) {
+
+                int *ivr = pr->vertex_index_list;
+                int ivp = ivr[iv];
+                double xd = geoPt[ivp].x;
+                double yd = geoPt[ivp].y;
+            
+                double valx = ( xd * m_pxgeom->x_rate ) + m_pxgeom->x_offset;
+                double valy = ( yd * m_pxgeom->y_rate ) + m_pxgeom->y_offset;
+        
+        //    Convert to lat/lon
+                double lat = ( 2.0 * atan ( exp ( valy/CM93_semimajor_axis_meters ) ) - PI/2. ) / DEGREE;
+                double lon = ( valx / ( DEGREE * CM93_semimajor_axis_meters ) );
+        
+                sxmax = fmax(lon, sxmax);
+                sxmin = fmin(lon, sxmin);
+                symax = fmax(lat, symax);
+                symin = fmin(lat, symin);
+            }
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+            float sxmax = -179;                   // this poly BBox
+            float sxmin = 170;
+            float symax = -90;
+            float symin = 90;
+            
+            for(int iv=0 ; iv < pr->nvert ; iv++)
+            {
+                int *ivr = pr->vertex_index_list;
+                int ivp = ivr[iv];
+                double xd = geoPt[ivp].x;
+                double yd = geoPt[ivp].y;
+                
+                sxmax = fmax(xd, sxmax);
+                sxmin = fmin(xd, sxmin);
+                symax = fmax(yd, symax);
+                symin = fmin(yd, symin);
+            }
+#endif            
+            pTP->minx = sxmin;
+            pTP->miny = symin;
+            pTP->maxx = sxmax;
+            pTP->maxy = symax;
+            
+        }
+        pr = (polyout *)pr->poly_next;
+    }
+    
+    m_ppg_head->tri_prim_head = pTP_Head;         // head of linked list of TriPrims
+    
+    
+    //  Free the polyout structure
+    pr = polys;
+    while(NULL != pr)
+    {
+        free(pr->vertex_index_list);
+        
+        polyout *pf = pr;
+        pr = (polyout *)pr->poly_next;
+        free(pf);
+    }
+    
+    free (geoPt);
+    
+    m_bOK = true;
+    
+    return 0;
+}
+
 
 int PolyTessGeo::Write_PolyTriGroup( FILE *ofs)
 {
@@ -895,14 +1394,10 @@ int PolyTessGeo::Write_PolyTriGroup( FILE *ofs)
         ostream2->Write( pTP->p_vertex, pTP->nVert * 2 * sizeof(double));
 
         //  Write out the object bounding box as lat/lon
-        double minx = pTP->p_bbox->GetMinX();
-        double maxx = pTP->p_bbox->GetMaxX();
-        double miny = pTP->p_bbox->GetMinY();
-        double maxy = pTP->p_bbox->GetMaxY();
-        ostream2->Write(&minx, sizeof(double));
-        ostream2->Write(&maxx, sizeof(double));
-        ostream2->Write(&miny, sizeof(double));
-        ostream2->Write(&maxy, sizeof(double));
+        ostream2->Write(&pTP->minx, sizeof(double));
+        ostream2->Write(&pTP->maxx, sizeof(double));
+        ostream2->Write(&pTP->miny, sizeof(double));
+        ostream2->Write(&pTP->maxy, sizeof(double));
 
 
         pTP = pTP->p_next;
@@ -994,14 +1489,10 @@ int PolyTessGeo::Write_PolyTriGroup( wxOutputStream &out_stream)
             ostream2->Write( pTP->p_vertex, pTP->nVert * 2 * sizeof(double));
 
         //  Write out the object bounding box as lat/lon
-            double minx = pTP->p_bbox->GetMinX();
-            double maxx = pTP->p_bbox->GetMaxX();
-            double miny = pTP->p_bbox->GetMinY();
-            double maxy = pTP->p_bbox->GetMaxY();
-            ostream2->Write(&minx, sizeof(double));
-            ostream2->Write(&maxx, sizeof(double));
-            ostream2->Write(&miny, sizeof(double));
-            ostream2->Write(&maxy, sizeof(double));
+            ostream2->Write(&pTP->minx, sizeof(double));
+            ostream2->Write(&pTP->maxx, sizeof(double));
+            ostream2->Write(&pTP->miny, sizeof(double));
+            ostream2->Write(&pTP->maxy, sizeof(double));
 
 
             pTP = pTP->p_next;
@@ -1087,6 +1578,15 @@ PolyTessGeo::~PolyTessGeo()
 
 }
 
+int PolyTessGeo::BuildDeferredTess(void)
+{
+#ifdef USE_GLU_TESS
+    return BuildTessGL();
+#else
+    return BuildTessTri();
+#endif
+}
+
 
 
 #ifdef USE_GLU_TESS
@@ -1112,6 +1612,8 @@ void __CALL_CONVENTION combineCallback(GLdouble coords[3],
 //      Using OpenGL/GLU tesselator
 int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon)
 {
+#ifdef ocpnUSE_GL
+    
     int iir, ip;
     int *cntr;
     GLdouble *geoPt;
@@ -1120,6 +1622,29 @@ int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, 
     wxString    sout1;
     wxString    stemp;
 
+    //  Make a quick sanity check of the polygon coherence
+    bool b_ok = true;
+    OGRLineString *tls = poly->getExteriorRing();
+    if(!tls) {
+        b_ok = false;
+    }
+    else {
+        int tnpta  = poly->getExteriorRing()->getNumPoints();
+        if(tnpta < 3 )
+            b_ok = false;
+    }
+
+    
+    for( iir=0 ; iir < poly->getNumInteriorRings() ; iir++)
+    {
+        int tnptr = poly->getInteriorRing(iir)->getNumPoints();
+        if( tnptr < 3 )
+            b_ok = false;
+    }
+    
+    if( !b_ok )
+        return ERROR_BAD_OGRPOLY;
+    
 
 #ifdef __WXMSW__
 //  If using the OpenGL dlls provided with Windows,
@@ -1481,12 +2006,15 @@ int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, 
 
     m_bOK = true;
 
+#endif          //    #ifdef ocpnUSE_GL
+    
     return 0;
 }
 
-
 int PolyTessGeo::BuildTessGL(void)
 {
+#ifdef ocpnUSE_GL
+    
       int iir, ip;
       int *cntr;
       GLdouble *geoPt;
@@ -1861,6 +2389,8 @@ int PolyTessGeo::BuildTessGL(void)
 
       m_bOK = true;
 
+#endif          //#ifdef ocpnUSE_GL
+      
       return 0;
 }
 
@@ -1919,8 +2449,6 @@ void __CALL_CONVENTION endCallback(void)
             pTPG->nVert = s_nvcall;
 
         //  Calculate bounding box
-            pTPG->p_bbox = new wxBoundingBox;
-
             float sxmax = -1000;                   // this poly BBox
             float sxmin = 1000;
             float symax = -90;
@@ -1956,9 +2484,11 @@ void __CALL_CONVENTION endCallback(void)
                 }
             }
 
-            pTPG->p_bbox->SetMin(sxmin, symin);
-            pTPG->p_bbox->SetMax(sxmax, symax);
-
+            pTPG->minx = sxmin;
+            pTPG->miny = symin;
+            pTPG->maxx = sxmax;
+            pTPG->maxy = symax;
+            
 
             //  Transcribe this geometry to TriPrim, converting to SM if called for
 
@@ -2244,7 +2774,6 @@ TriPrim::~TriPrim()
 {
 
     free(p_vertex);
-    delete p_bbox;
 }
 
 

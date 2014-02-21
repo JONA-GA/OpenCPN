@@ -1,7 +1,7 @@
-/******************************************************************************
+/***************************************************************************
  *
- * Project:  OpenCP
- * Purpose:  OpenCP Main wxWidgets Program
+ * Project:  OpenCPN
+ * Purpose:  OpenCPN Main wxWidgets Program
  * Author:   David Register
  *
  ***************************************************************************
@@ -21,10 +21,7 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- *
- *
- */
+ **************************************************************************/
 
 #ifndef __CHART1_H__
 #define __CHART1_H__
@@ -32,6 +29,7 @@
 #include "wx/print.h"
 #include "wx/datetime.h"
 #include <wx/cmdline.h>
+#include <wx/snglinst.h>
 
 #ifdef __WXMSW__
 #include "wx/msw/private.h"
@@ -59,12 +57,18 @@ int GetApplicationMemoryUse(void);
 // The point for anchor watch should really be a class...
 double AnchorDistFix( double const d, double const AnchorPointMinDist, double const AnchorPointMaxDist);   //  pjotrc 2010.02.22
 
+bool TestGLCanvas(wxString &prog_dir);
+
+class NMEA_Msg_Container;
+WX_DECLARE_STRING_HASH_MAP( NMEA_Msg_Container*, MsgPriorityHash );
+
 //    Fwd definitions
 class OCPN_NMEAEvent;
 class ChartCanvas;
 class ocpnFloatingToolbarDialog;
 class OCPN_MsgEvent;
 class options;
+class Track;
 
 //----------------------------------------------------------------------------
 //   constants
@@ -153,6 +157,16 @@ class ChartBase;
 class wxSocketEvent;
 class ocpnToolBarSimple;
 class OCPN_DataStreamEvent;
+class DataStream;
+
+//      A class to contain NMEA messages, their receipt time, and their source priority
+class NMEA_Msg_Container
+{
+public:
+    wxDateTime  receipt_time;
+    int         current_priority;
+    wxString    stream_name;
+};
 
 //    A small class used in an array to describe chart directories
 class ChartDirInfo
@@ -176,6 +190,8 @@ class MyApp: public wxApp
     void OnActivateApp(wxActivateEvent& event);
 
     void TrackOff(void);
+    
+    wxSingleInstanceChecker *m_checker;
 
     DECLARE_EVENT_TABLE()
 
@@ -199,7 +215,6 @@ class MyFrame: public wxFrame
     void OnMove(wxMoveEvent& event);
     void OnFrameTimer1(wxTimerEvent& event);
     bool DoChartUpdate(void);
-    void OnEvtNMEA(wxCommandEvent& event);
     void OnEvtTHREADMSG(wxCommandEvent& event);
     void OnEvtOCPN_NMEA(OCPN_DataStreamEvent & event);
     void OnEvtPlugInMessage( OCPN_MsgEvent & event );
@@ -229,8 +244,6 @@ class MyFrame: public wxFrame
     void DoPrint(void);
     void StopSockets(void);
     void ResumeSockets(void);
-    void DoExportGPX(void);
-    void DoImportGPX(void);
     void TogglebFollow(void);
     void ToggleFullScreen();
     void SetbFollow(void);
@@ -242,7 +255,7 @@ class MyFrame: public wxFrame
     bool ToggleLights( bool doToggle = true, bool temporary = false );
     void ToggleAnchor(void);
     void TrackOn(void);
-    void TrackOff(bool do_add_point = false);
+    Track *TrackOff(bool do_add_point = false);
     void TrackMidnightRestart(void);
     void ToggleColorScheme();
     int GetnChartStack(void);
@@ -283,9 +296,10 @@ class MyFrame: public wxFrame
     void SetupQuiltMode(void);
 
     void ChartsRefresh(int dbi_hint, ViewPort &vp, bool b_purge = true);
-    void ShowBrightnessLevelTimedDialog(int brightness, int min, int max);
 
     bool CheckGroup(int igroup);
+    double GetTrueOrMag(double a);
+    
 
     void TouchAISActive(void);
     void UpdateAISTool(void);
@@ -309,13 +323,13 @@ class MyFrame: public wxFrame
     void UpdateGPSCompassStatusBox(bool b_force_new = false);
     bool UpdateChartDatabaseInplace(ArrayOfCDI &DirArray,
                                     bool b_force, bool b_prog,
-                                    wxString &ChartListFileName);
+                                    const wxString &ChartListFileName);
 
     bool                m_bdefer_resize;
     wxSize              m_defer_size;
 
   private:
-    void DoSetSize(void);
+    void ODoSetSize(void);
     void DoCOGSet(void);
 
         //      Toolbar support
@@ -331,11 +345,13 @@ class MyFrame: public wxFrame
     void SetChartUpdatePeriod(ViewPort &vp);
 
     void ApplyGlobalColorSchemetoStatusBar(void);
-    void PostProcessNNEA(bool brx_rmc, wxString &sfixtime);
+    void PostProcessNNEA(bool pos_valid, const wxString &sfixtime);
 
-    void ScrubGroupArray();
+    bool ScrubGroupArray();
     wxString GetGroupName(int igroup);
     void LoadHarmonics();
+
+    bool EvalPriority(const wxString & message, DataStream *pDS );
 
     int                 m_StatusBarFieldCount;
 
@@ -373,20 +389,13 @@ class MyFrame: public wxFrame
     bool                bPrevFullScreenQuilt;
     bool                bPrevOGL;
 
-    int                 m_current_src_priority;
-    wxString            m_current_src_id;
-    time_t              m_current_src_ticks;
+    MsgPriorityHash     NMEA_Msg_Hash;
+    wxString            m_VDO_accumulator;
+    
+    time_t              m_fixtime;
 
     DECLARE_EVENT_TABLE()
 };
-
-
-//--------------------------------------------------------------------
-//          Private Memory Management
-//--------------------------------------------------------------------
-
-//    Private malloc replacement
-void *x_malloc(size_t t);
 
 //--------------------------------------------------------------------
 //          Printing Support
@@ -395,13 +404,21 @@ void *x_malloc(size_t t);
 class MyPrintout: public wxPrintout
 {
  public:
-  MyPrintout(const wxChar *title = _T("My printout")):wxPrintout(title) {}
+  MyPrintout(const wxChar *title = _T("My printout")):wxPrintout(title){}
+  virtual
   bool OnPrintPage(int page);
+  virtual
   bool HasPage(int page);
+  virtual
   bool OnBeginDocument(int startPage, int endPage);
+  virtual
   void GetPageInfo(int *minPage, int *maxPage, int *selPageFrom, int *selPageTo);
 
   void DrawPageOne(wxDC *dc);
+
+
+
+
 };
 
 
@@ -440,36 +457,39 @@ public:
 };
 
 
-extern int OCPNMessageBox(const wxString& message, const wxString& caption = _T("Message"), int style = wxOK,wxWindow *parent = NULL, int x = -1, int y = -1);
-
-class OCPNMessageDialog
-{
-      public:
-            OCPNMessageDialog(wxWindow* parent, const wxString& message, const wxString& caption = _T("Message box"), long style = wxOK | wxCANCEL, const wxPoint& pos = wxDefaultPosition);
-
-            ~OCPNMessageDialog();
-
-            int ShowModal();
-      private:
-            wxMessageDialog *m_pdialog;
-};
-
+extern int OCPNMessageBox(wxWindow *parent,
+                          const wxString& message,
+                          const wxString& caption = _T("Message"),
+                          int style = wxOK,  int timout_sec = -1, int x = -1, int y = -1);
 
 
 //----------------------------------------------------------------------------
-// Generic Bitmap Dialog
+// Generic Auto Timed Window
+// Belongs to the creator, not deleted automatically on application close
 //----------------------------------------------------------------------------
-class OCPNBitmapDialog: public wxDialog
-{
-      public:
-            OCPNBitmapDialog(wxWindow *frame, wxPoint position, wxSize size);
-            ~OCPNBitmapDialog();
-            void  SetBitmap(wxBitmap bitmap);
-            void OnPaint(wxPaintEvent& event);
-      private:
-            wxBitmap    m_bitmap;
 
-            DECLARE_EVENT_TABLE()
+class TimedPopupWin: public wxWindow
+{
+public:
+    TimedPopupWin( wxWindow *parent, int timeout = -1 );
+    ~TimedPopupWin();
+    
+    void OnPaint( wxPaintEvent& event );
+    
+    void SetBitmap( wxBitmap &bmp );
+    wxBitmap* GetBitmap() { return m_pbm; }
+    void OnTimer( wxTimerEvent& event );
+    bool IsActive() { return isActive; }
+    void IsActive( bool state ) { isActive = state; }
+    
+private:
+    wxBitmap *m_pbm;
+    wxTimer m_timer_timeout;
+    int m_timeout_sec;
+    bool isActive;
+    
+    DECLARE_EVENT_TABLE()
 };
+
 
 #endif

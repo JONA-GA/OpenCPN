@@ -2508,8 +2508,7 @@
 			<disp-prio>Area 2</disp-prio>
 			<radar-prio>Supressed</radar-prio>
 			<table-name>Plain</table-name>
-			<attrib-code index="0">CATVEG13</attrib-code>
-			<instruction>AP(VEGATN03);LS(DASH,1,LANDF)</instruction>
+			<instruction>AP(CROSSX02);LS(DASH,1,LANDF)</instruction>
 			<display-cat>Other</display-cat>
 			<comment>32030</comment>
 		</lookup>
@@ -5840,8 +5839,7 @@
 			<disp-prio>Area 2</disp-prio>
 			<radar-prio>Supressed</radar-prio>
 			<table-name>Symbolized</table-name>
-			<attrib-code index="0">CATVEG13</attrib-code>
-			<instruction>AP(VEGATN03);LS(DASH,1,LANDF)</instruction>
+			<instruction>AP(CROSSX02);LS(DASH,1,LANDF)</instruction>
 			<display-cat>Other</display-cat>
 			<comment>32030</comment>
 		</lookup>
@@ -10693,7 +10691,7 @@
 			<table-name>Simplified</table-name>
 			<attrib-code index="0">CATSPM54</attrib-code>
 			<attrib-code index="1">BOYSHP4</attrib-code>
-			<instruction>SY(BOYSPP35);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
+			<instruction>SY(BOYSPP11);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
 			<display-cat>Standard</display-cat>
 			<comment>27010</comment>
 		</lookup>
@@ -10704,7 +10702,7 @@
 			<table-name>Simplified</table-name>
 			<attrib-code index="0">CATSPM54</attrib-code>
 			<attrib-code index="1">BOYSHP5</attrib-code>
-			<instruction>SY(BOYSPP35);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
+			<instruction>SY(BOYSPP11);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
 			<display-cat>Standard</display-cat>
 			<comment>27010</comment>
 		</lookup>
@@ -10764,7 +10762,7 @@
 			<radar-prio>On Top</radar-prio>
 			<table-name>Simplified</table-name>
 			<attrib-code index="0">BOYSHP4</attrib-code>
-			<instruction>SY(BOYSPP35);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
+			<instruction>SY(BOYSPP11);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
 			<display-cat>Standard</display-cat>
 			<comment>27010</comment>
 		</lookup>
@@ -10774,7 +10772,7 @@
 			<radar-prio>On Top</radar-prio>
 			<table-name>Simplified</table-name>
 			<attrib-code index="0">BOYSHP5</attrib-code>
-			<instruction>SY(BOYSPP35);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
+			<instruction>SY(BOYSPP11);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
 			<display-cat>Standard</display-cat>
 			<comment>27010</comment>
 		</lookup>
@@ -10804,7 +10802,7 @@
 			<radar-prio>On Top</radar-prio>
 			<table-name>Simplified</table-name>
 			<attrib-code index="0">BOYSHP8</attrib-code>
-			<instruction>SY(BOYSPP35);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
+			<instruction>SY(BOYSPP11);TE('by %s','OBJNAM',2,1,2,'15110',-1,-1,CHBLK,21)</instruction>
 			<display-cat>Standard</display-cat>
 			<comment>27010</comment>
 		</lookup>
@@ -31968,7 +31966,7 @@
 			<filltype>L</filltype>
 			<spacing>C</spacing>
 			<description>area of depth less than the safety contour</description>
-			<bitmap width="9" height="9">
+			<bitmap width="32" height="32">
 				<distance min="0" max="0" />
 				<pivot x="5" y="5" />
 				<origin x="0" y="0" />
@@ -31976,7 +31974,37 @@
 			</bitmap>
 			<color-ref>ACHGRD</color-ref>
 		</pattern>
-	</patterns>
+
+		<pattern RCID="3">
+                        <name>CROSSX01</name>
+                        <definition>R</definition>
+                        <filltype>L</filltype>
+                        <spacing>C</spacing>
+                        <description>General Cross Hatch pattern, Angle 0</description>
+                        <bitmap width="16" height="16">
+                                <distance min="0" max="0" />
+                                <pivot x="8" y="8" />
+                                <origin x="0" y="0" />
+                                <graphics-location x="400" y="1040" />
+                        </bitmap>
+                        <color-ref>ACHBRN</color-ref>
+                </pattern>
+
+                <pattern RCID="4">
+                        <name>CROSSX02</name>
+                        <definition>R</definition>
+                        <filltype>L</filltype>
+                        <spacing>C</spacing>
+                        <description>General small dot pattern</description>
+                        <bitmap width="16" height="16">
+                                <distance min="0" max="0" />
+                                <pivot x="8" y="8" />
+                                <origin x="0" y="0" />
+                                <graphics-location x="430" y="1040" />
+                        </bitmap>
+                        <color-ref>ACHBRN</color-ref>
+                </pattern>
+        </patterns>
 
 	<symbols>
 
@@ -33802,6 +33830,7 @@
 				<origin x="684" y="362" />
 				<HPGL>SPA;SW1;PU685,1257;PD785,1058;PD884,1257;SPA;SW1;PU685,1073;PD785,874;PD884,1073;SPA;SW1;PU785,362;PD785,1270;SPA;SW1;PU684,611;PD786,364;PD886,611;</HPGL>
 			</vector>
+                        <prefer-bitmap>no</prefer-bitmap>
                         <definition>V</definition>
 		</symbol>
 
@@ -38430,6 +38459,7 @@
 				<HPGL>SPI;ST2;PU1500,1500;PM0;PD1375,937,1375,912,1381,875,1400,843,1418,825,1450,800,1493,800,1531,800,1556,806,1593,831;PD1606,868,1612,900,1612,931,1500,1500;PM2;FP;SPI;SW1;PU1500,1500;PD1375,925;PD1375,887;PD1387,850;PD1406,831;PD1437,806;PD1475,800;PD1500,800;PD1531,800;PD1562,812;PD1587,837;PD1606,875;PD1612,900;PD1606,956;PD1500,1500;</HPGL>
 			</vector>
 			<definition>V</definition>
+                        <prefer-bitmap>no</prefer-bitmap>
 		</symbol>
 
 		<symbol RCID="32">

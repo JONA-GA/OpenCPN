@@ -41,6 +41,7 @@ enum TrackContextMenu {
 
 class wxButton;
 class Route;
+class Track;
 class Layer;
 class RoutePoint;
 
@@ -55,9 +56,11 @@ class RouteManagerDialog : public wxDialog {
             void UpdateTrkListCtrl();
             void UpdateWptListCtrl(RoutePoint *rp_select = NULL, bool b_retain_sort = false);
             void UpdateLayListCtrl();
+            void UpdateWptListCtrlViz();
+            
             void OnTabSwitch(wxNotebookEvent& event);
             static void WptShowPropertiesDialog( RoutePoint* wp, wxWindow* parent );
-
+            void TrackToRoute( Track *track );
 
       private:
             void Create();
@@ -121,7 +124,8 @@ class RouteManagerDialog : public wxDialog {
             void OnLayColumnClicked(wxListEvent &event);
             void OnImportClick(wxCommandEvent &event);
             void OnExportClick(wxCommandEvent &event);
-
+            void OnExportVizClick(wxCommandEvent &event);
+            
             // properties
             wxNotebook *m_pNotebook;
             wxPanel    *m_pPanelRte;
@@ -163,7 +167,8 @@ class RouteManagerDialog : public wxDialog {
             wxButton *btnLayDelete;
             wxButton *btnImport;
             wxButton *btnExport;
-
+            wxButton *btnExportViz;
+            
             bool m_bPossibleClick;    // do
             bool m_bCtrlDown;         // record control key state for some action buttons
             bool m_bNeedConfigFlush;  // if true, update config in destructor

@@ -47,7 +47,7 @@ DashboardInstrument::DashboardInstrument(wxWindow *pparent, wxWindowID id, wxStr
       m_cap_flag = cap_flag;
 
       SetBackgroundStyle( wxBG_STYLE_CUSTOM );
-
+      SetDrawSoloInPane(false);
       wxClientDC dc(this);
       int width;
       dc.GetTextExtent(m_title, &width, &m_TitleHeight, 0, 0, g_pFontTitle);
@@ -60,7 +60,10 @@ int DashboardInstrument::GetCapacity()
 {
       return m_cap_flag;
 }
-
+void DashboardInstrument::SetDrawSoloInPane(bool value)
+{
+    m_drawSoloInPane = value;
+}
 void DashboardInstrument::OnEraseBackground(wxEraseEvent& WXUNUSED(evt))
 {
         // intentionally empty
@@ -81,7 +84,9 @@ void DashboardInstrument::OnPaint( wxPaintEvent& WXUNUSED(event) )
     }
 
     wxBitmap bm( size.x, size.y, 32 );
+#if !wxCHECK_VERSION(2,9,4)
     bm.UseAlpha();
+#endif
     wxMemoryDC mdc( bm );
     wxGCDC dc( mdc );
     wxColour cl;
@@ -91,22 +96,66 @@ void DashboardInstrument::OnPaint( wxPaintEvent& WXUNUSED(event) )
 
     Draw( &dc );
 
-    // With wxTRANSPARENT_PEN the borders are ugly so lets use the same color for both
-    wxPen pen;
-    pen.SetStyle( wxSOLID );
-    GetGlobalColor( _T("DASHL"), &cl );
-    pen.SetColour( cl );
-    dc.SetPen( pen );
-    dc.SetBrush( cl );
-    dc.DrawRoundedRectangle( 0, 0, size.x, m_TitleHeight, 3 );
+    if(m_drawSoloInPane) {
+        mdc.SelectObject( wxNullBitmap );
+        pdc.DrawBitmap( bm, 0, 0, false );
+    }
+    else {
 
-    dc.SetFont( *g_pFontTitle );
-    GetGlobalColor( _T("DASHF"), &cl );
-    dc.SetTextForeground( cl );
-    dc.DrawText( m_title, 5, 0 );
+    //  Windows GCDC does a terrible job of rendering small texts
+    //  Workaround by using plain old DC for title box if text size is too small
+#ifdef __WXMSW__
+        if( g_pFontTitle->GetPointSize() > 12 )
+#endif
+        {
+            wxPen pen;
+            pen.SetStyle( wxSOLID );
+            GetGlobalColor( _T("DASHL"), &cl );
+            pen.SetColour( cl );
+            dc.SetPen( pen );
+            dc.SetBrush( cl );
+            dc.DrawRoundedRectangle( 0, 0, size.x, m_TitleHeight, 3 );
 
-    mdc.SelectObject( wxNullBitmap );
-    pdc.DrawBitmap( bm, 0, 0, false );
+            dc.SetFont( *g_pFontTitle );
+            GetGlobalColor( _T("DASHF"), &cl );
+            dc.SetTextForeground( cl );
+            dc.DrawText( m_title, 5, 0 );
+
+            mdc.SelectObject( wxNullBitmap );
+            pdc.DrawBitmap( bm, 0, 0, false );
+        }
+
+#ifdef __WXMSW__
+        if( g_pFontTitle->GetPointSize() <= 12 ) {
+            mdc.SelectObject( wxNullBitmap );           // the instrument body
+            pdc.DrawBitmap( bm, 0, 0, false );
+
+            wxBitmap tbm( size.x, m_TitleHeight, -1 );
+            wxMemoryDC tdc( tbm );
+            wxColour cl;
+            GetGlobalColor( _T("DASHB"), &cl );
+            tdc.SetBackground( cl );
+            tdc.Clear();
+
+            wxPen pen;
+            pen.SetStyle( wxSOLID );
+            GetGlobalColor( _T("DASHL"), &cl );
+            pen.SetColour( cl );
+            tdc.SetPen( pen );
+            tdc.SetBrush( cl );
+            tdc.DrawRoundedRectangle( 0, 0, size.x, m_TitleHeight, 3 );
+
+            tdc.SetFont( *g_pFontTitle );
+            GetGlobalColor( _T("DASHF"), &cl );
+            tdc.SetTextForeground( cl );
+            tdc.DrawText( m_title, 5, 0 );
+
+            tdc.SelectObject( wxNullBitmap );
+            pdc.DrawBitmap( tbm, 0, 0, false );
+
+        }
+#endif
+    }
 }
 
 //----------------------------------------------------------------
@@ -139,11 +188,32 @@ wxSize DashboardInstrument_Single::GetSize( int orient, wxSize hint )
 void DashboardInstrument_Single::Draw(wxGCDC* dc)
 {
       wxColour cl;
-      dc->SetFont(*g_pFontData);
-      GetGlobalColor(_T("DASHF"), &cl);
-      dc->SetTextForeground(cl);
+#ifdef __WXMSW__
+      wxBitmap tbm( dc->GetSize().x, m_DataHeight, -1 );
+      wxMemoryDC tdc( tbm );
+      wxColour c2;
+      GetGlobalColor( _T("DASHB"), &c2 );
+      tdc.SetBackground( c2 );
+      tdc.Clear();
+
+      tdc.SetFont(*g_pFontData );
+      GetGlobalColor( _T("DASHF"), &cl );
+      tdc.SetTextForeground( cl );
+
+      tdc.DrawText(m_data, 10, 0);
+
+      tdc.SelectObject( wxNullBitmap );
+
+      dc->DrawBitmap(tbm, 0, m_TitleHeight, false);
+#else
+      dc->SetFont(*g_pFontData );
+      GetGlobalColor( _T("DASHF"), &cl );
+      dc->SetTextForeground( cl );
 
       dc->DrawText(m_data, 10, m_TitleHeight);
+
+#endif
+
 }
 
 void DashboardInstrument_Single::SetData(int st, double data, wxString unit)
@@ -212,12 +282,35 @@ wxSize DashboardInstrument_Position::GetSize( int orient, wxSize hint )
 void DashboardInstrument_Position::Draw(wxGCDC* dc)
 {
       wxColour cl;
-      dc->SetFont(*g_pFontData);
-      GetGlobalColor(_T("DASHF"), &cl);
-      dc->SetTextForeground(cl);
+
+#ifdef __WXMSW__
+      wxBitmap tbm( dc->GetSize().x, m_DataHeight * 2, -1 );
+      wxMemoryDC tdc( tbm );
+      wxColour c2;
+      GetGlobalColor( _T("DASHB"), &c2 );
+      tdc.SetBackground( c2 );
+      tdc.Clear();
+
+      tdc.SetFont(*g_pFontData );
+      GetGlobalColor( _T("DASHF"), &cl );
+      tdc.SetTextForeground( cl );
+
+      tdc.DrawText(m_data1, 10, 0);
+      tdc.DrawText(m_data2, 10, m_DataHeight);
+
+      tdc.SelectObject( wxNullBitmap );
+
+      dc->DrawBitmap(tbm, 0, m_TitleHeight, false);
+#else
+      dc->SetFont(*g_pFontData );
+      GetGlobalColor( _T("DASHF"), &cl );
+      dc->SetTextForeground( cl );
 
       dc->DrawText(m_data1, 10, m_TitleHeight);
-      dc->DrawText(m_data2, 10, m_TitleHeight+m_DataHeight);
+      dc->DrawText(m_data2, 10, m_TitleHeight + m_DataHeight);
+#endif
+
+
 }
 
 void DashboardInstrument_Position::SetData(int st, double data, wxString unit)
@@ -225,6 +318,7 @@ void DashboardInstrument_Position::SetData(int st, double data, wxString unit)
       if (st == m_cap_flag1)
       {
             m_data1 = toSDMM(1, data);
+            m_data1[0] = ' ';
       }
       else if (st == m_cap_flag2)
       {

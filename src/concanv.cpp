@@ -46,13 +46,14 @@
 #include "styles.h"
 #include "routeman.h"
 #include "navutil.h"
+#include "FontMgr.h"
 
 extern Routeman         *g_pRouteMan;
-extern FontMgr          *pFontMgr;
 extern MyFrame          *gFrame;
 extern bool             g_bShowActiveRouteHighway;
 extern double           gCog;
 extern double           gSog;
+extern bool             g_bShowMag;
 
 extern ocpnStyle::StyleManager* g_StyleManager;
 
@@ -268,9 +269,16 @@ void ConsoleCanvas::UpdateRouteData()
 
 //    Brg
             float dcog = g_pRouteMan->GetCurrentBrgToActivePoint();
-            if( dcog >= 359.5 ) dcog = 0;
-            str_buf.Printf( _T("%6.0f"), dcog );
-            pBRG->SetAValue( str_buf );
+            if( dcog >= 359.5 )
+                dcog = 0;
+            
+            wxString cogstr;
+            if( g_bShowMag )
+                cogstr << wxString::Format( wxString("%6.0f(M)", wxConvUTF8 ), gFrame->GetTrueOrMag( dcog ) );
+            else
+                cogstr << wxString::Format( wxString("%6.0f", wxConvUTF8 ), gFrame->GetTrueOrMag( dcog ) );
+            
+            pBRG->SetAValue( cogstr );
 
 //    XTE
             str_buf.Printf( _T("%6.2f"), g_pRouteMan->GetCurrentXTEToActivePoint() );
@@ -470,8 +478,8 @@ void AnnunText::SetColorScheme( ColorScheme cs )
 
 void AnnunText::RefreshFonts()
 {
-    m_plabelFont = pFontMgr->GetFont( m_LegendTextElement );
-    m_pvalueFont = pFontMgr->GetFont( m_ValueTextElement );
+    m_plabelFont = FontMgr::Get().GetFont( m_LegendTextElement );
+    m_pvalueFont = FontMgr::Get().GetFont( m_ValueTextElement );
 
     CalculateMinSize();
 
@@ -518,11 +526,15 @@ void AnnunText::OnPaint( wxPaintEvent& event )
 
     if( m_plabelFont ) {
         mdc.SetFont( *m_plabelFont );
+        if ( m_pbackBrush->GetColour() != FontMgr::Get().GetFontColor( _("Console Legend") ) )
+            mdc.SetTextForeground( FontMgr::Get().GetFontColor( _("Console Legend") ) );
         mdc.DrawText( m_label, 5, 2 );
     }
 
     if( m_pvalueFont ) {
         mdc.SetFont( *m_pvalueFont );
+        if ( m_pbackBrush->GetColour() != FontMgr::Get().GetFontColor( _("Console Value") ) )
+            mdc.SetTextForeground( FontMgr::Get().GetFontColor( _("Console Value") ) );
 
         int w, h;
         mdc.GetTextExtent( m_value, &w, &h );

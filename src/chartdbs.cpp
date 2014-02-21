@@ -1,11 +1,11 @@
-/******************************************************************************
+/**************************************************************************
 *
 * Project:  ChartManager
 * Purpose:  Basic Chart Info Storage
 * Author:   David Register, Mark A Sikes
 *
 ***************************************************************************
-*   Copyright (C) 2010 by David S. Register  *
+*   Copyright (C) 2010 by David S. Register                               *
 *                                                                         *
 *   This program is free software; you can redistribute it and/or modify  *
 *   it under the terms of the GNU General Public License as published by  *
@@ -20,10 +20,8 @@
 *   You should have received a copy of the GNU General Public License     *
 *   along with this program; if not, write to the                         *
 *   Free Software Foundation, Inc.,                                       *
-*   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
-***************************************************************************
-*
-*/
+*   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+**************************************************************************/
 
 #include "wx/wxprec.h"
 
@@ -1296,7 +1294,7 @@ int ChartDatabase::TraverseDirAndAddCharts(ChartDirInfo& dir_info, wxProgressDia
       return nAdd;
 }
 
-bool ChartDatabase::DetectDirChange(wxString dir_path, wxString magic, wxString &new_magic, wxProgressDialog *pprog)
+bool ChartDatabase::DetectDirChange(const wxString & dir_path, const wxString & magic, wxString &new_magic, wxProgressDialog *pprog)
 {
       if(pprog)
             pprog->SetTitle(_("OpenCPN Directory Scan...."));
@@ -1774,8 +1772,297 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
 }
 
 
+bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &chart_desc, wxProgressDialog *pprog,
+    int isearch, bool bthis_dir_in_dB)
+{
+    bool rv = false;
+    wxFileName file(chartfilename);
+    wxString full_name = file.GetFullPath();
+    wxString file_name = file.GetFullName();
+    
+    //    Validate the file name again, considering MSW's semi-random treatment of case....
+    // TODO...something fishy here - may need to normalize saved name?
+//    if(!file_name.Matches(lowerFileSpec) && !file_name.Matches(filespec) && !b_found_cm93)
+//        continue;
+    
+    if(pprog)
+        pprog->Update(wxMin((m_pdifile * 100) /m_pdnFile, 100), full_name);
+    
+    
+    ChartTableEntry *pnewChart = NULL;
+    bool bAddFinal = true;
+    int b_add_msg = 0;
+    
+    pnewChart = CreateChartTableEntry(full_name, chart_desc);
+    if(!pnewChart)
+    {
+        bAddFinal = false;
+        wxString msg = _T("   CreateChartTableEntry() failed for file: ");
+        msg.Append(full_name);
+        wxLogMessage(msg);
+        return false;
+    }
+    else         // traverse the existing database looking for duplicates, and choosing the right one
+            {
+                int nEntry = chartTable.GetCount();
+                for(int i=0 ; i<nEntry ; i++)
+                {
+                    wxString table_file_name(chartTable[isearch].GetpFullPath(), wxConvUTF8);
+                    
+                    //    If the chart full file paths are exactly the same, select the newer one
+                    if(bthis_dir_in_dB && full_name.IsSameAs(table_file_name))
+                    {
+                        b_add_msg++;
+                        
+                        //    Check the file modification time
+                        time_t t_oldFile = chartTable[isearch].GetFileTime();
+                        time_t t_newFile = file.GetModificationTime().GetTicks();
+                        
+                        if( t_newFile <= t_oldFile )
+                        {
+                            bAddFinal = false;
+                            chartTable[isearch].SetValid(true);
+                        }
+                        else
+                        {
+                            bAddFinal = true;
+                            chartTable[isearch].SetValid(false);
+                            wxString msg = _T("   Replacing older chart file of same path: ");
+                            msg.Append(full_name);
+                            wxLogMessage(msg);
+                        }
+                        
+                        break;
+                    }
+                    
+                    
+                    //  Look at the chart file name (without directory prefix) for a further check for duplicates
+                    //  This catches the case in which the "same" chart is in different locations,
+                    //  and one may be newer than the other.
+                    wxFileName table_file(table_file_name);
+                    
+                    if( table_file.GetFullName() == file_name )
+                    {
+                        b_add_msg++;
+                        
+                        if(pnewChart->IsEarlierThan(chartTable[isearch]))
+                        {
+                            //    Make sure the compare file actually exists
+                            if(table_file.IsFileReadable())
+                            {
+                                chartTable[isearch].SetValid(true);
+                                bAddFinal = false;
+                                wxString msg = _T("   Retaining newer chart file of same name: ");
+                                msg.Append(full_name);
+                                wxLogMessage(msg);
+                                
+                            }
+                        }
+                        else if(pnewChart->IsEqualTo(chartTable[isearch]))
+                        {
+                            //    The file names (without dir prefix) are identical,
+                            //    and the mod times are identical
+                            //    Prsume that this is intentional, in order to facilitate
+                            //    having the same chart in multiple groups.
+                            //    So, add this chart.
+                            bAddFinal = true;
+                        }
+                        
+                        else
+                        {
+                            chartTable[isearch].SetValid(false);
+                            bAddFinal = true;
+                            wxString msg = _T("   Replacing older chart file of same name: ");
+                            msg.Append(full_name);
+                            wxLogMessage(msg);
+                        }
+                        
+                        break;
+                    }
+                    
+                    //TODO    Look at the chart ID as a further check against duplicates
+                    
+                    
+                    isearch++;
+                    if(nEntry == isearch)
+                        isearch = 0;
+                }     // for
+            }
+            
+            
+            if(bAddFinal)
+            {
+                if(0 == b_add_msg)
+                {
+                    wxString msg = _T("   Adding chart file: ");
+                    msg.Append(full_name);
+                    wxLogMessage(msg);
+                }
+
+                chartTable.Add(pnewChart);
+                
+                rv = true;
+            }
+            else
+            {
+                //                  wxString msg = _T("   Not adding chart file: ");
+                //                  msg.Append(full_name);
+                //                  wxLogMessage(msg);
+                rv = false;
+            }
+            
+    return rv;
+}
+            
+bool ChartDatabase::AddSingleChart( wxString &ChartFullPath )
+{
+    //  Find a relevant chart class descriptor
+    wxFileName fn(ChartFullPath);
+    wxString ext = fn.GetExt();
+    ext.Prepend(_T("*."));
+    wxString ext_upper = ext.MakeUpper();
+    wxString ext_lower = ext.MakeLower();
+    wxString dir_name = fn.GetPath();
+
+    //    Search the array of chart class descriptors to find a match
+    //    bewteen the search mask and the the chart file extension
+
+    ChartClassDescriptor desc;
+    for(unsigned int i=0 ; i < m_ChartClassDescriptorArray.GetCount() ; i++)
+    {
+        if(m_ChartClassDescriptorArray.Item(i).m_descriptor_type == PLUGIN_DESCRIPTOR)
+        {
+            if(m_ChartClassDescriptorArray.Item(i).m_search_mask == ext_upper)
+            {
+                desc = m_ChartClassDescriptorArray.Item(i);
+                break;
+            }
+            if(m_ChartClassDescriptorArray.Item(i).m_search_mask == ext_lower)
+            {
+                desc = m_ChartClassDescriptorArray.Item(i);
+                break;
+            }
+        }
+    }
+    
+    
+    bool rv = AddChart( ChartFullPath, desc, NULL, 0,  IsChartDirUsed(dir_name) );
+
+    //  remove duplicates marked in AddChart()
+
+    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
+    {
+        if(!chartTable[i].GetbValid())
+        {
+            chartTable.RemoveAt(i);
+            i--;                 // entry is gone, recheck this index for next entry
+        }
+    }
+    
+    //    Update the Entry index fields
+    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
+        chartTable[i].SetEntryOffset( i );
+    
+    
+    //    Update (clone) the CDI array
+    bool bcfound = false;
+    ArrayOfCDI NewChartDirArray;
+    
+    ArrayOfCDI ChartDirArray = GetChartDirArray();
+    for(unsigned int i=0 ; i < ChartDirArray.GetCount(); i++)
+    {
+        ChartDirInfo cdi = ChartDirArray.Item(i);
+        
+        ChartDirInfo newcdi = cdi;
+        
+        //      If entry is found that matches this cell, clear the magic number.
+        if( newcdi.fullpath == dir_name ){
+            newcdi.magic_number = _T("");
+            bcfound = true;
+        }
+        
+        NewChartDirArray.Add(newcdi);
+    }
+    
+    if( !bcfound ){
+        ChartDirInfo cdi;
+        cdi.fullpath = dir_name;
+        cdi.magic_number = _T("");
+        NewChartDirArray.Add ( cdi );
+    }
+    
+    
+    // Update the database master copy of the CDI array
+    SetChartDirArray( NewChartDirArray );
+    
+    //  Update the list of chart dirs.
+    m_chartDirs.Clear();
+    
+    for(unsigned int i=0 ; i < GetChartDirArray().GetCount(); i++)
+    {
+        ChartDirInfo cdi = GetChartDirArray().Item(i);
+        m_chartDirs.Add( cdi.fullpath );
+    }
+    
+    return rv;
+    
+}
 
 
+bool ChartDatabase::RemoveSingleChart( wxString &ChartFullPath )
+{
+    bool rv = false;
+ 
+    //  Walk the chart table, looking for the target
+    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++) {
+        if( !strcmp( ChartFullPath.mb_str(), GetChartTableEntry(i).GetpFullPath() ) ){
+            chartTable.RemoveAt(i);
+            break;
+        }
+    }
+
+    
+    //    Update the EntryOffset fields for the array
+    ChartTableEntry *pcte;
+    
+    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++){
+        pcte = GetpChartTableEntry(i);
+        pcte->SetEntryOffset( i );
+    }
+ 
+ //  Check and update the dir array
+    wxFileName fn(ChartFullPath);
+    wxString fd = fn.GetPath();
+    if( !IsChartDirUsed(fd) ){
+        
+        //      Clone a new array, removing the unused directory, 
+        ArrayOfCDI NewChartDirArray;
+        
+        ArrayOfCDI ChartDirArray = GetChartDirArray();
+        for(unsigned int i=0 ; i < ChartDirArray.GetCount(); i++){
+            ChartDirInfo cdi = ChartDirArray.Item(i);
+            
+            ChartDirInfo newcdi = cdi;
+            
+            if( newcdi.fullpath != fd )
+                NewChartDirArray.Add(newcdi);
+        }
+        
+        SetChartDirArray( NewChartDirArray );
+    }
+
+    //  Update the list of chart dirs.
+    m_chartDirs.Clear();
+    for(unsigned int i=0 ; i < GetChartDirArray().GetCount(); i++)
+    {
+        ChartDirInfo cdi = GetChartDirArray().Item(i);
+        m_chartDirs.Add( cdi.fullpath );
+    }
+    
+    
+    return rv;
+}
+    
 
 
 ///////////////////////////////////////////////////////////////////////

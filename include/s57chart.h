@@ -1,11 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  S57 Chart Object
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -20,13 +20,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- *
- */
-
-
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef __S57CHART_H__
 #define __S57CHART_H__
@@ -45,9 +40,13 @@
 #include "iso8211.h"
 
 #include "gdal.h"
+#include "s57RegistrarMgr.h"
+#include "S57ClassRegistrar.h"
+#include "S57Light.h"
 
 #include "s52s57.h"                 //types
 #include "chcanv.h"                // for Viewport
+#include "OCPNRegion.h"
 
 
 // ----------------------------------------------------------------------------
@@ -57,7 +56,6 @@
 // ----------------------------------------------------------------------------
 // S57 Utility Prototypes
 // ----------------------------------------------------------------------------
-extern "C" int  s57_initialize(const wxString& csv_dir, FILE *flog);
 extern "C" bool s57_GetChartExtent(const wxString& FullPath, Extent *pext);
 
 void s57_DrawExtendedLightSectors( ocpnDC& temp_dc, ViewPort& VPoint, std::vector<s57Sector_t>& sectorlegs );
@@ -86,6 +84,9 @@ class S57ObjectDesc;
 class S57Reader;
 class OGRS57DataSource;
 class S57ClassRegistrar;
+class S57Obj;
+class VE_Element;
+class VC_Element;
 
 #include <wx/dynarray.h>
 
@@ -129,12 +130,10 @@ public:
 
       void SetNativeScale(int s){m_Chart_Scale = s;}
 
-      virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region);
-      virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region);
-      virtual bool RenderOverlayRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region);
-      virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region);
+      virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
+      virtual bool RenderOverlayRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
 
-      virtual void GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion);
+      virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
 
       virtual void GetPointPix(ObjRazRules *rzRules, float rlat, float rlon, wxPoint *r);
       virtual void GetPointPix(ObjRazRules *rzRules, wxPoint2DDouble *en, wxPoint *r, int nPoints);
@@ -184,7 +183,14 @@ public:
       virtual void ForceEdgePriorityEvaluate(void);
 
       void ClearRenderedTextCache();
+      
+      double GetCalculatedSafetyContour(void){ return m_next_safe_cnt; }
 
+//#ifdef ocpnUSE_GL
+      virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
+      virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
+//#endif
+      
 // Public data
 //Todo Accessors here
       //  Object arrays used by S52PLIB TOPMAR rendering logic
@@ -203,7 +209,7 @@ public:
 
       //    Last ViewPort succesfully rendered, stored as an aid to calculating pixel cache address offsets and regions
       ViewPort    m_last_vp;
-      wxRegion    m_last_Region;
+      OCPNRegion    m_last_Region;
 
       virtual bool IsCacheValid(){ return (pDIB != NULL); }
       virtual void InvalidateCache();
@@ -217,19 +223,22 @@ public:
       char GetUsageChar(void){ return m_usage_char; }
       static bool IsCellOverlayType(char *pFullPath);
 
+      bool        m_b2pointLUPS;
+      bool        m_b2lineLUPS;
+      
+      struct _chart_context     *m_this_chart_context;
+      
 private:
 
+      void SetSafetyContour(void);
+    
       bool DoRenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, RenderTypeEnum option, bool force_new_view);
-      bool DoRenderRectOnGL(const wxGLContext &glc, const ViewPort& VPoint, wxRect &rect);
 
-      bool DoRenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const wxRegion &Region, bool b_overlay);
-      bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region, bool b_overlay);
+      bool DoRenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_overlay);
 
       int DCRenderRect(wxMemoryDC& dcinput, const ViewPort& vp, wxRect *rect);
       bool DCRenderLPB(wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rect);
 
-      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRegion &Region, bool b_render_nodta = true);
-      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRect &Rect, bool b_render_nodta = true);
 
       InitReturn PostInit( ChartInitFlag flags, ColorScheme cs );
       InitReturn FindOrCreateSenc( const wxString& name );
@@ -259,7 +268,13 @@ private:
       const char *getName(OGRFeature *feature);
       int GetUpdateFileArray(const wxFileName file000, wxArrayString *UpFiles);
 
-
+//#ifdef ocpnUSE_GL
+      bool DoRenderRectOnGL(const wxGLContext &glc, const ViewPort& VPoint, wxRect &rect);
+      bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_overlay);
+      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRect &Rect, bool b_render_nodta = true);
+      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_render_nodta = true);
+//#endif
+      
 
  // Private Data
       wxString    *m_pcsv_locn;
@@ -313,38 +328,8 @@ private:
       long        m_plib_state_hash;
       bool        m_btex_mem;
       char        m_usage_char;
-};
-
-//----------------------------------------------------------------------------
-//    This class encapsulates the results (per object) of an S57 object query
-//----------------------------------------------------------------------------
-//
-class S57ObjectDesc
-{
-public:
-      wxString    S57ClassName;
-      wxString    S57ClassDesc;
-      wxString    Attributes;
-};
-
-class S57Light {
-public:
-      wxArrayString attributeNames;
-      wxArrayString attributeValues;
-      wxString position;
-      bool hasSectors;
-};
-
-//------------------------------------------------------------------------
-//  s57RegistrarMgr Definition
-//  This is a class holding the ctor and dtor for the global registrar
-//------------------------------------------------------------------------
-
-class s57RegistrarMgr
-{
-      public:
-            s57RegistrarMgr(const wxString& csv_dir, FILE *flog);
-            ~s57RegistrarMgr();
+      
+      double      m_next_safe_cnt;
 };
 
 #endif

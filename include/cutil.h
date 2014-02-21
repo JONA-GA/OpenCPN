@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Project:  OpenCP
+ * Project:  OpenCPN
  * Purpose:  Extern C Linked Utilities
  * Author:   David Register
  *
@@ -62,8 +62,28 @@ typedef struct {
      extern  long  __stdcall MyUnhandledExceptionFilter( struct _EXCEPTION_POINTERS *ExceptionInfo );
 #endif
 #endif
+     
 
-
+     //      Replacement for round(x)???
+#ifdef __cplusplus
+     extern "C"  double     round_msvc (double flt);
+#else
+     extern double round_msvc (double flt);
+#endif /* __cplusplus */
+     
+     
+inline int roundint (double x)
+{
+#ifdef __WXOSX__
+    return (int)round(x);     //FS#1278
+#else
+    int tmp = static_cast<int> (x);
+    tmp += (x-tmp>=.5) - (x-tmp<=-.5);
+    return tmp;
+#endif    
+}
+     
+     
 
 //-------------------------------------------------------------------------------------------------------
 //  Cohen & Sutherland Line clipping algorithms
@@ -88,12 +108,6 @@ extern "C"  ClipResult cohen_sutherland_line_clip_i (int *x0, int *y0, int *x1, 
                                              int xmin_, int xmax_, int ymin_, int ymax_);
 
 #endif
-
-
-//      Replacement for round(x)???
-#ifdef __cplusplus
-extern "C"  double     round_msvc (double flt);
-#endif /* __cplusplus */
 
 
 

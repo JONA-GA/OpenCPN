@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  *
  * Project:  OpenCPN
@@ -6,7 +6,7 @@
  * Author:   David Register
  *
  ***************************************************************************
- *   Copyright (C) 2010 by David S. Register   *
+ *   Copyright (C) 2010 by David S. Register                               *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -21,10 +21,8 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.             *
- ***************************************************************************
- *
- */
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
+ **************************************************************************/
 
 #ifndef _PLUGINMGR_H_
 #define _PLUGINMGR_H_
@@ -32,12 +30,18 @@
 #include <wx/wx.h>
 #include <wx/dynarray.h>
 #include <wx/dynlib.h>
+
+#ifdef ocpnUSE_GL
 #include <wx/glcanvas.h>
+#endif
 
 #include "ocpn_plugin.h"
 #include "chart1.h"                 // for MyFrame
 #include "chcanv.h"                 // for ViewPort
 #include "datastream.h"             // for GenericPosDat
+#include "OCPN_Sound.h"
+#include "s52s57.h"
+#include "s57chart.h"               // for Object list
 
 //For widgets...
 #include "wx/hyperlink.h"
@@ -67,6 +71,19 @@ PlugIn_AIS_Target *Create_PI_AIS_Target(AIS_Target_Data *ptarget);
 class PluginListPanel;
 class PluginPanel;
 
+typedef struct {
+    wxString name;      // name of the plugin
+    int version_major;  // major version
+    int version_minor;  // minor version
+    bool hard;          // hard blacklist - if true, don't load it at all, if false, load it and just warn the user
+    bool all_lower;     // if true, blacklist also all the lower versions of the plugin
+} BlackListedPlugin;
+
+const BlackListedPlugin PluginBlacklist[] = {
+    { _T("aisradar_pi"), 0, 95, false, true },
+    { _T("radar_pi"), 0, 95, false, true },             // GCC alias for aisradar_pi
+};
+
 //----------------------------------------------------------------------------
 // PlugIn Messaging scheme Event
 //----------------------------------------------------------------------------
@@ -75,35 +92,35 @@ class OCPN_MsgEvent: public wxEvent
 {
 public:
     OCPN_MsgEvent( wxEventType commandType = wxEVT_NULL, int id = 0 );
-    
+
     OCPN_MsgEvent(const OCPN_MsgEvent & event)
     : wxEvent(event),
     m_MessageID(event.m_MessageID),
     m_MessageText(event.m_MessageText)
     { }
-    
+
     ~OCPN_MsgEvent( );
-    
+
     // accessors
     wxString GetID() { return m_MessageID; }
     wxString GetJSONText() { return m_MessageText; }
-    
-    void SetID(wxString &string) { m_MessageID = string; }
-    void SetJSONText(wxString &string) { m_MessageText = string; }
-    
-    
+
+    void SetID(const wxString &string) { m_MessageID = string; }
+    void SetJSONText(const wxString &string) { m_MessageText = string; }
+
+
     // required for sending with wxPostEvent()
-    wxEvent *Clone() const; 
-    
+    wxEvent *Clone() const;
+
 private:
     wxString    m_MessageID;
     wxString    m_MessageText;
-        
-        
+
+
 };
-    
+
 extern  const wxEventType wxEVT_OCPN_MSG;
-    
+
 
 //-----------------------------------------------------------------------------------------------------
 //
@@ -167,7 +184,7 @@ class PlugInToolbarToolContainer
             wxBitmap          *bitmap_dusk;
             wxBitmap          *bitmap_night;
             wxBitmap          *bitmap_Rollover;
-            
+
             wxItemKind        kind;
             wxString          shortHelp;
             wxString          longHelp;
@@ -197,7 +214,7 @@ public:
       PlugInManager(MyFrame *parent);
       virtual ~PlugInManager();
 
-      bool LoadAllPlugIns(wxString &plugin_dir);
+      bool LoadAllPlugIns(const wxString &plugin_dir);
       bool UnLoadAllPlugIns();
       bool DeactivateAllPlugIns();
       bool UpdatePlugIns();
@@ -234,24 +251,31 @@ public:
       void SetCanvasContextMenuItemViz(int item, bool viz);
       void SetCanvasContextMenuItemGrey(int item, bool grey);
 
-      void SendNMEASentenceToAllPlugIns(wxString &sentence);
+      void SendNMEASentenceToAllPlugIns(const wxString &sentence);
       void SendPositionFixToAllPlugIns(GenericPosDatEx *ppos);
-      void SendAISSentenceToAllPlugIns(wxString &sentence);
-      void SendJSONMessageToAllPlugins(wxString &message_id, wxJSONValue v);
-      void SendMessageToAllPlugins(wxString &message_id, wxString &message_body);
+      void SendAISSentenceToAllPlugIns(const wxString &sentence);
+      void SendJSONMessageToAllPlugins(const wxString &message_id, wxJSONValue v);
+      void SendMessageToAllPlugins(const wxString &message_id, const wxString &message_body);
 
       void SendResizeEventToAllPlugIns(int x, int y);
       void SetColorSchemeForAllPlugIns(ColorScheme cs);
       void NotifyAuiPlugIns(void);
+      bool CallLateInit(void);
 
       wxArrayString GetPlugInChartClassNameArray(void);
 
+      ListOfPI_S57Obj *GetPlugInObjRuleListAtLatLon( ChartPlugInWrapper *target, float zlat, float zlon,
+                                                       float SelectRadius, const ViewPort& vp );
+      wxString CreateObjDescriptions( ChartPlugInWrapper *target, ListOfPI_S57Obj *rule_list );
+      
       wxString GetLastError();
       MyFrame *GetParentFrame(){ return pParent; }
 
       void DimeWindow(wxWindow *win);
-
+      OCPN_Sound        m_plugin_sound;
+      
 private:
+      bool CheckBlacklistedPlugin(opencpn_plugin* plugin);
       bool DeactivatePlugIn(PlugInContainer *pic);
       wxBitmap *BuildDimmedToolBitmap(wxBitmap *pbmp_normal, unsigned char dim_ratio);
       bool UpDateChartDataTypes(void);
@@ -271,7 +295,6 @@ private:
       int               m_plugin_menu_item_id_next;
       wxBitmap          m_cached_overlay_bm;
 
- //     opencpn_plugin    *m_plugin_base;
 
 
 };
@@ -285,6 +308,8 @@ public:
       ~PluginListPanel();
 
       void SelectPlugin( PluginPanel *pi );
+      void UpdateSelections();
+      
 
 private:
       ArrayOfPlugIns     *m_pPluginArray;
@@ -303,6 +328,7 @@ public:
       void OnPluginPreferences( wxCommandEvent& event );
       void OnPluginEnable( wxCommandEvent& event );
       void SetEnabled( bool enabled );
+      bool GetSelected(){ return m_bSelected; }
 
 private:
       PluginListPanel *m_PluginListPanel;
@@ -318,7 +344,39 @@ private:
 };
 
 
+//  API 1.11 adds access to S52 Presentation library
+//  These are some wrapper conversion utilities
 
+class S52PLIB_Context
+{
+public:
+    S52PLIB_Context(){
+        bBBObj_valid = false;
+        bCS_Added = false;
+        bFText_Added = false;
+        CSrules = NULL;
+        FText = NULL;
+        };
+        
+    ~S52PLIB_Context(){};
+    
+    wxBoundingBox           BBObj;                  // lat/lon BBox of the rendered object
+    bool                    bBBObj_valid;           // set after the BBObj has been calculated once.
+    
+    Rules                   *CSrules;               // per object conditional symbology
+    int                     bCS_Added;
+    
+    S52_TextC                *FText;
+    int                     bFText_Added;
+    wxRect                  rText;
+    
+    LUPrec                  *LUP;
+};
+
+
+
+void CreateCompatibleS57Object( PI_S57Obj *pObj, S57Obj *cobj );
+void UpdatePIObjectPlibContext( PI_S57Obj *pObj, S57Obj *cobj );
 
 #endif            // _PLUGINMGR_H_
 

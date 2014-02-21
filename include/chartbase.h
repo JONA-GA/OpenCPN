@@ -1,4 +1,4 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  ChartBase Definition
@@ -21,9 +21,7 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- *
- */
+ **************************************************************************/
 
 #ifndef _CHARTBASE_H_
 #define _CHARTBASE_H_
@@ -33,12 +31,15 @@
 #include "bbox.h"
 #include "ocpn_types.h"
 
+#ifdef ocpnUSE_GL
 #include <wx/glcanvas.h>
+#endif
 
 //----------------------------------------------------------------------------
 //  Forward Declarations
 //----------------------------------------------------------------------------
 class ViewPort;
+class wxGLContext;
 
 //----------------------------------------------------------------------------
 // Constants. etc
@@ -171,14 +172,14 @@ public:
 
       virtual bool IsReadyToRender(){ return bReadyToRender;}
       virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint,
-                                        const wxRegion &Region) = 0;
+                                        const OCPNRegion &Region) = 0;
 
       virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
-                                        const wxRegion &Region) = 0;
+                                        const OCPNRegion &Region) = 0;
 
       virtual bool AdjustVP(ViewPort &vp_last, ViewPort &vp_proposed) = 0;
 
-      virtual void GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion) = 0;
+      virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion) = 0;
 
       virtual void SetColorScheme(ColorScheme cs, bool bApplyImmediate = true ) = 0;
 
@@ -273,14 +274,14 @@ public:
       virtual bool GetChartExtent(Extent *pext);
 
       virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint,
-                                        const wxRegion &Region);
+                                        const OCPNRegion &Region);
 
       virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
-                                        const wxRegion &Region);
+                                        const OCPNRegion &Region);
 
       virtual bool AdjustVP(ViewPort &vp_last, ViewPort &vp_proposed);
 
-      virtual void GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion);
+      virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
 
       virtual void SetColorScheme(ColorScheme cs, bool bApplyImmediate);
 
@@ -304,7 +305,7 @@ class ChartPlugInWrapper : public ChartBase
 {
       public:
             ChartPlugInWrapper();
-            ChartPlugInWrapper(wxString &chart_class);
+            ChartPlugInWrapper(const wxString &chart_class);
             virtual ~ChartPlugInWrapper();
 
             virtual wxString GetFileSearchMask(void);
@@ -322,18 +323,20 @@ class ChartPlugInWrapper : public ChartBase
             virtual bool GetChartExtent(Extent *pext);
 
             virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint,
-                                              const wxRegion &Region);
+                                              const OCPNRegion &Region);
 
             virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
-                                              const wxRegion &Region);
+                                              const OCPNRegion &Region);
 
             virtual bool AdjustVP(ViewPort &vp_last, ViewPort &vp_proposed);
 
-            virtual void GetValidCanvasRegion(const ViewPort& VPoint, wxRegion *pValidRegion);
+            virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
 
             virtual void SetColorScheme(ColorScheme cs, bool bApplyImmediate);
 
             virtual double GetNearestPreferredScalePPM(double target_scale_ppm);
+            
+            virtual PlugInChartBase *GetPlugInChart(void){ return m_ppicb; }
 
             virtual int GetCOVREntries();
             virtual int GetCOVRTablePoints(int iTable);

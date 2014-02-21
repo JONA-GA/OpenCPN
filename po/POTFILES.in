@@ -34,6 +34,10 @@ include/mygeom.h
 include/cm93.h
 include/datastream.h
 include/multiplexer.h
+include/LinkPropDlg.h
+include/GoToPositionDialog.h
+include/AISTargetListDialog.h
+include/AIS_Target_Data.h
 src/chartdbs.cpp
 src/mygdal/ogrmultipolygon.cpp
 src/mygdal/cpl_csv.cpp
@@ -95,7 +99,6 @@ src/mygdal/cpl_minixml.cpp
 src/chart1.cpp
 src/s52utils.cpp
 src/s52plib.cpp
-src/cutil.c
 src/statwin.cpp
 src/chartdb.cpp
 src/mygeom.cpp
@@ -163,7 +166,6 @@ src/about.cpp
 src/s57chart.cpp
 src/thumbwin.cpp
 src/tri.c
-src/georef.c
 src/s52cnsy.cpp
 src/routeman.cpp
 src/pluginmanager.cpp
@@ -172,3 +174,13 @@ src/toolbar.cpp
 src/styles.cpp
 src/kml.cpp
 src/undo.cpp
+src/routeprintout.cpp
+src/TrackPropDlg.cpp
+src/LinkPropDlg.cpp
+src/GoToPositionDialog.cpp
+src/AISTargetListDialog.cpp
+src/AIS_Target_Data.cpp
+src/AISTargetQueryDialog.cpp
+src/RolloverWin.cpp
+src/RoutePoint.cpp
+
