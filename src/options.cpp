@@ -4574,3 +4574,6 @@ void SentenceListDlg::SetType(int io, ListType type)
 void SentenceListDlg::OnCancelClick( wxCommandEvent& event ) { event.Skip(); }
 void SentenceListDlg::OnOkClick( wxCommandEvent& event ) { event.Skip(); }
 
+
+
+
