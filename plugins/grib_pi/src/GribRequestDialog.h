@@ -24,28 +24,56 @@
  ***************************************************************************
  */
 
-#include "GribRecord.h"
+#ifndef __GRIBREQUESTDIALOG_H__
+#define __GRIBREQUESTDIALOG_H__
 
-WX_DECLARE_OBJARRAY( GribRecord *, ArrayOfGribRecordPtrs );
+#ifndef  WX_PRECOMP
+#include "wx/wx.h"
+#endif //precompiled headers
 
-    // These are indexes into the array
-enum { Idx_WIND_VX, Idx_WIND_VX850, Idx_WIND_VX700, Idx_WIND_VX500, Idx_WIND_VX300,
-    Idx_WIND_VY, Idx_WIND_VY850, Idx_WIND_VY700, Idx_WIND_VY500, Idx_WIND_VY300,
-    Idx_WIND_GUST, Idx_PRESSURE, Idx_HTSIGW, Idx_WVDIR, Idx_WVPER,
-    Idx_SEACURRENT_VX, Idx_SEACURRENT_VY, Idx_PRECIP_TOT, Idx_CLOUD_TOT,
-    Idx_AIR_TEMP, Idx_AIR_TEMP850, Idx_AIR_TEMP700, Idx_AIR_TEMP500, Idx_AIR_TEMP300,
-    Idx_SEA_TEMP, Idx_CAPE,
-    Idx_HUMID_RE, Idx_HUMID_RE850, Idx_HUMID_RE700, Idx_HUMID_RE500, Idx_HUMID_RE300,
-    Idx_GEOP_HGT,Idx_GEOP_HGT850, Idx_GEOP_HGT700, Idx_GEOP_HGT500, Idx_GEOP_HGT300,
-    Idx_COUNT };
+#include "GribUIDialogBase.h"
+#include "GribUIDialog.h"
 
-class GribRecordSet {
+#include "ocpn_plugin.h"
+
+//----------------------------------------------------------------------------------------------------------
+//    Request setting Specification
+//----------------------------------------------------------------------------------------------------------
+class GribRequestSetting : public GribRequestSettingBase
+{
 public:
-    GribRecordSet() {
-        for(int i=0; i<Idx_COUNT; i++)
-            m_GribRecordPtrArray[i] = NULL;
-    }
+      GribRequestSetting( wxWindow *parent )
+          : GribRequestSettingBase(parent) {};
 
-    time_t m_Reference_Time;
-    GribRecord *m_GribRecordPtrArray[Idx_COUNT];
+      ~GribRequestSetting() {}
+
+      void InitRequestConfig();
+      void SetVpSize(PlugIn_ViewPort *vp);
+      void OnVpChange(PlugIn_ViewPort *vp);
+
+      wxString m_RequestConfigBase;
+      wxString m_MailToAddresses;
+      int m_LatmaxBase;
+      int m_LatminBase;
+      int m_LonminBase;
+      int m_LonmaxBase;
+    
+private:
+      void ApplyRequestConfig( unsigned rs, unsigned it, unsigned tr );
+      wxString WriteMail();
+      bool EstimateFileSize();
+
+      void OnTopChange(wxCommandEvent &event);
+      void OnMovingClick( wxCommandEvent& event );
+      void OnAnyChange( wxCommandEvent& event );
+      void OnTimeRangeChange( wxCommandEvent& event );
+      void OnSendMaiL( wxCommandEvent& event );
+      void OnSaveMail( wxCommandEvent& event );
+
+      bool IsZYGRIB;
+      int  m_MailError_Nb;
+      int  m_SendMethod;
+      bool m_AllowSend;
 };
+
+#endif

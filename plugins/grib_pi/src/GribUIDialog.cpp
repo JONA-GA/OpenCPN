@@ -61,9 +61,6 @@ int round (double x) {
 
 WX_DEFINE_OBJARRAY( ArrayOfGribRecordSets );
 
-enum { SAILDOCS,ZYGRIB };
-enum { GFS,COAMPS,RTOFS };
-
 //    Sort compare function for File Modification Time
 static int CompareFileStringTime( const wxString& first, const wxString& second )
 {
@@ -88,28 +85,9 @@ static wxString TToString( const wxDateTime date_time, const int time_zone )
     }
 }
 
-wxString toMailFormat ( int NEflag, int a )
-{
-    char c;
-    switch(NEflag) {
-        case 1:
-            c = 'N';
-            if ( a < 0.0 ) c = 'S';
-            break;
-        case 2:
-            c = 'E';
-            if ( a < 0.0 ) c = 'W';
-    }
-    wxString s;
-    s.Printf ( _T ( "%01d%c" ), abs(a), c );
-    return s;
-}
-
 #if !wxCHECK_VERSION(2,9,4) /* to work with wx 2.8 */
 #define SetBitmap SetBitmapLabel
 #endif
-
-const wxString buttonText[] = {_("Moving Grib Disabled"), _("Moving Grib Enabled") };
 
 //---------------------------------------------------------------------------------------
 //          GRIB Selector/Control Dialog Implementation
@@ -151,13 +129,14 @@ void GRIBUIDialog::OpenFile(bool newestFile)
     m_bpPlay->SetBitmap(*m_bPlay);
     m_bpPlay->SetToolTip(_("Play"));
     m_tPlayStop.Stop();
-    SetCanvasContextMenuItemViz( pPlugIn->m_MenuItem, false);
-
     m_cRecordForecast->Clear();
-    /* this should be un-commented to avoid a memory leak,
-       but for some reason it crbashes windows */
+    m_cbAltitude->Clear();
+    pPlugIn->GetGRIBOverlayFactory()->SetAltitude( 0 );
+    m_FileIntervalIndex = m_OverlaySettings.m_SlicesPerUpdate;
     delete m_bGRIBActiveFile;
     m_pTimelineSet = NULL;
+    m_sTimeline->SetValue(0);
+    m_TimeLineHours = 0;
     m_InterpolateMode = false;
     m_pNowMode = false;
     m_pMovingGrib = false;
@@ -171,50 +150,43 @@ void GRIBUIDialog::OpenFile(bool newestFile)
                                       pPlugIn->GetCopyMissWaveRec() );
 
     ArrayOfGribRecordSets *rsa = m_bGRIBActiveFile->GetRecordSetArrayPtr();
-    if(rsa->GetCount() < 2)
-        m_TimeLineHours = 0;
-    else {
-        GribRecordSet &first=rsa->Item(0), &second = rsa->Item(1), &last = rsa->Item(rsa->GetCount()-1);
-
-        //get file interval index
-       // wxTimeSpan sp = wxDateTime(second.m_Reference_Time) - wxDateTime(first.m_Reference_Time);
-        //int intermin = sp.GetMinutes();
-        int halphintermin(wxTimeSpan(wxDateTime(second.m_Reference_Time) - wxDateTime(first.m_Reference_Time)).GetMinutes() / 2);
-        for( m_FileIntervalIndex=0;;m_FileIntervalIndex++){
-            if(m_OverlaySettings.GetMinFromIndex(m_FileIntervalIndex) > halphintermin) break;
-        }
-        m_FileIntervalIndex--;
-        if(m_OverlaySettings.m_SlicesPerUpdate > m_FileIntervalIndex) m_OverlaySettings.m_SlicesPerUpdate = m_FileIntervalIndex;
-
-        //search for a moving grib file
-        double wmin1,wmax1,hmin1,hmax1,wmin2,wmax2,hmin2,hmax2;
-        GetGribZoneLimits(GetTimeLineRecordSet(first.m_Reference_Time), &wmin1, &wmax1, &hmin1, &hmax1 );
-        GetGribZoneLimits(GetTimeLineRecordSet(last.m_Reference_Time), &wmin2, &wmax2, &hmin2, &hmax2 );
-        if( wmin1 != wmin2 || wmax1 != wmax2 || hmin1 != hmin2 || hmax1 != hmax2 )
-            m_pMovingGrib = true;
-        //
-        wxTimeSpan span = wxDateTime(last.m_Reference_Time) - wxDateTime(first.m_Reference_Time);
-        m_TimeLineHours = span.GetHours();
-        m_sTimeline->Enable();
-    }
-    m_sTimeline->SetValue(0);
 
     wxFileName fn( m_file_name );
     wxString title( fn.GetFullName() );
 
     if( m_bGRIBActiveFile ) {
         if( m_bGRIBActiveFile->IsOK() ) {
-            //there could be valid but empty file
-            if( rsa->GetCount() == 0 ) {
+            if( rsa->GetCount() == 0 ) {                        //valid but empty file
                 m_bGRIBActiveFile = NULL;
                 pPlugIn->GetGRIBOverlayFactory()->SetMessage( _("Error:  No valid data in this file!") );
 
             } else {
                 PopulateComboDataList();
                 title.append( _T("(") + TToString( m_bGRIBActiveFile->GetRefDateTime(), pPlugIn->GetTimeZone()) + _T(")"));
+
+                if( rsa->GetCount() > 1 ) {
+                    GribRecordSet &first=rsa->Item(0), &second = rsa->Item(1), &last = rsa->Item(rsa->GetCount()-1);
+
+                    //compute ntotal time span
+                    wxTimeSpan span = wxDateTime(last.m_Reference_Time) - wxDateTime(first.m_Reference_Time);
+                    m_TimeLineHours = span.GetHours();
+
+                    //get file interval index and update intervale choice if necessary
+                    int halfintermin(wxTimeSpan(wxDateTime(second.m_Reference_Time) - wxDateTime(first.m_Reference_Time)).GetMinutes() / 2);
+                    for( m_FileIntervalIndex = 0;; m_FileIntervalIndex++){
+                        if(m_OverlaySettings.GetMinFromIndex(m_FileIntervalIndex) > halfintermin) break;
+                    }
+                    m_FileIntervalIndex--;
+                    if(m_OverlaySettings.m_SlicesPerUpdate > m_FileIntervalIndex) m_OverlaySettings.m_SlicesPerUpdate = m_FileIntervalIndex;
+
+                    //search for a moving grib file
+                    double wmin1,wmax1,hmin1,hmax1,wmin2,wmax2,hmin2,hmax2;
+                    GetGribZoneLimits(new GribTimelineRecordSet(first, first, 0), &wmin1, &wmax1, &hmin1, &hmax1 );
+                    GetGribZoneLimits(new GribTimelineRecordSet(last, last, 0), &wmin2, &wmax2, &hmin2, &hmax2 );
+                    if( wmin1 != wmin2 || wmax1 != wmax2 || hmin1 != hmin2 || hmax1 != hmax2 ) m_pMovingGrib = true;
+                    //
+                }
             }
-            if( rsa->GetCount() > 1 )
-                SetCanvasContextMenuItemViz( pPlugIn->m_MenuItem, true);
         } else {
             if( fn.IsDir() ) {
                 pPlugIn->GetGRIBOverlayFactory()->SetMessage( _("Warning:  Empty directory!") );
@@ -222,16 +194,16 @@ void GRIBUIDialog::OpenFile(bool newestFile)
             else
                 pPlugIn->GetGRIBOverlayFactory()->SetMessage( m_bGRIBActiveFile->GetLastMessage() );
         }
-
         this->SetTitle(title);
         SetFactoryOptions();
-        if( pPlugIn->GetStartOptions() )
+        if( pPlugIn->GetStartOptions() && m_TimeLineHours != 0)                             //fix a crash for one date files
             ComputeBestForecastForNow();
         else
             TimelineChanged();
 
         PopulateTrackingControls();
     }
+    SetCanvasContextMenuItemViz( pPlugIn->m_MenuItem, m_TimeLineHours != 0);
     if(m_pMovingGrib) {
         wxMessageDialog mes(this, _("The Grib file you are opening contains a moving Grib Zone.\nInterpolation is not supported for this type of file"),
             _("Warning!"), wxOK);
@@ -244,7 +216,7 @@ bool GRIBUIDialog::GetGribZoneLimits(GribTimelineRecordSet *timelineSet, double 
     //calculate the largest overlay size
     GribRecord **pGR = timelineSet->m_GribRecordPtrArray;
     double ltmi = -GRIB_NOTDEF, ltma = GRIB_NOTDEF, lnmi = -GRIB_NOTDEF, lnma = GRIB_NOTDEF;
-    for( int i = 0; i<13; i++){
+    for( int i = 0; i<36; i++){
         GribRecord *pGRA = pGR[i];
         if(!pGRA) continue;
         if(pGRA->getLatMin() < ltmi) ltmi = pGRA->getLatMin();
@@ -366,6 +338,9 @@ GRIBUIDialog::GRIBUIDialog(wxWindow *parent, grib_pi *ppi)
     DimeWindow( this );
 
     m_pTimelineSet = NULL;
+    m_fgTrackingDisplay->Show(2,false);         //Hide extra altitude data parameters
+    //is there a bug in wxWigget? m_fgTrackingControls->Clear() delete m_fcAltitude so it's necessary to detach it before
+    m_fgTrackingControls->Detach(m_fcAltitude);
     m_fgTrackingControls->Clear();
 
     Fit();
@@ -448,11 +423,18 @@ void GRIBUIDialog::SetViewPort( PlugIn_ViewPort *vp )
         if(pReq_Dialog->IsShown()) pReq_Dialog->OnVpChange(vp);
 }
 
-void GRIBUIDialog::AddTrackingControl( wxControl *ctrl1,  wxControl *ctrl2,  wxControl *ctrl3, bool show )
+void GRIBUIDialog::AddTrackingControl( wxControl *ctrl1,  wxControl *ctrl2,  wxControl *ctrl3, bool show, bool altitude )
 {
     if(show) {
+        if( altitude ){
+            m_fcAltitude->Add(ctrl1, 0, wxALL, 1);
+            ctrl1->Show();
+            m_cbAltitude->Show();
+            m_fgTrackingControls->Add( m_fcAltitude, 1, wxRIGHT|wxBOTTOM, 3 );
+        } else {
         m_fgTrackingControls->Add(ctrl1, 0, wxALL, 1);
         ctrl1->Show();
+        }
         if(ctrl2) {
             m_fgTrackingControls->Add(ctrl2, 0, wxALL, 1);
             ctrl2->Show();
@@ -473,40 +455,48 @@ void GRIBUIDialog::AddTrackingControl( wxControl *ctrl1,  wxControl *ctrl2,  wxC
     }
 }
 
-void GRIBUIDialog::PopulateTrackingControls( void )
+void GRIBUIDialog::PopulateTrackingControls( bool Populate_Altitude )
 {
+    wxColour bgd1,bgd2;
+    GetGlobalColor( _T("DILG0"),&bgd1);
+    GetGlobalColor( _T("YELO1"),&bgd2);
+    m_tcWindSpeed->SetBackgroundColour(bgd1);
+    m_tcWindDirection->SetBackgroundColour(bgd1);
+
     //fix crash with curious files with no record
-    if(m_pTimelineSet) {
-        m_bpSettings->Enable();
-        m_bpZoomToCenter->Enable();
-    } else {
-        m_bpSettings->Disable();
-        m_bpZoomToCenter->Disable();
-    }
+    m_bpSettings->Enable(m_pTimelineSet != NULL);
+    m_bpZoomToCenter->Enable(m_pTimelineSet != NULL);
 
-    if(m_pTimelineSet && m_TimeLineHours) {
-        m_sTimeline->Show();
-        m_bpPlay->Show();
+    m_sTimeline->Show(m_pTimelineSet != NULL && m_TimeLineHours);
+    m_bpPlay->Show(m_pTimelineSet != NULL && m_TimeLineHours);
 
-        m_bpPrev->Enable();
-        m_bpNext->Enable();
-        m_bpNow->Enable();
-    } else {
-        m_sTimeline->Hide();
-        m_bpPlay->Hide();
+    m_bpPrev->Enable(m_pTimelineSet != NULL && m_TimeLineHours);
+    m_bpNext->Enable(m_pTimelineSet != NULL && m_TimeLineHours);
+    m_bpNow->Enable(m_pTimelineSet != NULL && m_TimeLineHours);
 
-        m_bpPrev->Disable();
-        m_bpNext->Disable();
-        m_bpNow->Disable();
-    }
-
+    //is there a bug in wxWigget? flexsizer->Clear() delete child if it's a flexsizer so it's necessary to detach it before
+    if(m_fgTrackingControls->GetItem(m_fcAltitude) != NULL) m_fgTrackingControls->Detach(m_fcAltitude);
     m_fgTrackingControls->Clear();
     m_fgTrackingControls->SetCols(9);
+    if(m_fcAltitude->GetItem(m_cbWind) != NULL) m_fcAltitude->Detach(m_cbWind);
+    m_cbAltitude->Hide();
     this->Fit();
+
+    //populate and set altitude choice if necessary
+    if( Populate_Altitude ) {
+        int selection = m_cbAltitude->GetCurrentSelection() < 1 ? 0 : m_cbAltitude->GetCurrentSelection();
+        m_cbAltitude->Clear();
+        for( int i = 0; i<5; i++) {
+            if( (( m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WIND_VX + i) != wxNOT_FOUND
+                && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WIND_VY + i) != wxNOT_FOUND )) || i == 0 )
+                    m_cbAltitude->Append(m_OverlaySettings.GetAltitudeFromIndex( i , m_OverlaySettings.Settings[GribOverlaySettings::PRESSURE].m_Units));
+        }
+        m_cbAltitude->SetSelection( selection );
+    }
 
     AddTrackingControl(m_cbWind, m_tcWindSpeed, m_tcWindDirection,
         m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WIND_VX) != wxNOT_FOUND
-        && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WIND_VY) != wxNOT_FOUND);
+        && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WIND_VY) != wxNOT_FOUND, m_cbAltitude->GetCount() > 1 );
     AddTrackingControl(m_cbWindGust, m_tcWindGust, 0, m_pTimelineSet
         && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WIND_GUST) != wxNOT_FOUND);
     AddTrackingControl(m_cbPressure, m_tcPressure, 0, m_pTimelineSet
@@ -535,18 +525,43 @@ void GRIBUIDialog::PopulateTrackingControls( void )
     AddTrackingControl(m_cbCloud, m_tcCloud, 0,
         m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_CLOUD_TOT) != wxNOT_FOUND);
     AddTrackingControl(m_cbAirTemperature, m_tcAirTemperature, 0,
-        m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_AIR_TEMP_2M) != wxNOT_FOUND);
+        m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_AIR_TEMP) != wxNOT_FOUND);
     AddTrackingControl(m_cbSeaTemperature, m_tcSeaTemperature, 0,
         m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_SEA_TEMP) != wxNOT_FOUND);
     AddTrackingControl(m_cbCAPE, m_tcCAPE, 0,
         m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_CAPE) != wxNOT_FOUND);
+    //
+    //init and show extra parameters for altitude tracking if necessary
+    if( pPlugIn->GetGRIBOverlayFactory()->m_Altitude ) {
+        if( (m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_AIR_TEMP
+                + pPlugIn->GetGRIBOverlayFactory()->m_Altitude) != wxNOT_FOUND)
+            || (m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_HUMID_RE
+                + pPlugIn->GetGRIBOverlayFactory()->m_Altitude) != wxNOT_FOUND)
+            || (m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_GEOP_HGT
+                + pPlugIn->GetGRIBOverlayFactory()->m_Altitude) != wxNOT_FOUND) ) {
+                    m_fgTrackingDisplay->Show(2, true);
+                    m_tcAltitude->SetValue( _("N/A") );
+                    m_tcTemp->SetValue( _("N/A") );
+                    m_tcRelHumid->SetValue( _("N/A") );
+                    m_tcAltitude->SetBackgroundColour(bgd2);
+                    m_tcTemp->SetBackgroundColour(bgd2);
+                    m_tcRelHumid->SetBackgroundColour(bgd2);
+                    m_tcWindSpeed->SetBackgroundColour(bgd2);
+                    m_tcWindDirection->SetBackgroundColour(bgd2);
+        }
 
-    //Risize speed ctrl for single or double unit display
+        m_stAltitudeText->SetLabel((m_OverlaySettings.GetAltitudeFromIndex(
+            pPlugIn->GetGRIBOverlayFactory()->m_Altitude, m_OverlaySettings.Settings[GribOverlaySettings::PRESSURE].m_Units))
+            .append(_T(" ")).Append( m_OverlaySettings.GetUnitSymbol(GribOverlaySettings::PRESSURE) ) );
+    } else
+        m_fgTrackingDisplay->Show(2,false);
+    //
+    //Resize speed ctrl for single or double unit display
     if(m_OverlaySettings.Settings[GribOverlaySettings::WIND].m_Units == GribOverlaySettings::BFS)
         m_tcWindSpeed->SetMinSize(wxSize(70, -1));
     else
         m_tcWindSpeed->SetMinSize(wxSize(110, -1) );
-    //Risize wave height ctrl for single or double display
+    //Resize wave height ctrl for single or double display
     if(m_pTimelineSet && m_bGRIBActiveFile->m_GribIdxArray.Index(Idx_WVPER) == wxNOT_FOUND)
         m_tcWaveHeight->SetMinSize(wxSize(70, -1));
     else
@@ -563,10 +578,11 @@ void GRIBUIDialog::UpdateTrackingControls( void )
 
     GribRecord **RecordArray = m_pTimelineSet->m_GribRecordPtrArray;
     //    Update the wind control
-    if( RecordArray[Idx_WIND_VX] && RecordArray[Idx_WIND_VY] ) {
-        double vx = RecordArray[Idx_WIND_VX]->
+    int altitude = pPlugIn->GetGRIBOverlayFactory()->m_Altitude;
+    if( RecordArray[Idx_WIND_VX + altitude] && RecordArray[Idx_WIND_VY + altitude] ) {
+        double vx = RecordArray[Idx_WIND_VX + altitude]->
             getInterpolatedValue(m_cursor_lon, m_cursor_lat, true );
-        double vy = RecordArray[Idx_WIND_VY]->
+        double vy = RecordArray[Idx_WIND_VY + altitude]->
             getInterpolatedValue(m_cursor_lon, m_cursor_lat, true );
 
         if( ( vx != GRIB_NOTDEF ) && ( vy != GRIB_NOTDEF ) ) {
@@ -699,8 +715,8 @@ void GRIBUIDialog::UpdateTrackingControls( void )
     }
 
     //    Update the Air Temperature
-    if( RecordArray[Idx_AIR_TEMP_2M] ) {
-        double temp = RecordArray[Idx_AIR_TEMP_2M]->
+    if( RecordArray[Idx_AIR_TEMP] ) {
+        double temp = RecordArray[Idx_AIR_TEMP]->
             getInterpolatedValue( m_cursor_lon, m_cursor_lat, true );
 
         if( temp != GRIB_NOTDEF ) {
@@ -733,7 +749,41 @@ void GRIBUIDialog::UpdateTrackingControls( void )
         } else
             m_tcCAPE->SetValue( _("N/A") );
     }
+    // Update extra data for altitude
+    // geopotential altitude
+    if( RecordArray[Idx_GEOP_HGT + altitude] ) {
+        double geop = RecordArray[Idx_GEOP_HGT + altitude]->
+            getInterpolatedValue( m_cursor_lon, m_cursor_lat, true );
 
+        if( geop != GRIB_NOTDEF ) {
+            geop = m_OverlaySettings.CalibrateValue(GribOverlaySettings::GEO_ALTITUDE, geop);
+            m_tcAltitude->SetValue( wxString::Format( _T("%5.0f "), geop ) + m_OverlaySettings.GetUnitSymbol(GribOverlaySettings::GEO_ALTITUDE) );
+        } else
+            m_tcAltitude->SetValue( _("N/A") );
+    }
+
+    // temperature
+    if( RecordArray[Idx_AIR_TEMP + altitude] ) {
+        double temp = RecordArray[Idx_AIR_TEMP + altitude]->
+            getInterpolatedValue( m_cursor_lon, m_cursor_lat, true );
+
+        if( temp != GRIB_NOTDEF ) {
+            temp = m_OverlaySettings.CalibrateValue(GribOverlaySettings::AIR_TEMPERATURE, temp);
+            m_tcTemp->SetValue( wxString::Format( _T("%5.1f "), temp ) + m_OverlaySettings.GetUnitSymbol(GribOverlaySettings::AIR_TEMPERATURE) );
+        } else
+            m_tcTemp->SetValue(  _("N/A") );
+    }
+    // relative humidity
+    if( RecordArray[Idx_HUMID_RE + altitude] ) {
+        double humi = RecordArray[Idx_HUMID_RE + altitude]->
+            getInterpolatedValue( m_cursor_lon, m_cursor_lat, true );
+
+        if( humi != GRIB_NOTDEF ) {
+            humi = m_OverlaySettings.CalibrateValue(GribOverlaySettings::REL_HUMIDITY, humi);
+            m_tcRelHumid->SetValue( wxString::Format( _T("%5.0f "), humi ) + m_OverlaySettings.GetUnitSymbol(GribOverlaySettings::REL_HUMIDITY) );
+        } else
+            m_tcRelHumid->SetValue(  _("N/A") );
+    }
     Fit();
 }
 
@@ -975,6 +1025,29 @@ void GRIBUIDialog::OnTimeline( wxScrollEvent& event )
     if(!m_InterpolateMode) m_cRecordForecast->SetSelection(m_sTimeline->GetValue());
     m_pNowMode = false;
     TimelineChanged();
+}
+
+void GRIBUIDialog::OnAltitudeChange( wxCommandEvent& event )
+{
+    double alt;
+    m_cbAltitude->GetLabel().ToDouble(&alt);
+    switch((int) alt) {
+    case 8:
+    case 225:
+    case 300: pPlugIn->GetGRIBOverlayFactory()->SetAltitude(4);break;
+    case 14:
+    case 375:
+    case 500: pPlugIn->GetGRIBOverlayFactory()->SetAltitude(3);break;
+    case 20:
+    case 525:
+    case 700: pPlugIn->GetGRIBOverlayFactory()->SetAltitude(2);break;
+    case 25:
+    case 637:
+    case 850: pPlugIn->GetGRIBOverlayFactory()->SetAltitude(1);break;
+    default:  pPlugIn->GetGRIBOverlayFactory()->SetAltitude(0);break;
+    }
+    PopulateTrackingControls( false );
+    SetFactoryOptions();                     // Reload the visibility options
 }
 
 void GRIBUIDialog::OnCBAny( wxCommandEvent& event )
@@ -1271,8 +1344,28 @@ GRIBFile::GRIBFile( const wxString file_name, bool CumRec, bool WaveRec )
                 if( m_GribRecordSetArray.Item( j ).m_Reference_Time == thistime ) {
                     int idx = -1;
                     switch(pRec->getDataType()) {
-                    case GRB_WIND_VX:  idx = Idx_WIND_VX; break;
-                    case GRB_WIND_VY:  idx = Idx_WIND_VY; break;
+                    case GRB_WIND_VX:
+                        if(pRec->getLevelType() == LV_ISOBARIC){
+                            switch(pRec->getLevelValue()){
+                            case 300: idx = Idx_WIND_VX300;break;
+                            case 500: idx = Idx_WIND_VX500;break;
+                            case 700: idx = Idx_WIND_VX700;break;
+                            case 850: idx = Idx_WIND_VX850;break;
+                            }
+                        } else
+                            idx = Idx_WIND_VX;
+                        break;
+                    case GRB_WIND_VY:
+                        if(pRec->getLevelType() == LV_ISOBARIC){
+                            switch(pRec->getLevelValue()){
+                            case 300: idx = Idx_WIND_VY300;break;
+                            case 500: idx = Idx_WIND_VY500;break;
+                            case 700: idx = Idx_WIND_VY700;break;
+                            case 850: idx = Idx_WIND_VY850;break;
+                            }
+                        } else
+                            idx = Idx_WIND_VY;
+                        break;
                     case GRB_WIND_GUST: idx = Idx_WIND_GUST; break;
                     case GRB_PRESSURE: idx = Idx_PRESSURE;   break;
                     case GRB_HTSGW:    idx = Idx_HTSIGW;  break;
@@ -1282,10 +1375,40 @@ GRIBFile::GRIBFile( const wxString file_name, bool CumRec, bool WaveRec )
                     case GRB_VOGRD:    idx = Idx_SEACURRENT_VY; break;
                     case GRB_PRECIP_TOT: idx = Idx_PRECIP_TOT; break;
                     case GRB_CLOUD_TOT:  idx = Idx_CLOUD_TOT; break;
-                    case GRB_TEMP:     idx = Idx_AIR_TEMP_2M; break;
+                    case GRB_TEMP:
+                        if(pRec->getLevelType() == LV_ISOBARIC){
+                            switch(pRec->getLevelValue()){
+                            case 300: idx = Idx_AIR_TEMP300;break;
+                            case 500: idx = Idx_AIR_TEMP500;break;
+                            case 700: idx = Idx_AIR_TEMP700;break;
+                            case 850: idx = Idx_AIR_TEMP850;break;
+                            }
+                        } else
+                            idx = Idx_AIR_TEMP;
+                        break;
                     case GRB_WTMP:     idx = Idx_SEA_TEMP; break;
                     case GRB_CAPE:      idx = Idx_CAPE;break;
-                    }
+                    case GRB_HUMID_REL:
+                        if(pRec->getLevelType() == LV_ISOBARIC){
+                            switch(pRec->getLevelValue()){
+                            case 300: idx = Idx_HUMID_RE300;break;
+                            case 500: idx = Idx_HUMID_RE500;break;
+                            case 700: idx = Idx_HUMID_RE700;break;
+                            case 850: idx = Idx_HUMID_RE850;break;
+                            }
+                        }
+                        break;
+                    case GRB_GEOPOT_HGT:
+                        if(pRec->getLevelType() == LV_ISOBARIC){
+                            switch(pRec->getLevelValue()){
+                            case 300: idx = Idx_GEOP_HGT300;break;
+                            case 500: idx = Idx_GEOP_HGT500;break;
+                            case 700: idx = Idx_GEOP_HGT700;break;
+                            case 850: idx = Idx_GEOP_HGT850;break;
+                            }
+                        }
+                        break;
+                     }
 
                     if(idx != -1) {
                         m_GribRecordSetArray.Item( j ).m_GribRecordPtrArray[idx]= pRec;
@@ -1304,518 +1427,3 @@ GRIBFile::~GRIBFile()
     delete m_pGribReader;
 }
 
-//----------------------------------------------------------------------------------------------------------
-//          GRIB Request Implementation
-//----------------------------------------------------------------------------------------------------------
-void GribRequestSetting::InitRequestConfig()
-{
-    wxFileConfig *pConf = GetOCPNConfigObject();
-
-    if(pConf) {
-        pConf->SetPath ( _T( "/PlugIns/GRIB" ) );
-    wxString sender,login, code;
-    pConf->Read ( _T( "MailRequestConfig" ), &m_RequestConfigBase, _T( "000220XX........0" ) );
-    pConf->Read ( _T( "MailSenderAddress" ), &sender, _T("") );
-    m_pSenderAddress->ChangeValue( sender );
-    pConf->Read ( _T( "MailRequestAddresses" ), &m_MailToAddresses, _T("query@saildocs.com;gribauto@zygrib.org") );
-    pConf->Read ( _T( "ZyGribLogin" ), &login, _T("") );
-    m_pLogin->ChangeValue( login );
-    pConf->Read ( _T( "ZyGribCode" ), &code, _T("") );
-    m_pCode->ChangeValue( code );
-    pConf->Read ( _T( "SendMailMethod" ), &m_SendMethod, 0 );
-    pConf->Read ( _T( "MovingGribSpeed" ), &m_MovingSpeed, 0 );
-    pConf->Read ( _T( "MovingGribCourse" ), &m_MovingCourse, 0 );
-
-    //if GriDataConfig has been corrupted , take the standard one to fix a crash
-    if( m_RequestConfigBase.Len() != wxString (_T( "000220XX........0" ) ).Len() )
-        m_RequestConfigBase = _T( "000220XX........0" );
-    }
-    //populate model, mail to, waves model choices
-    wxString s1[] = {_T("GFS"),_T("COAMPS"),_T("RTOFS")};
-    for( unsigned int i= 0;  i<(sizeof(s1) / sizeof(wxString));i++)
-        m_pModel->Append( s1[i] );
-    wxString s2[] = {_T("Saildocs"),_T("zyGrib")};
-    for( unsigned int i= 0;  i<(sizeof(s2) / sizeof(wxString));i++)
-        m_pMailTo->Append( s2[i] );
-    wxString s3[] = {_T("WW3-GLOBAL"),_T("WW3-MEDIT")};
-    for( unsigned int i= 0;  i<(sizeof(s3) / sizeof(wxString));i++)
-        m_pWModel->Append( s3[i] );
-    m_rButtonYes->SetLabel(_("Send"));
-    m_rButtonApply->SetLabel(_("Save"));
-    m_tResUnit->SetLabel(wxString::Format( _T("\u00B0")));
-    m_pSenderAddress->SetToolTip(_("Address used to send request eMail. (Mandatory for LINUX)"));
-    m_pLogin->SetToolTip(_("This is your zyGrib's forum access Login"));
-    m_pCode->SetToolTip(_("Get this Code in zyGrib's forum ( This is not your password! )"));
-
-    long i,j,k;
-    ( (wxString) m_RequestConfigBase.GetChar(0) ).ToLong( &i );             //MailTo
-    m_pMailTo->SetSelection(i);
-    ( (wxString) m_RequestConfigBase.GetChar(16) ).ToLong( &i );            //Moving Grib
-    m_MovingGribEnabled = (i == 1.);
-    ( (wxString) m_RequestConfigBase.GetChar(1) ).ToLong( &i );             //Model
-    m_pModel->SetSelection(i);
-    ( (wxString) m_RequestConfigBase.GetChar(2) ).ToLong( &i );             //Resolution
-    ( (wxString) m_RequestConfigBase.GetChar(3) ).ToLong( &j );             //interval
-    ( (wxString) m_RequestConfigBase.GetChar(4) ).ToLong( &k, 16 );         //Time Range
-    k--;                                         // range max = 2 to 16 stored in hexa from 1 to f
-
-#ifdef __WXMSW__                                 //show / hide sender elemants as necessary
-    m_pSenderSizer->ShowItems(false);
-    m_MailImage->SetMinSize(wxSize(-1, -1));
-#else
-    if(m_SendMethod == 0 )
-        m_pSenderSizer->ShowItems(false);
-    else
-        m_pSenderSizer->ShowItems(true);
-#endif
-
-    ApplyRequestConfig( i, j ,k);
-
-    ( (wxString) m_RequestConfigBase.GetChar(5) ).ToLong( &j );             //Waves model
-    m_pWModel->SetSelection( j );
-
-    m_pWind->Enable( false );                                               //always selected if available
-    m_pPress->Enable( false );
-
-    m_pMovingGribButton->SetLabel(buttonText[m_MovingGribEnabled]);
-    m_AllowSend = true;
-    m_MailImage->SetValue( WriteMail() );
-}
-
-void GribRequestSetting::SetVpSize(PlugIn_ViewPort *vp)
-{
-    double lonmax=vp->lon_max;
-    double lonmin=vp->lon_min;
-    if( ( fabs( vp->lat_max ) < 90. ) && ( fabs( lonmax ) < 360. ) ) {
-        if( lonmax < -180. ) lonmax += 360.;
-        if( lonmax > 180. ) lonmax -= 360.;
-    }
-    if( ( fabs( vp->lat_min ) < 90. ) && ( fabs( lonmin ) < 360. ) ) {
-        if( lonmin < -180. ) lonmin += 360.;
-        if( lonmin > 180. ) lonmin -= 360.;
-    }
-
-    m_LatmaxBase = (int) ceil(vp->lat_max);
-    m_LatminBase = (int) floor(vp->lat_min);
-    m_LonminBase = (int) floor(lonmin);
-    m_LonmaxBase = (int) ceil(lonmax);
-}
-
-void GribRequestSetting::OnVpChange(PlugIn_ViewPort *vp)
-{
-    if(!m_AllowSend) return;
-
-    SetVpSize(vp);
-    m_MailImage->SetValue( WriteMail() );
-}
-
-void GribRequestSetting::ApplyRequestConfig( unsigned rs, unsigned it, unsigned tr )
-{
-    //some useful  strings
-    const wxString res[][3] = {
-        {_T("0.5"), _T("1.0"), _T("2.0")},
-        {_T("0.2"), _T("0.8"), _T("1.6")},
-        {_T("0.05"), _T("0.25"), _T("1.0")}
-    };
-
-    bool IsZYGRIB = m_pMailTo->GetCurrentSelection() == ZYGRIB;
-    if(IsZYGRIB) m_pModel->SetSelection(GFS);                       //Model is always GFS when Zygrib selected
-    bool IsGFS = m_pModel->GetCurrentSelection() == GFS;
-    bool IsRTOFS = m_pModel->GetCurrentSelection() == RTOFS;
-
-    //populate resolution choice
-    m_pResolution->Clear();
-    for( int i = 0; i<3; i++ ) {
-        m_pResolution->Append(res[m_pModel->GetCurrentSelection()][i]);
-    }
-     m_pResolution->SetSelection(rs);
-
-    unsigned l;
-     //populate time interval choice
-    l = IsGFS ? 3 : IsRTOFS ? 12 : 6;
-    m_pInterval->Clear();
-    for( unsigned i=l; i<25; i*=2)
-        m_pInterval->Append( wxString::Format(_T("%d"), i));
-    m_pInterval->SetSelection(wxMin(it,m_pInterval->GetCount()-1));
-
-    //populate time range choice
-    l = IsZYGRIB ? 8 : IsGFS ? 16 : IsRTOFS ? 6 : 3;
-    m_pTimeRange->Clear();
-    for( unsigned i=2; i<l+1; i++)
-        m_pTimeRange->Append( wxString::Format(_T("%d"), i));
-    m_pTimeRange->SetSelection( wxMin(l-2, tr));
-
-    m_pModel->Enable(!IsZYGRIB);
-    m_pWind->SetValue( !IsRTOFS );
-    m_pPress->SetValue( !IsRTOFS );
-    m_pWaves->SetValue( m_RequestConfigBase.GetChar(8) == 'X' && IsGFS );
-    m_pWaves->Enable( IsGFS && m_pTimeRange->GetCurrentSelection() < 7 );      //gfs & time range less than 8 days
-    m_pRainfall->SetValue( m_RequestConfigBase.GetChar(9) == 'X' && IsGFS );
-    m_pRainfall->Enable( IsGFS );
-    m_pCloudCover->SetValue( m_RequestConfigBase.GetChar(10) == 'X' && IsGFS );
-    m_pCloudCover->Enable( IsGFS );
-    m_pAirTemp->SetValue( m_RequestConfigBase.GetChar(11) == 'X' && IsGFS );
-    m_pAirTemp->Enable( IsGFS );
-    m_pSeaTemp->SetValue( (m_RequestConfigBase.GetChar(12) == 'X' && (!IsZYGRIB && IsGFS)) || IsRTOFS );
-    m_pSeaTemp->Enable( !IsZYGRIB && IsGFS );
-    m_pWindGust->SetValue( m_RequestConfigBase.GetChar(14) == 'X' && IsZYGRIB);
-    m_pWindGust->Enable( IsZYGRIB );
-    m_pCAPE->SetValue( m_RequestConfigBase.GetChar(15) == 'X' && IsGFS );
-    m_pCAPE->Enable( IsGFS );
-    m_pCurrent->SetValue( IsRTOFS );
-    m_pCurrent->Enable( false );
-
-    //show parameters only if necessary
-    m_pMovingGribButton->Show(!IsZYGRIB);
-    m_tLogin->Show(IsZYGRIB);
-    m_pLogin->Show(IsZYGRIB);
-    m_tCode->Show(IsZYGRIB);
-    m_pCode->Show(IsZYGRIB);
-    m_tWModel->Show(IsZYGRIB && m_pWaves->IsChecked());
-    m_pWModel->Show(IsZYGRIB && m_pWaves->IsChecked());
-}
-
-void GribRequestSetting::OnTopChange(wxCommandEvent &event)
-{
-
-    ApplyRequestConfig( m_pResolution->GetCurrentSelection(), m_pInterval->GetCurrentSelection(), m_pTimeRange->GetCurrentSelection() );
-
-    if(m_AllowSend) m_MailImage->SetValue( WriteMail() );
-
-    this->Fit();
-    this->Refresh();
-}
-
-void GribRequestSetting::OnMovingGribButtonClick( wxCommandEvent& event )
-{
-    GribMovingSetting *moving_dialog = new GribMovingSetting( this, m_MovingGribEnabled, m_MovingSpeed, m_MovingCourse);
-        moving_dialog->m_cMovingGribEnabled->SetValue(m_MovingGribEnabled);
-        moving_dialog->m_sMovingSpeed->SetValue(m_MovingSpeed);
-        moving_dialog->m_sMovingCourse->SetValue(m_MovingCourse);
-        if(moving_dialog->ShowModal() == wxID_OK) {
-            m_MovingGribEnabled = moving_dialog->GetMovingGribEnabled();
-            m_pMovingGribButton->SetLabel(buttonText[m_MovingGribEnabled]);
-            m_MovingSpeed = moving_dialog->GetMovingSpeed();
-            m_MovingCourse = moving_dialog->GetMovingCourse();
-            WriteMail();
-        }
-}
-
-void GribRequestSetting::OnAnyChange(wxCommandEvent &event)
-{
-    m_tWModel->Show(m_pMailTo->GetCurrentSelection() == ZYGRIB && m_pWaves->IsChecked());
-    m_pWModel->Show(m_pMailTo->GetCurrentSelection() == ZYGRIB && m_pWaves->IsChecked());
-
-    if(m_AllowSend) m_MailImage->SetValue( WriteMail() );
-
-    this->Fit();
-    this->Refresh();
-}
-
-void GribRequestSetting::OnTimeRangeChange(wxCommandEvent &event)
-{
-    m_tWModel->Show(m_pMailTo->GetCurrentSelection() == ZYGRIB && m_pWaves->IsChecked());
-    m_pWModel->Show(m_pMailTo->GetCurrentSelection() == ZYGRIB && m_pWaves->IsChecked());
-
-    if( m_pModel->GetCurrentSelection() == 0 ) {               //gfs
-        if( m_pTimeRange->GetCurrentSelection() > 6 ) {         //time range more than 8 days
-            m_pWaves->SetValue(0);
-            m_pWaves->Enable(false);
-            wxMessageDialog mes(this, _("You request a forecast for more than 8 days horizon.\nThis is conflicting with Wave data which will be removed from your request.\nDon't forget that beyond the first 8 days, the resolution will be only 2.5\u00B0x2.5\u00B0 and the time intervall 12 hours."),
-                _("Warning!"), wxOK);
-            mes.ShowModal();
-        } else
-            m_pWaves->Enable(true);
-    }
-
-    if(m_AllowSend) m_MailImage->SetValue( WriteMail() );
-
-    this->Fit();
-    this->Refresh();
-}
-
-void GribRequestSetting::OnSaveMail( wxCommandEvent& event )
-{
-    m_RequestConfigBase.SetChar( 0, (char) ( m_pMailTo->GetCurrentSelection() + '0' ) );
-    m_RequestConfigBase.SetChar( 16, (char) ( m_MovingGribEnabled + '0' ) );
-    if(m_pMailTo->GetCurrentSelection() == SAILDOCS)
-        m_RequestConfigBase.SetChar( 1, (char) ( m_pModel->GetCurrentSelection() + '0' ) );
-    if(m_pModel->GetCurrentSelection() != RTOFS)
-        m_RequestConfigBase.SetChar( 2, (char) ( m_pResolution->GetCurrentSelection() + '0' ) );
-    m_RequestConfigBase.SetChar( 3, (char) ( m_pInterval->GetCurrentSelection() + '0' ) );
-    wxString range;
-    range.Printf(_T("%x"), m_pTimeRange->GetCurrentSelection() + 1 );       //range max = 2 to 16 stored in hexa 1 to f
-    m_RequestConfigBase.SetChar( 4, range.GetChar( 0 ) );
-    if(m_pMailTo->GetCurrentSelection() == ZYGRIB && m_pWModel->IsShown())
-        m_RequestConfigBase.SetChar( 5, (char) ( m_pWModel->GetCurrentSelection() + '0' ) );
-    m_RequestConfigBase.SetChar( 6, 'X' );              //must be always selected as a default
-    m_RequestConfigBase.SetChar( 7, 'X' );
-    if(m_pModel->GetCurrentSelection() != COAMPS) {
-        m_pWaves->IsChecked() ? m_RequestConfigBase.SetChar( 8, 'X' )
-            : m_RequestConfigBase.SetChar( 8, '.' );
-        m_pRainfall->IsChecked() ? m_RequestConfigBase.SetChar( 9, 'X' )
-            : m_RequestConfigBase.SetChar( 9, '.' );
-        m_pCloudCover->IsChecked() ? m_RequestConfigBase.SetChar( 10, 'X' )
-            : m_RequestConfigBase.SetChar( 10, '.' );
-        m_pAirTemp->IsChecked() ? m_RequestConfigBase.SetChar( 11, 'X' )
-            : m_RequestConfigBase.SetChar( 11, '.' );
-        m_pSeaTemp->IsChecked() ? m_RequestConfigBase.SetChar( 12, 'X' )
-            : m_RequestConfigBase.SetChar( 12, '.' );
-        m_pCAPE->IsChecked() ? m_RequestConfigBase.SetChar( 15, 'X' )
-            : m_RequestConfigBase.SetChar( 15, '.' );
-    }
-    if(m_pModel->GetCurrentSelection() != ZYGRIB && m_pModel->GetCurrentSelection() != COAMPS)
-        m_pCurrent->IsChecked() ? m_RequestConfigBase.SetChar( 13, 'X' )
-            : m_RequestConfigBase.SetChar( 13, '.' );
-    if(m_pMailTo->GetCurrentSelection() == ZYGRIB)
-        m_pWindGust->IsChecked() ? m_RequestConfigBase.SetChar( 14, 'X' )
-            : m_RequestConfigBase.SetChar( 14, '.' );
-
-    wxFileConfig *pConf = GetOCPNConfigObject();
-    if(pConf) {
-        pConf->SetPath ( _T( "/PlugIns/GRIB" ) );
-
-        pConf->Write ( _T ( "MailRequestConfig" ), m_RequestConfigBase );
-        pConf->Write ( _T( "MailSenderAddress" ), m_pSenderAddress->GetValue() );
-        pConf->Write ( _T( "MailRequestAddresses" ), m_MailToAddresses );
-        pConf->Write ( _T( "ZyGribLogin" ), m_pLogin->GetValue() );
-        pConf->Write ( _T( "ZyGribCode" ), m_pCode->GetValue() );
-        pConf->Write ( _T( "SendMailMethod" ), m_SendMethod );
-        pConf->Write ( _T( "MovingGribSpeed" ), m_MovingSpeed );
-        pConf->Write ( _T( "MovingGribCourse" ), m_MovingCourse );
-
-    }
-        this->Hide();
-}
-
-wxString GribRequestSetting::WriteMail()
-{
-    m_MailError_Nb = 0;
-    //some useful strings
-
-    const wxString s[] = { _T(","), _T(" ") };        //separators
-    const wxString p[][7] = {{ _T("APCP"), _T("TCDC"), _T("AIRTMP"), _T("HTSGW,WVPER,WVDIR"), _T("SEATMP"), wxEmptyString, _T("CAPE")}, //parameters
-        {_T("PRECIP"), _T("CLOUD"), _T("TEMP"), _T("WVSIG WVWIND"), wxEmptyString, _T("GUST"), _T("CAPE")} };
-
-    wxString r_topmess,r_parameters,r_zone;
-    //write the top part of the mail
-    switch( m_pMailTo->GetCurrentSelection() ) {
-    case SAILDOCS:                                                                         //Saildocs
-        r_zone = toMailFormat(1, m_LatmaxBase) + _T(",") + toMailFormat(1, m_LatminBase) + _T(",")
-            + toMailFormat(2, m_LonminBase) + _T(",") + toMailFormat(2, m_LonmaxBase);
-        r_topmess = wxT("send ");
-        r_topmess.Append(m_pModel->GetStringSelection() + _T(":"));
-        r_topmess.Append( r_zone  + _T("|"));
-        r_topmess.Append(m_pResolution->GetStringSelection()).Append(_T(","))
-            .Append(m_pResolution->GetStringSelection()).Append(_T("|"));
-        double v;
-        m_pInterval->GetStringSelection().ToDouble(&v);
-        r_topmess.Append(wxString::Format(_T("0,%d,%d"), (int) v, (int) v*2));
-        m_pTimeRange->GetStringSelection().ToDouble(&v);
-        r_topmess.Append(wxString::Format(_T("..%d"), (int) v*24) + _T("|=\n"));
-        break;
-    case ZYGRIB:                                                                         //Zygrib
-        r_zone = toMailFormat(1, m_LatminBase) + toMailFormat(2, m_LonminBase) + _T(" ")
-            + toMailFormat(1, m_LatmaxBase) + toMailFormat(2, m_LonmaxBase);
-        r_topmess = wxT("login : ");
-        r_topmess.Append(m_pLogin->GetValue() + _T("\n"));
-        r_topmess.Append(wxT("code :"));
-        r_topmess.Append(m_pCode->GetValue() + _T("\n"));
-        r_topmess.Append(wxT("area : "));
-        r_topmess.append(r_zone + _T("\n"));
-        r_topmess.Append(wxT("resol : "));
-        r_topmess.append(m_pResolution->GetStringSelection() + _T("\n"));
-        r_topmess.Append(wxT("days : "));
-        r_topmess.append(m_pTimeRange->GetStringSelection() + _T("\n"));
-        r_topmess.Append(wxT("hours : "));
-        r_topmess.append(m_pInterval->GetStringSelection() + _T("\n"));
-        if(m_pWaves->IsChecked()) {
-            r_topmess.Append(wxT("waves : "));
-            r_topmess.append(m_pWModel->GetStringSelection() + _T("\n"));
-        }
-        r_topmess.Append(wxT("meteo : "));
-        r_topmess.append(m_pModel->GetStringSelection() + _T("\n"));
-        if ( m_pLogin->GetValue().IsEmpty() || m_pCode->GetValue().IsEmpty() ) m_MailError_Nb =1;
-        break;
-    }
-    //write the parameters part of the mail
-    switch( m_pModel->GetCurrentSelection() ) {
-    case GFS:                                                                           //GFS
-        r_parameters = wxT("WIND") + s[m_pMailTo->GetCurrentSelection()] + wxT("PRESS");    // the default minimum request parameters
-        if( m_pRainfall->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][0] );
-        if( m_pCloudCover->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][1] );
-        if( m_pAirTemp->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][2] );
-        if( m_pWaves->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][3] );
-        if( m_pSeaTemp->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][4] );
-        if( m_pWindGust->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][5] );
-        if( m_pCAPE->GetValue() )
-            r_parameters.Append( s[m_pMailTo->GetCurrentSelection()] + p[m_pMailTo->GetCurrentSelection()][6] );
-        break;
-    case COAMPS:                                                                           //COAMPS
-        r_parameters = wxT("WIND,PRMSL");                                 //the default parameters for this model
-        break;
-    case RTOFS:                                                                           //RTOFS
-        r_parameters = wxT("CUR,WTMP");                                   //the default parameters for this model
-        break;
-    }
-    if( m_pMailTo->GetCurrentSelection() != ZYGRIB && m_MovingGribEnabled)
-        r_parameters.Append(wxString::Format(_T("|%d,%d"),m_MovingSpeed,m_MovingCourse));
-
-    if( !EstimateFileSize() ) m_MailError_Nb += 2;
-    return wxString( r_topmess + r_parameters );
-}
-
-bool GribRequestSetting::EstimateFileSize()
-{
-    //define size limits
-    int limit;
-    if(m_pMailTo->GetCurrentSelection() == ZYGRIB )
-        limit = 2;
-    else                                                                 //No size limit for SaiDocs
-        limit = 0;
-
-    //too small zone ? ( mini 2 * resolutions )
-    double reso,time,inter;
-    m_pResolution->GetStringSelection().ToDouble(&reso);
-    m_pTimeRange->GetStringSelection().ToDouble(&time);
-    m_pInterval->GetStringSelection().ToDouble(&inter);
-    if (m_LonmaxBase-m_LonminBase < 2*reso) {
-        m_LonminBase -= reso;
-        m_LonmaxBase += reso;
-    }
-    if (m_LatmaxBase-m_LatminBase < 2*reso) {
-        m_LatmaxBase += reso;
-        m_LatminBase -= reso;
-    }
-    int npts = (int) (  ceil(((double)(m_LatmaxBase-m_LatminBase)/reso))
-                       * ceil(((double)(m_LonmaxBase-m_LonminBase)/reso)) );
-
-    if(m_pModel->GetCurrentSelection() == COAMPS )                                           //limited area for COAMPS
-        npts = wxMin(npts, (int) (  ceil(40.0/reso) * ceil(40.0/reso) ) );
-
-    // Nombre de GribRecords
-    int nbrec = (int) (time*24/inter)+1;
-    int nbPress = (m_pPress->IsChecked()) ?  nbrec   : 0;
-    int nbWind  = (m_pWind->IsChecked()) ?  2*nbrec : 0;
-    int nbwave  = (m_pWaves->IsChecked()) ?  2*nbrec : 0;
-    int nbRain  = (m_pRainfall->IsChecked()) ?  nbrec-1 : 0;
-    int nbCloud = (m_pCloudCover->IsChecked()) ?  nbrec-1 : 0;
-    int nbTemp  = (m_pAirTemp->IsChecked())    ?  nbrec   : 0;
-    int nbSTemp  = (m_pSeaTemp->IsChecked())    ?  nbrec   : 0;
-    int nbGUSTsfc  = (m_pWindGust->IsChecked()) ?  nbrec : 0;
-    int nbCurrent  = (m_pCurrent->IsChecked()) ?  nbrec : 0;
-    int nbCape  = (m_pCAPE->IsChecked()) ?  nbrec : 0;
-    int head = 84;
-    double estime = 0.0;
-    int nbits;
-
-    nbits = 13;
-    estime += nbWind*(head+(nbits*npts)/8+2 );
-    estime += nbCurrent*(head+(nbits*npts)/8+2 );
-
-    nbits = 11;
-    estime += nbTemp*(head+(nbits*npts)/8+2 );
-    estime += nbSTemp*(head+(nbits*npts)/8+2 );
-
-    nbits = 4;
-    estime += nbRain*(head+(nbits*npts)/8+2 );
-
-    nbits = 15;
-    estime += nbPress*(head+(nbits*npts)/8+2 );
-
-    nbits = 4;
-    estime += nbCloud*(head+(nbits*npts)/8+2 );
-
-    nbits = 7;
-    estime += nbGUSTsfc*(head+(nbits*npts)/8+2 );
-
-    nbits = 5;
-    estime += nbCape*(head+(nbits*npts)/8+2 );
-
-	nbits = 6;
-	estime += nbrec*nbwave*(head+(nbits*npts)/8+2 );
-
-	estime /= (1024*1024);
-
-    m_tFileSize->SetLabel(wxString::Format(_T("%1.2f Mo"), estime));
-
-    if(limit) {
-        m_tLimit->SetLabel(_("( Max ") + wxString::Format(_T("%d"), limit) + _(" Mo )"));
-        if(estime > limit) return false;
-    } else
-        m_tLimit->SetLabel(_T(""));
-
-    return true;
-}
-
-void GribRequestSetting::OnSendMaiL( wxCommandEvent& event  )
-{
-    if(!m_AllowSend) {
-        m_rButtonCancel->Show();
-        m_rButtonApply->Show();
-        m_rButtonYes->SetLabel(_("Send"));
-
-        m_MailImage->SetForegroundColour(wxColor( 0, 0, 0 ));                   //permit to send a (new) message
-        m_AllowSend = true;
-
-        m_MailImage->SetValue( WriteMail() );
-
-        return;
-    }
-
-    const wxString error[] = { _T("\n\n"), _("Before sending an email to Zygrib you have to enter your Login and Code.\nPlease visit www.zygrib.org/ and follow instructions..."),
-        _("The file size limit is overcome!\nYou can zoom in and/or change parameters...") };
-
-    m_MailImage->SetForegroundColour(wxColor( 255, 0, 0 ));
-    m_AllowSend = false;
-
-    if( m_MailError_Nb ) {
-       // m_MailImage->SetForegroundColour(wxColor( 255, 0, 0 ));
-        if( m_MailError_Nb == 3 )
-            m_MailImage->SetValue( error[1] + error[0] + error[2] );
-        else
-            m_MailImage->SetValue( error[m_MailError_Nb] );
-        m_rButtonCancel->Hide();
-        m_rButtonApply->Hide();
-        m_rButtonYes->SetLabel(_("Continue..."));
-        this->Fit();
-        this->Refresh();
-        return;
-    }
-
-    wxMailMessage *message = new wxMailMessage(
-    wxT("gribauto"),                                                                            //requested subject
-    (m_pMailTo->GetCurrentSelection() == SAILDOCS) ? m_MailToAddresses.BeforeFirst(_T(';'))     //to request address
-        : m_MailToAddresses.AfterFirst(_T(';')),
-    WriteMail(),                                                                                 //message image
-    m_pSenderAddress->GetValue()
-    );
-    wxEmail mail ;
-    if(mail.Send( *message, m_SendMethod)) {
-#ifdef __WXMSW__
-        m_MailImage->SetValue(
-            _("Your request is ready. An email is prepared in your email environment. \nYou have just to verify and send it...\nSave or Cancel to finish...or Continue...") );
-#else
-        if(m_SendMethod == 0 ) {
-            m_MailImage->SetValue(
-            _("Your request is ready. An email is prepared in your email environment. \nYou have just to verify and send it...\nSave or Cancel to finish...or Continue...") );
-        } else {
-        m_MailImage->SetValue(
-            _("Your request was sent \n(if your system has an MTA configured and is able to send email).\nSave or Cancel to finish...or Continue...") );
-        }
-#endif
-    } else {
-        m_MailImage->SetValue(
-            _("Request can't be sent. Please verify your email systeme parameters.\nYou should also have a look at your log file.\nSave or Cancel to finish..."));
-        m_rButtonYes->Hide();
-    }
-    m_rButtonYes->SetLabel(_("Continue..."));
-    this->Fit();
-    this->Refresh();
-}
