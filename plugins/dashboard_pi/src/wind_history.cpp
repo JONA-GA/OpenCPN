@@ -91,12 +91,12 @@ wxSize DashboardInstrument_WindDirHistory::GetSize( int orient, wxSize hint )
 }
 void DashboardInstrument_WindDirHistory::SetData(int st, double data, wxString unit)
 {
-  if (st == OCPN_DBP_STC_TWD || st == OCPN_DBP_STC_TWS2) {  // TWS2 avec MWD?
+  if (st == OCPN_DBP_STC_TWD || st == OCPN_DBP_STC_TWS) {  
     if (st == OCPN_DBP_STC_TWD) {
       m_WindDir = data;
       if(m_DirRecCnt++ <=5) m_DirStartVal+=data;
     }
-    if (st == OCPN_DBP_STC_TWS2) {
+    if (st == OCPN_DBP_STC_TWS) {
       m_WindSpd = data;
       if(m_SpdRecCnt++<=5) m_SpdStartVal+=data;
     }
