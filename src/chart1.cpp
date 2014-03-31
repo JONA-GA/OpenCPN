@@ -4108,7 +4108,12 @@ void MyFrame::JumpToPosition( double lat, double lon, double scale )
     cc1->m_bFollow = false;
     DoChartUpdate();
 
-    cc1->SetViewPoint( lat, lon, scale, 0, cc1->GetVPRotation() );
+    if( !cc1->GetQuiltMode() ) {
+        cc1->SetViewPoint( lat, lon, scale, Current_Ch->GetChartSkew() * PI / 180., cc1->GetVPRotation() );
+    } else {
+        cc1->SetViewPoint( lat, lon, scale, 0, cc1->GetVPRotation() );
+    }
+    
     cc1->ReloadVP();
 
     SetToolbarItemState( ID_FOLLOW, false );
@@ -5780,7 +5785,8 @@ void MyFrame::SelectdbChart( int dbindex )
 
         double best_scale = GetBestVPScale( Current_Ch );
 
-        cc1->SetViewPoint( zLat, zLon, best_scale, Current_Ch->GetChartSkew() * PI / 180.,
+        if( Current_Ch )
+            cc1->SetViewPoint( zLat, zLon, best_scale, Current_Ch->GetChartSkew() * PI / 180.,
                 cc1->GetVPRotation() );
 
         SetChartUpdatePeriod( cc1->GetVP() );
