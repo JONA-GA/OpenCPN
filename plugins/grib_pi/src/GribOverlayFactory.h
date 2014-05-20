@@ -131,7 +131,7 @@ private:
 
 #ifdef ocpnUSE_GL
     void DrawGLTexture( GLuint texture, int width, int height,
-                        int xd, int yd, bool Djneg, double dwidth, double dheight,
+                        int xd, int yd, double dwidth, double dheight,
                         PlugIn_ViewPort *vp );
     void DrawGLRGBA( unsigned char *pRGBA, int RGBA_width, int RGBA_height, int xd, int yd );
     bool CreateGribGLTexture( GribOverlay *pGO, int config, GribRecord *pGR,
@@ -149,7 +149,9 @@ private:
     int  m_TimeZone;
 
     wxDC *m_pdc;
+#if wxUSE_GRAPHICS_CONTEXT
     wxGraphicsContext *m_gdc;
+#endif
 
     wxFont *m_dFont_map;
     wxFont *m_dFont_war;
