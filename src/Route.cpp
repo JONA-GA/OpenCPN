@@ -62,6 +62,7 @@ Route::Route( void )
     m_bDeleteOnArrival = false;
     m_width = STYLE_UNDEFINED;
     m_style = STYLE_UNDEFINED;
+    m_hiliteWidth = 0;
 
     pRoutePointList = new RoutePointList;
     m_pLastAddedPoint = NULL;
@@ -151,7 +152,11 @@ void Route::CloneTrack( Route *psourceroute, int start_nPoint, int end_nPoint, c
                 psourcepoint->m_IconName, psourcepoint->GetName(), GPX_EMPTY_STRING, false );
 
         AddPoint( ptargetpoint, false );
-
+        
+        //    This is a hack, need to undo the action of Route::AddPoint
+        ptargetpoint->m_bIsInRoute = false;
+        ptargetpoint->m_bIsInTrack = true;
+        
         CloneAddedTrackPoint( m_pLastAddedPoint, psourcepoint );
 
         int segment_shift = psourcepoint->m_GPXTrkSegNo;
@@ -305,10 +310,6 @@ void Route::Draw( ocpnDC& dc, ViewPort &VP )
 {
     if( m_nPoints == 0 ) return;
 
-    int hilite = 0;
-    if(m_bIsBeingEdited)
-        hilite = 50;
-    
     if( m_bVisible && m_bRtIsSelected ) {
         dc.SetPen( *g_pRouteMan->GetSelectedRoutePen() );
         dc.SetBrush( *g_pRouteMan->GetSelectedRouteBrush() );
@@ -366,7 +367,7 @@ void Route::Draw( ocpnDC& dc, ViewPort &VP )
             bool b_1_on = VP.GetBBox().PointInBox( prp1->m_lon, prp1->m_lat, 0 );
 
             //Simple case
-            if( b_1_on && b_2_on ) RenderSegment( dc, rpt1.x, rpt1.y, rpt2.x, rpt2.y, VP, true, hilite ); // with arrows
+            if( b_1_on && b_2_on ) RenderSegment( dc, rpt1.x, rpt1.y, rpt2.x, rpt2.y, VP, true, m_hiliteWidth ); // with arrows
 
             //    In the cases where one point is on, and one off
             //    we must decide which way to go in longitude
@@ -387,7 +388,7 @@ void Route::Draw( ocpnDC& dc, ViewPort &VP )
 
                 if( dp < dtest ) adder = 0;
 
-                RenderSegment( dc, rpt1.x, rpt1.y, rpt2.x + adder, rpt2.y, VP, true, hilite );
+                RenderSegment( dc, rpt1.x, rpt1.y, rpt2.x + adder, rpt2.y, VP, true, m_hiliteWidth );
             } else
                 if( !b_1_on ) {
                     if( rpt1.x < rpt2.x ) adder = (int) pix_full_circle;
@@ -400,7 +401,7 @@ void Route::Draw( ocpnDC& dc, ViewPort &VP )
                     
                     if( dp < dtest ) adder = 0;
 
-                    RenderSegment( dc, rpt1.x + adder, rpt1.y, rpt2.x, rpt2.y, VP, true, hilite );
+                    RenderSegment( dc, rpt1.x + adder, rpt1.y, rpt2.x, rpt2.y, VP, true, m_hiliteWidth );
                 }
         }
 
@@ -418,6 +419,35 @@ void Route::DrawGL( ViewPort &VP, OCPNRegion &region )
 #ifdef ocpnUSE_GL
     if( m_nPoints < 2 || !m_bVisible ) return;
 
+    //  Hiliting first
+    if(m_hiliteWidth){
+        ocpnDC dc;
+        wxColour y = GetGlobalColor( _T ( "YELO1" ) );
+        wxColour hilt( y.Red(), y.Green(), y.Blue(), 128 );
+        wxPen HiPen( hilt, m_hiliteWidth, wxSOLID );
+        dc.SetPen( HiPen );
+        
+        wxRoutePointListNode *node = pRoutePointList->GetFirst();
+        RoutePoint *prp0 = node->GetData();
+        wxPoint r0;
+        cc1->GetCanvasPointPix( prp0->m_lat, prp0->m_lon, &r0);
+
+        node = node->GetNext();
+        while( node ){
+            
+            RoutePoint *prp = node->GetData();
+            wxPoint r1;
+            cc1->GetCanvasPointPix( prp->m_lat, prp->m_lon, &r1);
+
+            dc.StrokeLine( r0.x, r0.y, r1.x, r1.y );
+                    
+            r0 = r1;
+            node = node->GetNext();
+            
+        }
+    }
+    
+    
     /* determine color and width */
     wxColour col;
     int width;
@@ -436,6 +466,21 @@ void Route::DrawGL( ViewPort &VP, OCPNRegion &region )
         if( m_width != STYLE_UNDEFINED ) width = m_width;
         if( m_Colour == wxEmptyString ) {
             col = g_pRouteMan->GetRoutePen()->GetColour();
+            
+            //  For tracks, establish colour based on first icon name
+            if(m_bIsTrack){
+                wxRoutePointListNode *node = pRoutePointList->GetFirst();
+                RoutePoint *prp = node->GetData();
+                
+                if( prp->m_IconName.StartsWith( _T("xmred") ) ) 
+                    col = GetGlobalColor( _T ( "URED" ) );
+                else if( prp->m_IconName.StartsWith( _T("xmblue") ) ) 
+                    col = GetGlobalColor( _T ( "BLUE3" ) );
+                else if( prp->m_IconName.StartsWith( _T("xmgreen") ) ) 
+                    col = GetGlobalColor( _T ( "UGREN" ) );
+                else 
+                    col = GetGlobalColor( _T ( "CHMGD" ) );
+            }
         } else {
             for( unsigned int i = 0; i < sizeof( ::GpxxColorNames ) / sizeof(wxString); i++ ) {
                 if( m_Colour == ::GpxxColorNames[i] ) {
@@ -479,15 +524,17 @@ void Route::DrawGL( ViewPort &VP, OCPNRegion &region )
     glEnd();
 
     /* direction arrows.. could probably be further optimized for opengl */
-    wxRoutePointListNode *node = pRoutePointList->GetFirst();
-    wxPoint rpt1, rpt2;
-    while(node) {
-        RoutePoint *prp = node->GetData();
-        cc1->GetCanvasPointPix( prp->m_lat, prp->m_lon, &rpt2 );
-        if(node != pRoutePointList->GetFirst())
-            RenderSegmentArrowsGL( rpt1.x, rpt1.y, rpt2.x, rpt2.y, cc1->GetVP() );
-        rpt1 = rpt2;
-        node = node->GetNext();
+    if( !m_bIsTrack ) {
+        wxRoutePointListNode *node = pRoutePointList->GetFirst();
+        wxPoint rpt1, rpt2;
+        while(node) {
+            RoutePoint *prp = node->GetData();
+            cc1->GetCanvasPointPix( prp->m_lat, prp->m_lon, &rpt2 );
+            if(node != pRoutePointList->GetFirst())
+                RenderSegmentArrowsGL( rpt1.x, rpt1.y, rpt2.x, rpt2.y, cc1->GetVP() );
+            rpt1 = rpt2;
+            node = node->GetNext();
+        }
     }
 
     /*  Route points  */
@@ -880,6 +927,8 @@ void Route::CalculateDCRect( wxDC& dc_route, wxRect *prect, ViewPort &VP )
 {
     dc_route.ResetBoundingBox();
     dc_route.DestroyClippingRegion();
+    
+    wxRect update_rect;
 
     // Draw the route in skeleton form on the dc
     // That is, draw only the route points, assuming that the segements will
@@ -896,15 +945,15 @@ void Route::CalculateDCRect( wxDC& dc_route, wxRect *prect, ViewPort &VP )
             prp2->Draw( odc_route, NULL );
             prp2->m_bBlink = blink_save;
 
+            wxRect r =  prp2->CurrentRect_in_DC ;
+            r.Inflate(m_hiliteWidth, m_hiliteWidth);        // allow for large hilite circles at segment ends
+                
+            update_rect.Union( r );
             node = node->GetNext();
         }
     }
 
-    //  Retrieve the drawing extents
-    prect->x = dc_route.MinX() - 1;
-    prect->y = dc_route.MinY() - 1;
-    prect->width = dc_route.MaxX() - dc_route.MinX() + 2;
-    prect->height = dc_route.MaxY() - dc_route.MinY() + 2;
+    *prect = update_rect;
 }
 
 /*

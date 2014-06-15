@@ -38,6 +38,10 @@
 #include "CrashRpt.h"
 #endif
 
+#ifdef LINUX_CRASHRPT
+#include "crashprint.h"
+#endif
+
 #include "wx/print.h"
 #include "wx/printdlg.h"
 #include "wx/artprov.h"
@@ -582,6 +586,7 @@ int                       g_AisTargetList_sortColumn;
 bool                      g_bAisTargetList_sortReverse;
 wxString                  g_AisTargetList_column_spec;
 int                       g_AisTargetList_count;
+bool                      g_bAisTargetList_autosort;
 
 bool                      g_bGarminHostUpload;
 
@@ -601,6 +606,7 @@ int                       g_toolbar_x;
 int                       g_toolbar_y;
 long                      g_toolbar_orient;
 wxRect                    g_last_tb_rect;
+float                     g_toolbar_scalefactor;
 
 MyDialogPtrArray          g_MacShowDialogArray;
 
@@ -638,6 +644,10 @@ wxString g_config_version_string;
 
 bool             g_btouch;
 bool             g_bresponsive;
+
+#ifdef LINUX_CRASHRPT
+wxCrashPrint g_crashprint;
+#endif
 
 #ifndef __WXMSW__
 sigjmp_buf env;                    // the context saved by sigsetjmp();
@@ -936,7 +946,7 @@ bool MyApp::OnInit()
     int type = MiniDumpWithDataSegs;  // Include the data sections from all loaded modules.
                                                 // This results in the inclusion of global variables
 
-    type |=  MiniDumpNormal | MiniDumpWithPrivateReadWriteMemory | MiniDumpWithIndirectlyReferencedMemory;
+    type |=  MiniDumpNormal;// | MiniDumpWithPrivateReadWriteMemory | MiniDumpWithIndirectlyReferencedMemory;
     info.uMiniDumpType = (MINIDUMP_TYPE)type;
                                                 
                                                 
@@ -994,6 +1004,11 @@ bool MyApp::OnInit()
     crAddFile2( log_crash.c_str(), NULL, NULL, CR_AF_MISSING_FILE_OK | CR_AF_ALLOW_DELETE );
 
 #endif
+#endif
+
+#ifdef LINUX_CRASHRPT
+    // fatal exceptions handling
+    wxHandleFatalExceptions (true);
 #endif
 
     //  Seed the random number generator
@@ -1130,8 +1145,14 @@ bool MyApp::OnInit()
     temp_font.SetDefaultEncoding( wxFONTENCODING_SYSTEM );
 
 //      Establish a "home" location
-    wxStandardPathsBase& std_path = wxApp::GetTraits()->GetStandardPaths();
-    std_path.Get();
+    wxStandardPaths& std_path = *dynamic_cast<wxStandardPaths*>(&wxApp::GetTraits()->GetStandardPaths());
+    
+    //TODO  Why is the following preferred?  Will not compile with gcc...
+//    wxStandardPaths& std_path = wxApp::GetTraits()->GetStandardPaths();
+    
+#ifdef __WXGTK__
+    std_path.SetInstallPrefix(wxString(PREFIX, wxConvUTF8));
+#endif
     
     gExe_path = std_path.GetExecutablePath();
 
@@ -1746,18 +1767,32 @@ if( 0 == g_memCacheLimit )
 
     //  Check the global Tide/Current data source array
     //  If empty, preset one default (US) Ascii data source
+    wxString default_tcdata =  ( g_SData_Locn + _T("tcdata") +
+             wxFileName::GetPathSeparator() + _T("HARMONIC.IDX"));
+    wxFileName fdefault( default_tcdata );
+    
     if(!TideCurrentDataSet.GetCount()) {
-        wxString default_tcdata =  ( g_SData_Locn + _T("tcdata") +
-            wxFileName::GetPathSeparator() +
-            _T("HARMONIC.IDX"));
-
         if( g_bportable ) {
-            wxFileName f( default_tcdata );
-            f.MakeRelativeTo( g_PrivateDataDir );
-            TideCurrentDataSet.Add( f.GetFullPath() );
+            fdefault.MakeRelativeTo( g_PrivateDataDir );
+            TideCurrentDataSet.Add( fdefault.GetFullPath() );
         }
         else
             TideCurrentDataSet.Add( default_tcdata );
+    }
+    else {
+        wxString first_tide = TideCurrentDataSet.Item(0);
+        wxFileName ft(first_tide);
+        if(!ft.FileExists()){
+            TideCurrentDataSet.RemoveAt(0);
+            TideCurrentDataSet.Insert( default_tcdata, 0 );
+        }
+        else {
+            wxString first_path(ft.GetPath());
+            if(fdefault.GetPath() != first_path){
+                TideCurrentDataSet.RemoveAt(0);
+                TideCurrentDataSet.Insert( default_tcdata, 0 );
+            }
+        }
     }
 
 
@@ -1879,7 +1914,7 @@ if( 0 == g_memCacheLimit )
 
     pthumbwin = new ThumbWin( cc1 );
 
-    gFrame->ApplyGlobalSettings( 1, false );               // done once on init with resize
+    gFrame->ApplyGlobalSettings( false, false );               // done once on init with resize
     
     g_toolbar_x = wxMax(g_toolbar_x, 0);
     g_toolbar_y = wxMax(g_toolbar_y, 0);
@@ -1887,15 +1922,7 @@ if( 0 == g_memCacheLimit )
     g_toolbar_x = wxMin(g_toolbar_x, cw);
     g_toolbar_y = wxMin(g_toolbar_y, ch);
 
-    g_FloatingToolbarDialog = new ocpnFloatingToolbarDialog( cc1,
-            wxPoint( g_toolbar_x, g_toolbar_y ), g_toolbar_orient );
-    g_FloatingToolbarDialog->LockPosition(true);
-
-    gFrame->SetAndApplyColorScheme( global_color_scheme );
-    
-    /*  Load initial symbol tables  */
-    if( ps52plib && ps52plib->m_bOK )
-        ps52plib->SetPLIBColorScheme( global_color_scheme );
+    gFrame->SetToolbarScale();
     
     //  The position and size of the static frame children (i.e. the canvas, and the status bar) are now set
     //  So now we can establish the AUI panes for them.
@@ -1918,6 +1945,8 @@ if( 0 == g_memCacheLimit )
     gFrame->ClearBackground();
     gFrame->Show( TRUE );
 
+    gFrame->SetAndApplyColorScheme( global_color_scheme );
+    
     if( g_bframemax ) gFrame->Maximize( true );
 
     if( g_bresponsive  && ( g_pix_per_mm > 4.0))
@@ -2150,7 +2179,7 @@ if( 0 == g_memCacheLimit )
     
     gFrame->DoChartUpdate();
 
-    g_FloatingToolbarDialog->LockPosition(false);
+//    g_FloatingToolbarDialog->LockPosition(false);
 
     gFrame->RequestNewToolbar();
 
@@ -2207,6 +2236,13 @@ if( 0 == g_memCacheLimit )
 
     cc1->ReloadVP();                  // once more, and good to go
 
+    //  Some window managers get confused about z-order of Compass Window, and other windows not children of gFrame.
+    //  We need to defer their creation until here.
+    if( pConfig->m_bShowCompassWin ) {
+        g_FloatingCompassDialog = new ocpnFloatingCompassWindow( cc1 );
+        if( g_FloatingCompassDialog ) g_FloatingCompassDialog->UpdateStatus( true );
+    }
+    
     g_FloatingToolbarDialog->Raise();
     g_FloatingToolbarDialog->Show();
 
@@ -2237,7 +2273,7 @@ if( 0 == g_memCacheLimit )
     
     if ( g_start_fullscreen )
         gFrame->ToggleFullScreen();
-    
+
     return TRUE;
 }
 
@@ -2368,6 +2404,12 @@ int MyApp::OnExit()
     return TRUE;
 }
 
+#ifdef LINUX_CRASHRPT
+void MyApp::OnFatalException () {
+    g_crashprint.Report();
+}
+#endif
+
 void MyApp::TrackOff( void )
 {
     if( gFrame ) gFrame->TrackOff();
@@ -2471,11 +2513,7 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
             }
 #endif    
                 
-            dsPortType port_type;
-            if (cp->Output)
-                port_type = DS_TYPE_INPUT_OUTPUT;
-            else
-                port_type = DS_TYPE_INPUT;
+            dsPortType port_type = cp->IOSelect;
             DataStream *dstr = new DataStream( g_pMUX,
                                            cp->GetDSPort(),
                                            wxString::Format(wxT("%i"),cp->Baudrate),
@@ -2652,6 +2690,8 @@ void MyFrame::SetAndApplyColorScheme( ColorScheme cs )
         }
     }
 
+    if( ps52plib ) ps52plib->SetPLIBColorScheme( SchemeName );
+    
     //    Set up a pointer to the proper hash table
     pcurrent_user_color_hash = (wxColorHashMap *) UserColourHashTableArray->Item(
             Usercolortable_index );
@@ -2752,8 +2792,10 @@ ocpnToolBarSimple *MyFrame::CreateAToolbar()
     ocpnToolBarSimple *tb = NULL;
     wxToolBarToolBase* newtool;
 
-    if( g_FloatingToolbarDialog ) tb = g_FloatingToolbarDialog->GetToolbar();
-    if( !tb ) return 0;
+    if( g_FloatingToolbarDialog )
+        tb = g_FloatingToolbarDialog->GetToolbar();
+    if( !tb )
+        return 0;
 
     ocpnStyle::Style* style = g_StyleManager->GetCurrentStyle();
 
@@ -3008,9 +3050,26 @@ bool MyFrame::AddDefaultPositionPlugInTools( ocpnToolBarSimple *tb )
 
 void MyFrame::RequestNewToolbar()
 {
+    bool b_reshow = true;
     if( g_FloatingToolbarDialog ) {
-        bool b_reshow = g_FloatingToolbarDialog->IsShown();
-        if( g_FloatingToolbarDialog->IsToolbarShown() ) DestroyMyToolbar();
+        b_reshow = g_FloatingToolbarDialog->IsShown();
+        
+        float ff = fabs(g_FloatingToolbarDialog->GetScaleFactor() - g_toolbar_scalefactor);
+        if(ff > 0.01f){
+            DestroyMyToolbar();
+            delete g_FloatingToolbarDialog;
+            g_FloatingToolbarDialog = NULL;
+        }
+    }
+
+    if( !g_FloatingToolbarDialog ) {
+        g_FloatingToolbarDialog = new ocpnFloatingToolbarDialog( cc1,
+             wxPoint( g_toolbar_x, g_toolbar_y ), g_toolbar_orient, g_toolbar_scalefactor );
+    }
+        
+    if( g_FloatingToolbarDialog ) {
+        if( g_FloatingToolbarDialog->IsToolbarShown() )
+            DestroyMyToolbar();
 
         g_toolbar = CreateAToolbar();
         g_FloatingToolbarDialog->RePosition();
@@ -3063,6 +3122,26 @@ void MyFrame::EnableToolbar( bool newstate )
         g_toolbar->EnableTool( ID_ROUTEMANAGER, newstate );
         g_toolbar->EnableTool( ID_TRACK, newstate );
         g_toolbar->EnableTool( ID_AIS, newstate );
+    }
+}
+
+void MyFrame::SetToolbarScale()
+{
+    //  Get the basic size of a tool icon
+    ocpnStyle::Style* style = g_StyleManager->GetCurrentStyle();
+    wxSize style_tool_size = style->GetToolSize();
+    
+    g_toolbar_scalefactor = 1.0;
+    if(g_bresponsive ){
+        //      Adjust the scale factor so that the basic tool size is xx millimetres, assumed square
+        float target_size = 9.0;                // mm
+        
+        float basic_tool_size_mm = style_tool_size.x / cc1->GetPixPerMM();
+        g_toolbar_scalefactor =  target_size / basic_tool_size_mm;
+        g_toolbar_scalefactor = wxMax(g_toolbar_scalefactor, 1.0);
+        
+        //  Round to the nearest "quarter", to avoid rendering artifacts
+        g_toolbar_scalefactor = wxRound( g_toolbar_scalefactor * 4.0 )/ 4.0;
     }
 }
 
@@ -3182,7 +3261,8 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     }
 
     FrameTimer1.Stop();
-
+    FrameCOGTimer.Stop();
+    
     g_bframemax = IsMaximized();
 
     //    Record the current state of tracking
@@ -3242,6 +3322,11 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     SetStatusBar( NULL );
     stats = NULL;
 
+    if( pRouteManagerDialog ) {
+        pRouteManagerDialog->Destroy();
+        pRouteManagerDialog = NULL;
+    }
+        
     cc1->Destroy();
     cc1 = NULL;
 
@@ -3510,13 +3595,13 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
             break;
 
         case ID_ZOOMIN: {
-            cc1->DoZoomCanvas( 2.0 );
+            cc1->DoZoomCanvas( 2.0, false );
             DoChartUpdate();
             break;
         }
 
         case ID_ZOOMOUT: {
-            cc1->DoZoomCanvas( 0.5 );
+            cc1->DoZoomCanvas( 0.5, false );
             DoChartUpdate();
             break;
         }
@@ -4131,16 +4216,17 @@ void MyFrame::ApplyGlobalSettings( bool bFlyingUpdate, bool bnewtoolbar )
         }
     }
 
-    if( pConfig->m_bShowCompassWin ) {
-        if(!g_FloatingCompassDialog) {
-            g_FloatingCompassDialog = new ocpnFloatingCompassWindow( cc1 );
-            if( g_FloatingCompassDialog ) g_FloatingCompassDialog->UpdateStatus( true );
+    if( bFlyingUpdate ) {
+        if( pConfig->m_bShowCompassWin ) {
+            if(!g_FloatingCompassDialog) {
+                g_FloatingCompassDialog = new ocpnFloatingCompassWindow( cc1 );
+                if( g_FloatingCompassDialog ) g_FloatingCompassDialog->UpdateStatus( true );
+            }
+        } else if(g_FloatingCompassDialog) {
+            g_FloatingCompassDialog->Destroy();
+            g_FloatingCompassDialog = NULL;
         }
-    } else if(g_FloatingCompassDialog) {
-        g_FloatingCompassDialog->Destroy();
-        g_FloatingCompassDialog = NULL;
     }
-
 
     if( bnewtoolbar ) UpdateToolbar( global_color_scheme );
 
@@ -4296,6 +4382,9 @@ int MyFrame::DoOptionsDialog()
 
     delete pWorkDirArray;
 
+    SetToolbarScale();
+    RequestNewToolbar();
+    
     bDBUpdateInProgress = false;
     if( g_FloatingToolbarDialog ) {
         if( IsFullScreen() && !g_bFullscreenToolbar )
@@ -5272,9 +5361,12 @@ void MyFrame::OnFrameTimer1( wxTimerEvent& event )
         m_ChartUpdatePeriod = g_ChartUpdatePeriod;
     }
 
+    nBlinkerTick++;
+    if( cc1 )
+        cc1->DrawBlinkObjects();
+    
 //      Update the active route, if any
     if( g_pRouteMan->UpdateProgress() ) {
-        nBlinkerTick++;
         //    This RefreshRect will cause any active routepoint to blink
         if( g_pRouteMan->GetpActiveRoute() ) cc1->RefreshRect( g_blink_rect, false );
     }
@@ -5506,15 +5598,19 @@ void MyFrame::DoCOGSet( void )
     if( !g_bCourseUp )
         return;
  
+    if(!cc1)
+        return;
+    
     double old_VPRotate = g_VPRotate;
     g_VPRotate = -g_COGAvg * PI / 180.;
     if(!g_bskew_comp)
         g_VPRotate += cc1->GetVPSkew();
 
-    if( cc1 ) cc1->SetVPRotation( g_VPRotate );
+    cc1->SetVPRotation( g_VPRotate );
     bool bnew_chart = DoChartUpdate();
 
-    if( ( bnew_chart ) || ( old_VPRotate != g_VPRotate ) ) if( cc1 ) cc1->ReloadVP();
+    if( ( bnew_chart ) || ( old_VPRotate != g_VPRotate ) )
+        cc1->ReloadVP();
 }
 
 void RenderShadowText( wxDC *pdc, wxFont *pFont, wxString& str, int x, int y )
@@ -9410,8 +9506,13 @@ wxFont *GetOCPNScaledFont( wxString item, int default_size )
     wxFont *dFont = FontMgr::Get().GetFont( item, default_size );
     
     if( g_bresponsive ){
-        if(dFont->GetPointSize() < 20) {
-            wxFont *qFont = wxTheFontList->FindOrCreateFont( 20,
+        //      Adjust font size to be reasonably readable, but no smaller than the default specified
+        double scaled_font_size = (double)default_size;
+        
+        if( cc1) {
+            scaled_font_size = 2.5 * cc1->GetPixPerMM();
+            int nscaled_font_size = wxMax( wxRound(scaled_font_size), default_size );
+            wxFont *qFont = wxTheFontList->FindOrCreateFont( nscaled_font_size,
                                                              dFont->GetFamily(),
                                                              dFont->GetStyle(),
                                                              dFont->GetWeight());

@@ -192,6 +192,11 @@ class MyApp: public wxApp
     bool OnCmdLineParsed(wxCmdLineParser& parser);
     void OnActivateApp(wxActivateEvent& event);
 
+#ifdef LINUX_CRASHRPT
+    //! fatal exeption handling
+    void OnFatalException();
+#endif
+
     void TrackOff(void);
     
     wxSingleInstanceChecker *m_checker;
@@ -275,7 +280,8 @@ class MyFrame: public wxFrame
     void SubmergeToolbar(void);
     void SubmergeToolbarIfOverlap(int x, int y, int margin = 0);
     void SurfaceToolbar(void);
-
+    void SetToolbarScale(void);
+    
     void HandlePianoClick(int selected_index, int selected_dbIndex);
     void HandlePianoRClick(int x, int y,int selected_index, int selected_dbIndex);
     void HandlePianoRollover(int selected_index, int selected_dbIndex);

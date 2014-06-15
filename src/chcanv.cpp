@@ -897,7 +897,6 @@ BEGIN_EVENT_TABLE ( ChartCanvas, wxWindow )
     EVT_TIMER ( CURTRACK_TIMER, ChartCanvas::OnCursorTrackTimerEvent )
     EVT_TIMER ( ROT_TIMER, ChartCanvas::RotateTimerEvent )
     EVT_TIMER ( ROPOPUP_TIMER, ChartCanvas::OnRolloverPopupTimerEvent )
-    EVT_TIMER ( MOUSEWHEEL_TIMER, ChartCanvas::OnMouseWheelTimerEvent )
     EVT_KEY_DOWN(ChartCanvas::OnKeyDown )
     EVT_KEY_UP(ChartCanvas::OnKeyUp )
     EVT_MOUSE_CAPTURE_LOST(ChartCanvas::LostMouseCapture )
@@ -1216,8 +1215,9 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
     pCurTrackTimer->Stop();
     m_curtrack_timer_msec = 10;
 
-    m_MouseWheelTimer.SetOwner( this, MOUSEWHEEL_TIMER );
-
+    m_wheelzoom_stop_oneshot = 0;
+    m_last_wheel_dir = 0;
+    
     m_RolloverPopupTimer.SetOwner( this, ROPOPUP_TIMER );
 
     m_rollover_popup_timer_msec = 20;
@@ -2210,6 +2210,16 @@ void ChartCanvas::OnKeyUp( wxKeyEvent &event )
                 m_rotation_speed = 0;
                 break;
             }
+        } else {
+            switch( key_char ) {
+            case 43:
+            case 54:                     // '-'  alpha/num pad
+            case 56:                     // '_'  alpha/num pad
+                DoMovement(m_mustmove);
+
+                m_zoom_factor = 1;
+                break;
+            }
         }
     }
     event.Skip();
@@ -2222,6 +2232,8 @@ void ChartCanvas::StopMovement( )
     m_zoom_factor = 1;
     m_rotation_speed = 0;
     m_mustmove = 0;
+    SetFocus();
+    gFrame->Raise();
 }
 
 /* instead of integrating in timer callbacks
@@ -2297,8 +2309,41 @@ void ChartCanvas::DoMovement( long dt )
 
         if(m_zoom_factor < 1)
             zoom_factor = 1/zoom_factor;
-            
-        DoZoomCanvas( zoom_factor );
+        
+        //  Try to hit the zoom target exactly.
+        if(zoom_factor > 1){
+            if(  VPoint.chart_scale / zoom_factor <= m_zoom_target)
+                zoom_factor = VPoint.chart_scale / m_zoom_target;
+        }
+
+        else if(zoom_factor < 1){
+            if(  VPoint.chart_scale / zoom_factor >= m_zoom_target)
+                zoom_factor = VPoint.chart_scale / m_zoom_target;
+        }
+        
+        DoZoomCanvas( zoom_factor, m_bzooming_to_cursor );
+        
+        if(m_wheelzoom_stop_oneshot > 0 &&
+           m_wheelstopwatch.Time() > m_wheelzoom_stop_oneshot){
+            m_wheelzoom_stop_oneshot = 0;
+            StopMovement( );
+        }
+        
+        //      Don't overshoot the zoom target.
+        if(zoom_factor > 1){
+            if(  VPoint.chart_scale <= m_zoom_target){
+                m_wheelzoom_stop_oneshot = 0;
+                StopMovement( );
+            }
+        }
+        else if(zoom_factor < 1){
+            if(  VPoint.chart_scale >= m_zoom_target){
+                m_wheelzoom_stop_oneshot = 0;
+                StopMovement( );
+            }
+        }
+        
+                
     }
 
     if( m_rotation_speed ) { /* in degrees per second */
@@ -2805,7 +2850,9 @@ void ChartCanvas::ZoomCanvas( double factor, bool can_zoom_to_cursor, bool stopt
         if(StartTimedMovement(stoptimer)) {
             m_mustmove += 150; /* for quick presses register as 200 ms duration */
             m_zoom_factor = factor;
+//            m_zoom_target =  VPoint.chart_scale / factor;
         }
+        m_zoom_target =  VPoint.chart_scale / factor;
     } else {
         if( m_modkeys == wxMOD_ALT )
             factor = pow(factor, .15);
@@ -2816,7 +2863,7 @@ void ChartCanvas::ZoomCanvas( double factor, bool can_zoom_to_cursor, bool stopt
     extendedSectorLegs.clear();
 }
 
-void ChartCanvas::DoZoomCanvas( double factor )
+void ChartCanvas::DoZoomCanvas( double factor,  bool can_zoom_to_cursor )
 {
     /* TODO: queue the quilted loading code to a background thread
        so yield is never called from here, and also rendering is not delayed */
@@ -2829,15 +2876,17 @@ void ChartCanvas::DoZoomCanvas( double factor )
     double zlat = m_cursor_lat;
     double zlon = m_cursor_lon;
 
+    double proposed_scale_onscreen = GetCanvasScaleFactor() / ( GetVPScale() * factor );
+    bool b_do_zoom = false;
+    
     if(factor > 1)
     {
-        bool b_do_zoom = true;
+        b_do_zoom = true;
 
         double zoom_factor = factor;
 
         double min_allowed_scale = 50.0;                // meters per meter
 
-        double proposed_scale_onscreen = GetCanvasScaleFactor() / ( GetVPScale() * zoom_factor );
         ChartBase *pc = NULL;
 
         if( !VPoint.b_quilt ) {
@@ -2868,17 +2917,11 @@ void ChartCanvas::DoZoomCanvas( double factor )
             }
         }
 
-        if( b_do_zoom ) {
-            SetVPScale( GetCanvasScaleFactor() / proposed_scale_onscreen );
-            Refresh( false );
-        }
-
     } else if(factor < 1) {
         double zoom_factor = 1/factor;
 
-        bool b_do_zoom = true;
+        b_do_zoom = true;
 
-        double proposed_scale_onscreen = GetCanvasScaleFactor() / ( GetVPScale() / zoom_factor );
         ChartBase *pc = NULL;
 
         bool b_smallest = false;
@@ -2925,21 +2968,24 @@ void ChartCanvas::DoZoomCanvas( double factor )
             if( ( GetCanvasScaleFactor() / proposed_scale_onscreen ) < m_absolute_min_scale_ppm )
                 b_do_zoom = false;
         }
+    }
 
-        if( b_do_zoom ) {
-            SetVPScale( GetCanvasScaleFactor() / proposed_scale_onscreen );
-            Refresh( false );
+    if( b_do_zoom ) {
+        if( can_zoom_to_cursor && g_bEnableZoomToCursor) {
+            //  Arrange to combine the zoom and pan into one operation for smoother appearance
+            SetVPScale( GetCanvasScaleFactor() / proposed_scale_onscreen, false );   // adjust, but deferred refresh
+            wxPoint r;
+            GetCanvasPointPix( zlat, zlon, &r );
+            PanCanvas( r.x - mouse_x, r.y - mouse_y );  // this will give the Refresh()
+            ClearbFollow();      // update the follow flag
         }
+        else
+            SetVPScale( GetCanvasScaleFactor() / proposed_scale_onscreen );
+        
     }
-
-    if( m_bzooming_to_cursor ) {
-        wxPoint r;
-        GetCanvasPointPix( zlat, zlon, &r );
-        PanCanvas( r.x - mouse_x, r.y - mouse_y );
-        ClearbFollow();      // update the follow flag
-    }
-
+    
     m_bzooming = false;
+    
 }
 
 void ChartCanvas::RotateCanvas( double dir )
@@ -3076,9 +3122,9 @@ void ChartCanvas::UpdateCanvasOnGroupChange( void )
     }
 }
 
-bool ChartCanvas::SetVPScale( double scale )
+bool ChartCanvas::SetVPScale( double scale, bool refresh )
 {
-    return SetViewPoint( VPoint.clat, VPoint.clon, scale, VPoint.skew, VPoint.rotation );
+    return SetViewPoint( VPoint.clat, VPoint.clon, scale, VPoint.skew, VPoint.rotation, true, refresh );
 }
 
 bool ChartCanvas::SetViewPoint( double lat, double lon )
@@ -3087,7 +3133,7 @@ bool ChartCanvas::SetViewPoint( double lat, double lon )
 }
 
 bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double skew,
-                                double rotation, bool b_adjust )
+                                double rotation, bool b_adjust, bool b_refresh )
 {
     bool b_ret = false;
 
@@ -3274,7 +3320,9 @@ bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double
                 ChartData->PurgeCacheUnusedCharts( false );
                 ChartData->LockCache();
 
-                Refresh( false );
+                if(b_refresh)
+                    Refresh( false );
+                
                 b_ret = true;
             }
             parent_frame->UpdateControlBar();
@@ -3503,8 +3551,8 @@ void ChartCanvas::ShipIndicatorsDraw( ocpnDC& dc, float lpp,
         ll_gc_ll( gLat, gLon, 0, factor, &tlat, &tlon );
         GetCanvasPointPix( tlat, tlon, &r );
 
-        double lpp = sqrt( pow( (double) (lShipMidPoint.x - r.x), 2) +
-                           pow( (double) (lShipMidPoint.y - r.y), 2 ) );
+        double lpp = sqrt( pow( (double) (lGPSPoint.x - r.x), 2) +
+                           pow( (double) (lGPSPoint.y - r.y), 2 ) );
         int pix_radius = (int) lpp;
 
         wxPen ppPen1( GetGlobalColor( _T ( "URED" ) ), 2 );
@@ -3512,14 +3560,14 @@ void ChartCanvas::ShipIndicatorsDraw( ocpnDC& dc, float lpp,
         dc.SetBrush( wxBrush( GetGlobalColor( _T ( "URED" ) ), wxTRANSPARENT ) );
 
         for( int i = 1; i <= g_iNavAidRadarRingsNumberVisible; i++ )
-            dc.StrokeCircle( lShipMidPoint.x, lShipMidPoint.y, i * pix_radius );
+            dc.StrokeCircle( lGPSPoint.x, lGPSPoint.y, i * pix_radius );
     }
 }
 
 void ChartCanvas::ComputeShipScaleFactor(float icon_hdt,
                                          int ownShipWidth, int ownShipLength, 
-                                         wxPoint lShipMidPoint,
-                                         wxPoint GPSOffsetPixels, wxPoint lGPSPoint,
+                                         wxPoint &lShipMidPoint,
+                                         wxPoint &GPSOffsetPixels, wxPoint lGPSPoint,
                                          float &scale_factor_x, float &scale_factor_y)
 {
     float screenResolution = (float) ::wxGetDisplaySize().y / ::wxGetDisplaySizeMM().y;
@@ -5528,7 +5576,6 @@ void ChartCanvas::FindRoutePointsAtCursor( float selectRadius, bool setBeingEdit
                     pr->m_bIsBeingEdited = setBeingEdited;
                 }
                 m_bRouteEditing = setBeingEdited;
-
             } else                                      // editing Mark
             {
                 frp->m_bIsBeingEdited = setBeingEdited;
@@ -5549,11 +5596,6 @@ void ChartCanvas::MouseTimedEvent( wxTimerEvent& event )
     if( singleClickEventIsValid ) MouseEvent( singleClickEvent );
     singleClickEventIsValid = false;
     m_DoubleClickTimer->Stop();
-}
-
-void ChartCanvas::OnMouseWheelTimerEvent( wxTimerEvent& event )
-{
-    m_zoom_factor = 1; // Stop zooming
 }
 
 void ChartCanvas::MouseEvent( wxMouseEvent& event )
@@ -5734,36 +5776,40 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
     if( g_pi_manager ) g_pi_manager->SendCursorLatLonToAllPlugIns( m_cursor_lat, m_cursor_lon );
 
     //        Check for wheel rotation
-    m_mouse_wheel_oneshot = 500;                  //msec
     // ideally, should be just longer than the time between
     // processing accumulated mouse events from the event queue
     // as would happen during screen redraws.
     int wheel_dir = event.GetWheelRotation();
 
     if( wheel_dir ) {
-        wxDateTime this_now = wxDateTime::UNow();
-        if( m_MouseWheelTimer.IsRunning() ) {
-            if( wheel_dir != m_last_wheel_dir )
-                StopMovement( );
-            else {
-                // restart running timer to stop later
-                long ms = (this_now - m_MouseWheelTimerTime).GetMilliseconds().ToLong();
-
-                m_mouse_wheel_oneshot += m_mouse_wheel_oneshot - ms;
-                this_now = m_MouseWheelTimerTime + wxTimeSpan::Milliseconds(500);
-            }
-        }
-
-        m_last_wheel_dir = wheel_dir;
+        int mouse_wheel_oneshot = abs(wheel_dir)*4;                  //msec
+        wheel_dir = wheel_dir > 0 ? 1 : -1; // normalize
 
         double factor = 2.0;
         if(wheel_dir < 0)
             factor = 1/factor;
         
+        if(g_bsmoothpanzoom){
+            if( (m_wheelstopwatch.Time() < m_wheelzoom_stop_oneshot) ) {
+                if( wheel_dir == m_last_wheel_dir ) {
+                    m_wheelzoom_stop_oneshot += mouse_wheel_oneshot;
+//                    m_zoom_target /= factor;
+                }
+                else 
+                    StopMovement( );
+            }
+            else {    
+                m_wheelzoom_stop_oneshot = mouse_wheel_oneshot;
+                m_wheelstopwatch.Start(0);
+//                m_zoom_target =  VPoint.chart_scale / factor;
+            }
+        }
+
+        m_last_wheel_dir = wheel_dir;
+        
+        
         ZoomCanvas( factor, true, false );
         
-        m_MouseWheelTimer.Start( m_mouse_wheel_oneshot, true );           // start timer
-        m_MouseWheelTimerTime = this_now;
     }
 
     if(!g_btouch ){
@@ -5978,103 +6024,6 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                 FindRoutePointsAtCursor( SelectRadius, true );    // Not creating Route
             }
         }  // !g_btouch
-
-
-       if( g_btouch ){
-        //      Check to see if there is a route or AIS target under the cursor
-        //      If so, start the rollover timer which creates the popup
-            bool b_start_rollover = false;
-            if( g_pAIS && g_pAIS->GetNumTargets() && g_bShowAIS ) {
-                SelectItem *pFind = pSelectAIS->FindSelection( m_cursor_lat, m_cursor_lon,
-                                                           SELTYPE_AISTARGET );
-                if( pFind )
-                    b_start_rollover = true;
-            }
-
-            if(!b_start_rollover){
-                SelectableItemList SelList = pSelect->FindSelectionList( m_cursor_lat, m_cursor_lon,
-                                                                     SELTYPE_ROUTESEGMENT );
-                wxSelectableItemListNode *node = SelList.GetFirst();
-                while( node ) {
-                    SelectItem *pFindSel = node->GetData();
-
-                    Route *pr = (Route *) pFindSel->m_pData3;        //candidate
-
-                    if( pr && pr->IsVisible() ){
-                        b_start_rollover = true;
-                        break;
-                    }
-                }       // while
-            }
-
-            if( b_start_rollover ){
-                m_RolloverPopupTimer.Start( m_rollover_popup_timer_msec, wxTIMER_ONE_SHOT );
-            }
-
-            {
-                SelectItem *pFindCurrent = NULL;
-                SelectItem *pFindTide = NULL;
-                double slat, slon;
-                slat = m_cursor_lat;
-                slon = m_cursor_lon;
-
-
-                if( m_bShowCurrent )
-                    pFindCurrent = pSelectTC->FindSelection( slat, slon, SELTYPE_CURRENTPOINT );
-
-                if( m_bShowTide )                                // look for tide stations
-                    pFindTide = pSelectTC->FindSelection( slat, slon, SELTYPE_TIDEPOINT );
-
-                if( pFindCurrent ) {
-                    // There may be multiple current entries at the same point.
-                    // For example, there often is a current substation (with directions specified)
-                    // co-located with its master.  We want to select the substation, so that
-                    // the direction will be properly indicated on the graphic.
-                    // So, we search the select list looking for IDX_type == 'c' (i.e substation)
-                    IDX_entry *pIDX_best_candidate;
-
-                    SelectItem *pFind = NULL;
-                    SelectableItemList SelList = pSelectTC->FindSelectionList( m_cursor_lat,
-                                                                               m_cursor_lon, SELTYPE_CURRENTPOINT );
-
-                    //      Default is first entry
-                    wxSelectableItemListNode *node = SelList.GetFirst();
-                    pFind = node->GetData();
-                    pIDX_best_candidate = (IDX_entry *) ( pFind->m_pData1 );
-
-                    if( SelList.GetCount() > 1 ) {
-                        node = node->GetNext();
-                        while( node ) {
-                            pFind = node->GetData();
-                            IDX_entry *pIDX_candidate = (IDX_entry *) ( pFind->m_pData1 );
-                            if( pIDX_candidate->IDX_type == 'c' ) {
-                                pIDX_best_candidate = pIDX_candidate;
-                                break;
-                            }
-
-                            node = node->GetNext();
-                        }       // while (node)
-                    } else {
-                        wxSelectableItemListNode *node = SelList.GetFirst();
-                        pFind = node->GetData();
-                        pIDX_best_candidate = (IDX_entry *) ( pFind->m_pData1 );
-                    }
-
-                    m_pIDXCandidate = pIDX_best_candidate;
-
-                    DrawTCWindow( x, y, (void *) pIDX_best_candidate );
-                    Refresh( false );
-                }
-
-                else if( pFindTide ) {
-                    m_pIDXCandidate = (IDX_entry *) pFindTide->m_pData1;
-
-                    DrawTCWindow( x, y, (void *) pFindTide->m_pData1 );
-                    Refresh( false );
-                }
-            }
-       }       // g_btouch
-
     }
 
     if( event.Dragging() ) {
@@ -6251,7 +6200,9 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
         bool b_startedit_mark = false;
 
         if(g_btouch) {
-            if( parent_frame->nRoute_State && !m_bChartDragging)                  // creating route?
+            m_bChartDragging = false;
+            
+            if( parent_frame->nRoute_State /*&& !m_bChartDragging*/)                  // creating route?
             {
                 double rlat, rlon;
 
@@ -6419,28 +6370,43 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                 Refresh( false );
             }
             else {
-                bool b_was_editing_route = m_bRouteEditing;
                 bool b_was_editing_mark = m_bMarkEditing;
-                FindRoutePointsAtCursor( SelectRadius, true );    // Not creating Route
-                if( m_pEditRouteArray ) {
-                    if(!b_was_editing_route)
+                if( !m_bRouteEditing ) {
+                    FindRoutePointsAtCursor( SelectRadius, true );    // Possibly selecting a point in a route for later dragging
+                    if( m_pEditRouteArray ) {
                         b_startedit_route = true;
-//                    wxBell();
-                    wxRect pre_rect;
-                    for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
-                        Route *pr = (Route *) m_pEditRouteArray->Item( ir );
-                        //      Need to validate route pointer
-                        //      Route may be gone due to drgging close to ownship with
-                        //      "Delete On Arrival" state set, as in the case of
-                        //      navigating to an isolated waypoint on a temporary route
-                        if( g_pRouteMan->IsRouteValid(pr) ) {
-                            wxRect route_rect;
-                            pr->CalculateDCRect( m_dc_route, &route_rect, VPoint );
-                            pre_rect.Union( route_rect );
+
+                        if( m_pRoutePointEditTarget){
+                            m_pRoutePointEditTarget->m_bIsBeingEdited = true;
+                            m_pRoutePointEditTarget->m_bBlink = true;
                         }
+                            
+                        //  Hide the route rollover during route point edit, not needed, and may be confusing
+                        if( m_pRouteRolloverWin && m_pRouteRolloverWin->IsActive()  ) {
+                            m_pRouteRolloverWin->IsActive( false );
+                        }
+                        
+                        wxRect pre_rect;
+                        for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
+                            Route *pr = (Route *) m_pEditRouteArray->Item( ir );
+                            //      Need to validate route pointer
+                            //      Route may be gone due to drgging close to ownship with
+                            //      "Delete On Arrival" state set, as in the case of
+                            //      navigating to an isolated waypoint on a temporary route
+                            if( g_pRouteMan->IsRouteValid(pr) ) {
+                                pr->SetHiLite(50);
+                                wxRect route_rect;
+                                pr->CalculateDCRect( m_dc_route, &route_rect, VPoint );
+                                pre_rect.Union( route_rect );
+                            }
+                        }
+                        RefreshRect( pre_rect, false );
                     }
-                    RefreshRect( pre_rect, false );
                 }
+                else {
+                    b_startedit_route = false;           // Done with drag edit
+                }
+                
 
                 if( m_bMarkEditing ) {
                     if(!b_was_editing_mark)
@@ -6451,16 +6417,105 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                         m_pRoutePointEditTarget->CalculateDCRect( m_dc_route, &wp_rect );
                         RefreshRect( wp_rect, false );
                     }
+                    
                 }
-
             }
+            
+                //      Check to see if there is a route or AIS target under the cursor
+                //      If so, start the rollover timer which creates the popup
+                bool b_start_rollover = false;
+                if( g_pAIS && g_pAIS->GetNumTargets() && g_bShowAIS ) {
+                    SelectItem *pFind = pSelectAIS->FindSelection( m_cursor_lat, m_cursor_lon,
+                                                                   SELTYPE_AISTARGET );
+                    if( pFind )
+                        b_start_rollover = true;
+                }
+                
+                if(!b_start_rollover && !b_startedit_route){
+                    SelectableItemList SelList = pSelect->FindSelectionList( m_cursor_lat, m_cursor_lon,
+                                                                             SELTYPE_ROUTESEGMENT );
+                    wxSelectableItemListNode *node = SelList.GetFirst();
+                    while( node ) {
+                        SelectItem *pFindSel = node->GetData();
+                        
+                        Route *pr = (Route *) pFindSel->m_pData3;        //candidate
+                        
+                        if( pr && pr->IsVisible() ){
+                            b_start_rollover = true;
+                            break;
+                        }
+                    }       // while
+                }
+                
+                if( b_start_rollover )
+                    m_RolloverPopupTimer.Start( m_rollover_popup_timer_msec, wxTIMER_ONE_SHOT );
+                
+                
+                SelectItem *pFindCurrent = NULL;
+                SelectItem *pFindTide = NULL;
+                    
+                if( m_bShowCurrent )
+                        pFindCurrent = pSelectTC->FindSelection( m_cursor_lat, m_cursor_lon, SELTYPE_CURRENTPOINT );
+                    
+                if( m_bShowTide )                                // look for tide stations
+                        pFindTide = pSelectTC->FindSelection( m_cursor_lat, m_cursor_lon, SELTYPE_TIDEPOINT );
+                    
+                if( pFindCurrent ) {
+                        // There may be multiple current entries at the same point.
+                        // For example, there often is a current substation (with directions specified)
+                        // co-located with its master.  We want to select the substation, so that
+                        // the direction will be properly indicated on the graphic.
+                        // So, we search the select list looking for IDX_type == 'c' (i.e substation)
+                        IDX_entry *pIDX_best_candidate;
+                        
+                        SelectItem *pFind = NULL;
+                        SelectableItemList SelList = pSelectTC->FindSelectionList( m_cursor_lat,
+                                                                                   m_cursor_lon, SELTYPE_CURRENTPOINT );
+                        
+                        //      Default is first entry
+                        wxSelectableItemListNode *node = SelList.GetFirst();
+                        pFind = node->GetData();
+                        pIDX_best_candidate = (IDX_entry *) ( pFind->m_pData1 );
+                        
+                        if( SelList.GetCount() > 1 ) {
+                            node = node->GetNext();
+                            while( node ) {
+                                pFind = node->GetData();
+                                IDX_entry *pIDX_candidate = (IDX_entry *) ( pFind->m_pData1 );
+                                if( pIDX_candidate->IDX_type == 'c' ) {
+                                    pIDX_best_candidate = pIDX_candidate;
+                                    break;
+                                }
+                                
+                                node = node->GetNext();
+                            }       // while (node)
+                        } else {
+                            wxSelectableItemListNode *node = SelList.GetFirst();
+                            pFind = node->GetData();
+                            pIDX_best_candidate = (IDX_entry *) ( pFind->m_pData1 );
+                        }
+                        
+                        m_pIDXCandidate = pIDX_best_candidate;
+                        
+                        DrawTCWindow( x, y, (void *) pIDX_best_candidate );
+                        Refresh( false );
+                }
+                    
+                else if( pFindTide ) {
+                        m_pIDXCandidate = (IDX_entry *) pFindTide->m_pData1;
+                        
+                        DrawTCWindow( x, y, (void *) pFindTide->m_pData1 );
+                        Refresh( false );
+                }
+            
         }       // g_btouch
 
 
-        if( m_bRouteEditing && !b_startedit_route) {
+        if( m_bRouteEditing && !b_startedit_route) {            // End of RoutePoint drag
             if( m_pRoutePointEditTarget ) {
                 pSelect->UpdateSelectableRouteSegments( m_pRoutePointEditTarget );
-
+                m_pRoutePointEditTarget->m_bBlink = false;
+                
                 if( m_pEditRouteArray ) {
                     for( unsigned int ir = 0; ir < m_pEditRouteArray->GetCount(); ir++ ) {
                         Route *pr = (Route *) m_pEditRouteArray->Item( ir );
@@ -6470,8 +6525,11 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                             pr->m_bIsBeingEdited = false;
 
                             pConfig->UpdateRoute( pr );
+                            
+                            pr->SetHiLite( 0 );
                         }
                     }
+                    Refresh( false );
                 }
 
                 //    Update the RouteProperties Dialog, if currently shown
@@ -6491,7 +6549,8 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                 }
 
                 m_pRoutePointEditTarget->m_bPtIsSelected = false;
-
+                m_pRoutePointEditTarget->m_bIsBeingEdited = false;
+                
                 delete m_pEditRouteArray;
                 m_pEditRouteArray = NULL;
                 undo->AfterUndoableAction( m_pRoutePointEditTarget );
@@ -6503,7 +6562,7 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
             if( !g_FloatingToolbarDialog->IsShown() ) gFrame->SurfaceToolbar();
         }
 
-        else if( m_bMarkEditing && !b_startedit_mark) {
+        else if( m_bMarkEditing && !b_startedit_mark) {         // end of Waypoint drag
             if( m_pRoutePointEditTarget ) {
                 pConfig->UpdateWayPoint( m_pRoutePointEditTarget );
                 undo->AfterUndoableAction( m_pRoutePointEditTarget );
@@ -8904,7 +8963,7 @@ void ChartCanvas::RenderRouteLegs( ocpnDC &dc )
             route->m_NextLegGreatCircle = true;
         }
 
-        if( !g_bresponsive) {
+        if( !g_btouch) {
             route->DrawPointWhich( dc, route->m_lastMousePointIndex, &lastPoint );
 
             if( route->m_NextLegGreatCircle ) {
@@ -9194,9 +9253,11 @@ void ChartCanvas::OnPaint( wxPaintEvent& event )
             return;
         }
 
-        Current_Ch->RenderRegionViewOnDC( temp_dc, svp, chart_get_region );
+        if(!chart_get_region.IsEmpty()){
+            Current_Ch->RenderRegionViewOnDC( temp_dc, svp, chart_get_region );
+        }            
     }
-
+    
     if( !temp_dc.IsOk() ) return;
 
 //    Arrange to render the World Chart vector data behind the rendered current chart
@@ -9441,8 +9502,6 @@ void ChartCanvas::OnPaint( wxPaintEvent& event )
 
     PaintCleanup();
 
-    pMovementTimer->Start( 1, wxTIMER_ONE_SHOT ); 
-
 //      CALLGRIND_STOP_INSTRUMENTATION
 
 }
@@ -9467,6 +9526,11 @@ void ChartCanvas::PaintCleanup()
         WarpPointer( warp_x, warp_y );
         warp_flag = false;
     }
+
+    // Start movement timer, this runs nearly immediately.
+    // the reason we cannot simply call it directly is the
+    // refresh events it emits may be blocked from this paint event
+    pMovementTimer->Start( 1, wxTIMER_ONE_SHOT ); 
 }
 
 #if 0
@@ -10147,6 +10211,30 @@ void ChartCanvas::DrawAllWaypointsInBBox( ocpnDC& dc, LLBBox& BltBBox, const wxR
     }
 }
 
+void ChartCanvas::DrawBlinkObjects( void )
+{
+    //  All RoutePoints
+    wxRect update_rect;
+    
+    wxRoutePointListNode *node = pWayPointMan->GetWaypointList()->GetFirst();
+    
+    while( node ) {
+        RoutePoint *pWP = node->GetData();
+        if( pWP ) {
+            if( pWP->m_bBlink ) {
+                update_rect.Union( pWP->CurrentRect_in_DC ) ;
+            }
+        }
+        
+        node = node->GetNext();
+    }
+    if( !update_rect.IsEmpty() )
+        RefreshRect(update_rect);
+}
+
+
+
+
 void ChartCanvas::DrawAnchorWatchPoints( ocpnDC& dc )
 {
     // draw anchor watch rings, if activated
@@ -10517,8 +10605,8 @@ void ChartCanvas::DrawAllCurrentsInBBox( ocpnDC& dc, LLBBox& BBox, bool bRebuild
         pgray_brush = (wxBrush *) pmono_brush;
     }
 
-    pTCFont = wxTheFontList->FindOrCreateFont( 12, wxDEFAULT, wxNORMAL, wxBOLD, FALSE,
-              wxString( _T ( "Eurostile Extended" ) ) );
+    pTCFont = FontMgr::Get().GetFont( _("CurrentValue"), 12 );
+    
     int now = time( NULL );
 
     if( bRebuildSelList ) pSelectTC->DeleteAllSelectableTypePoints( SELTYPE_CURRENTPOINT );
@@ -10683,7 +10771,7 @@ wxString ChartCanvas::FindValidUploadPort()
             // then use the first available serial connection which has output defined.
             for( size_t i = 0; i < g_pConnectionParams->Count(); i++ ) {
                 ConnectionParams *cp = g_pConnectionParams->Item( i );
-                if( cp->Output && cp->Type == SERIAL )
+                if( (cp->IOSelect != DS_TYPE_INPUT) && cp->Type == SERIAL )
                     port << _T("Serial:") << cp->Port;
             }
     }

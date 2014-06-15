@@ -207,7 +207,8 @@ public:
     void Init();
 
     wxWindow* GetContentWindow() const;
-
+    void OnClose( wxCloseEvent& event );
+    
     void CreateControls();
     size_t CreatePanel(const wxString & title);
     wxScrolledWindow *AddPage(size_t parent, const wxString & title);
@@ -355,6 +356,7 @@ public:
     wxRadioButton* m_rbIIgnore;
     wxTextCtrl* m_tcInputStc;
     wxButton* m_btnInputStcList;
+    wxCheckBox* m_cbInput;
     wxCheckBox* m_cbOutput;
     wxRadioButton* m_rbOAccept;
     wxRadioButton* m_rbOIgnore;
@@ -384,7 +386,8 @@ public:
     void OnRbAcceptInput( wxCommandEvent& event );
     void OnRbIgnoreInput( wxCommandEvent& event );
     void OnBtnIStcs( wxCommandEvent& event );
-    void OnCbOutput( wxCommandEvent& event ) { OnConnValChange(event); }
+    void OnCbInput( wxCommandEvent& event );
+    void OnCbOutput( wxCommandEvent& event );
     void OnRbOutput( wxCommandEvent& event );
     void OnBtnOStcs( wxCommandEvent& event );
     void OnConnValChange( wxCommandEvent& event );

@@ -155,8 +155,9 @@ public:
 
       void CancelMouseRoute();
 
-      bool SetViewPoint(double lat, double lon, double scale_ppm, double skew, double rotation, bool b_adjust = true);
-      bool SetVPScale(double sc);
+      bool SetViewPoint(double lat, double lon, double scale_ppm, double skew, double rotation,
+                        bool b_adjust = true, bool b_refresh = true);
+      bool SetVPScale(double sc, bool b_refresh = true);
       bool SetViewPoint ( double lat, double lon);
       void ReloadVP ( bool b_adjust = true );
       void LoadVP ( ViewPort &vp, bool b_adjust = true );
@@ -223,7 +224,7 @@ public:
       void StopAutoPan(void);
 
       void ZoomCanvas(double factor, bool can_zoom_to_cursor=true, bool stoptimer=true );
-      void DoZoomCanvas(double factor);
+      void DoZoomCanvas(double factor,  bool can_zoom_to_cursor = true);
 
       void RotateCanvas( double dir );
       void DoRotateCanvas( double rotation );
@@ -273,7 +274,8 @@ public:
 
       void RemovePointFromRoute( RoutePoint* point, Route* route );
 
-      void        FinishRoute(void);
+      void DrawBlinkObjects( void );
+      void FinishRoute(void);
       
 #ifdef ocpnUSE_GL
       glChartCanvas *GetglCanvas(){ return m_glcc; }
@@ -289,8 +291,8 @@ private:
 
       void ComputeShipScaleFactor(float icon_hdt,
                                   int ownShipWidth, int ownShipLength, 
-                                  wxPoint lShipMidPoint,
-                                  wxPoint GpsOffsetPixels, wxPoint lGPSPoint,
+                                  wxPoint &lShipMidPoint,
+                                  wxPoint &GpsOffsetPixels, wxPoint lGPSPoint,
                                   float &scale_factor_x, float &scale_factor_y);
 
       void ShipDrawLargeScale( ocpnDC& dc, wxPoint lShipMidPoint );
@@ -361,7 +363,6 @@ private:
       void OnActivate(wxActivateEvent& event);
       void OnSize(wxSizeEvent& event);
       void MouseTimedEvent(wxTimerEvent& event);
-      void OnMouseWheelTimerEvent ( wxTimerEvent& event );
       void MouseEvent(wxMouseEvent& event);
       void ShipDraw(ocpnDC& dc);
       void DrawArrow(ocpnDC& dc, int x, int y, double rot_angle, double scale);
@@ -458,13 +459,13 @@ private:
       wxTimer     *pRotDefTimer;    // This timer used to control rotaion rendering on mouse moves
       wxTimer     *m_DoubleClickTimer;
 
-      wxTimer     m_MouseWheelTimer;
-      wxDateTime  m_MouseWheelTimerTime;
       wxTimer     m_RolloverPopupTimer;
 
-      int         m_mouse_wheel_oneshot;
+      int         m_wheelzoom_stop_oneshot;
       int         m_last_wheel_dir;
-
+      wxStopWatch m_wheelstopwatch;
+      double      m_zoom_target;
+      
       int         m_curtrack_timer_msec;
       int         m_rollover_popup_timer_msec;
 

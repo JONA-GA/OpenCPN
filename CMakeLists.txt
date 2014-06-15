@@ -76,7 +76,7 @@ IF (NOT WIN32)
     ELSE (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "i386")
     ENDIF (CMAKE_SIZEOF_VOID_P MATCHES "8")
-    SET(TENTATIVE_PREFIX "/usr/")
+    SET(TENTATIVE_PREFIX "/usr/local")
   ENDIF (EXISTS /etc/debian_version)
   IF (EXISTS /etc/redhat-release)
     SET (PACKAGE_FORMAT "RPM")
@@ -179,6 +179,13 @@ MESSAGE (STATUS "")
 MESSAGE (STATUS "*** Staging to build ${PACKAGE_NAME}  ***")
 
 #SET(CMAKE_BUILD_TYPE Debug)
+IF( NOT CMAKE_BUILD_TYPE )
+  SET( CMAKE_BUILD_TYPE Release CACHE STRING
+       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
+       FORCE )
+ENDIF( NOT CMAKE_BUILD_TYPE )
+
+MESSAGE (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 IF (PREFIX)
     SET(CMAKE_INSTALL_PREFIX ${PREFIX})
@@ -203,6 +210,7 @@ IF(NOT WIN32 AND NOT APPLE )
   ADD_DEFINITIONS( "-Wall -Wno-unused -fexceptions -rdynamic" )
   ADD_DEFINITIONS( " -g -O0 -fno-strict-aliasing")
 
+  ADD_DEFINITIONS( " -DPREFIX=\\\"${CMAKE_INSTALL_PREFIX}\\\"")
   # profiling with gprof
 #    ADD_DEFINITIONS( -pg )
 #    SET(CMAKE_EXE_LINKER_FLAGS -pg)
@@ -215,14 +223,21 @@ IF( APPLE )
   ADD_DEFINITIONS( "-Wall -Wno-unused -fexceptions -Wno-overloaded-virtual" )
   ADD_DEFINITIONS( " -g -fno-strict-aliasing")
   ADD_DEFINITIONS( " -Wno-deprecated -Wno-deprecated-declarations" )
+  ADD_DEFINITIONS( " -D_WCHAR_H_CPLUSPLUS_98_CONFORMANCE_" )
 ENDIF(APPLE)
 
-#Enable CrashReporting for Windows
+#Enable CrashReporting for Windows and Linux
 IF(WIN32)
     ADD_DEFINITIONS(-DOCPN_USE_CRASHRPT)
     INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/buildwin/crashrpt)
     SET(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1401.lib)
     SET(CMAKE_EXE_LINKER_FLAGS /DEBUG)
+ELSE(WIN32)
+    IF(NOT APPLE)
+        IF(CMAKE_BUILD_TYPE MATCHES "Rel*")
+            ADD_DEFINITIONS(-DLINUX_CRASHRPT)
+        ENDIF(CMAKE_BUILD_TYPE MATCHES "Rel*")
+    ENDIF(NOT APPLE)
 ENDIF(WIN32)
 
 # Add some definitions to satisfy MS
@@ -555,6 +570,11 @@ SET(SRCS
                 src/TrackPropDlg.cpp
                 src/LinkPropDlg.cpp
     )
+
+IF(NOT WIN32 AND NOT APPLE)
+  SET(HDRS ${HDRS} include/crashprint.h )
+  SET(SRCS ${SRCS} src/crashprint.cpp)
+ENDIF(NOT WIN32 AND NOT APPLE)
 
 #  Search for wxWidgets 2.9 or newer
 STRING(REGEX MATCHALL "-2.9|-3." wx_Version_2.9+ "${wxWidgets_INCLUDE_DIRS}")

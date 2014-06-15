@@ -51,7 +51,6 @@ extern wxMenu*                    g_FloatingToolbarConfigMenu;
 extern wxString                   g_toolbarConfig;
 extern bool                       g_bPermanentMOBIcon;
 extern bool                       g_btouch;
-extern bool                       g_bresponsive;
 extern bool                       g_bsmoothpanzoom;
 
 //----------------------------------------------------------------------------
@@ -243,7 +242,7 @@ BEGIN_EVENT_TABLE(ocpnFloatingToolbarDialog, wxDialog)
 END_EVENT_TABLE()
 
 ocpnFloatingToolbarDialog::ocpnFloatingToolbarDialog( wxWindow *parent, wxPoint position,
-        long orient )
+                                                      long orient, float size_factor )
 {
     m_pparent = parent;
     long wstyle = wxNO_BORDER | wxFRAME_NO_TASKBAR;
@@ -270,6 +269,7 @@ ocpnFloatingToolbarDialog::ocpnFloatingToolbarDialog( wxWindow *parent, wxPoint 
 
     m_position = position;
     m_orient = orient;
+    m_sizefactor = size_factor;
 
     m_style = g_StyleManager->GetCurrentStyle();
 
@@ -284,7 +284,7 @@ ocpnFloatingToolbarDialog::ocpnFloatingToolbarDialog( wxWindow *parent, wxPoint 
 
     m_marginsInvisible = m_style->marginsInvisible;
 
-    if(g_bresponsive )
+    if(m_sizefactor > 1.0 )
         m_marginsInvisible = true;
         
     Hide();
@@ -332,10 +332,9 @@ void ocpnFloatingToolbarDialog::SetGeometry()
 
     if( m_ptoolbar ) {
         wxSize style_tool_size = m_style->GetToolSize();
-        if(g_bresponsive ){
-            style_tool_size.x *= 2;
-            style_tool_size.y *= 2;
-        }
+        
+        style_tool_size.x *= m_sizefactor;
+        style_tool_size.y *= m_sizefactor;
         
         m_ptoolbar->SetToolBitmapSize( style_tool_size );
 
@@ -404,35 +403,25 @@ void ocpnFloatingToolbarDialog::ShowTooltips()
 
 void ocpnFloatingToolbarDialog::ToggleOrientation()
 {
-    wxPoint old_screen_pos = m_pparent->ClientToScreen( m_position );
-
-    if( m_orient == wxTB_HORIZONTAL ) {
+    if( m_orient == wxTB_HORIZONTAL ) 
         m_orient = wxTB_VERTICAL;
-        m_ptoolbar->SetWindowStyleFlag( m_ptoolbar->GetWindowStyleFlag() & ~wxTB_HORIZONTAL );
-        m_ptoolbar->SetWindowStyleFlag( m_ptoolbar->GetWindowStyleFlag() | wxTB_VERTICAL );
-    } else {
+    else
         m_orient = wxTB_HORIZONTAL;
-        m_ptoolbar->SetWindowStyleFlag( m_ptoolbar->GetWindowStyleFlag() & ~wxTB_VERTICAL );
-        m_ptoolbar->SetWindowStyleFlag( m_ptoolbar->GetWindowStyleFlag() | wxTB_HORIZONTAL );
-    }
-
-    wxPoint grabber_point_abs = ClientToScreen( m_pGrabberwin->GetPosition() );
 
     m_style->SetOrientation( m_orient );
-    m_ptoolbar->InvalidateBitmaps();
 
-    SetGeometry();
-    Realize();
-
+    wxPoint old_screen_pos = m_pparent->ClientToScreen( m_position );
+    wxPoint grabber_point_abs = ClientToScreen( m_pGrabberwin->GetPosition() );   
+    
+    gFrame->RequestNewToolbar();  
+    
     wxPoint pos_abs = grabber_point_abs;
     pos_abs.x -= m_pGrabberwin->GetPosition().x;
     MoveDialogInScreenCoords( pos_abs, old_screen_pos );
 
-    RePosition();
 
     Show();   // this seems to be necessary on GTK to kick the sizer into gear...(FS#553)
     Refresh();
-    //GetParent()->Refresh( false );
 }
 
 void ocpnFloatingToolbarDialog::MouseEvent( wxMouseEvent& event )
@@ -645,9 +634,8 @@ void ocpnFloatingToolbarDialog::Realize()
                 }
             }
 
-#ifndef __WXMAC__
-            SetShape( wxRegion( shape, *wxWHITE, 10 ) );
-#endif
+            if(shape.GetWidth() && shape.GetHeight())
+                SetShape( wxRegion( shape, *wxWHITE, 10 ) );
         }
     }
 }

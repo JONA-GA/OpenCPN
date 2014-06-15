@@ -505,7 +505,7 @@ wxColour GRIBOverlayFactory::GetGraphicColor(int settings, double val_in)
     case SEATEMP_GRAPHIC_INDEX:
         map = SeaTempMap;
         maplen = (sizeof SeaTempMap) / (sizeof *SeaTempMap);
-    break;
+        break;
     case PRECIPITATION_GRAPHIC_INDEX:
         map = PrecipitationMap;
         maplen = (sizeof PrecipitationMap) / (sizeof *PrecipitationMap);
@@ -514,6 +514,8 @@ wxColour GRIBOverlayFactory::GetGraphicColor(int settings, double val_in)
         map = CloudMap;
         maplen = (sizeof CloudMap) / (sizeof *CloudMap);
         break;
+    default:
+        return *wxBLACK;
     }
 
     /* normalize map from 0 to 1 */
@@ -574,20 +576,19 @@ wxImage &GRIBOverlayFactory::getLabel(double value, int settings, wxColour back_
 
     wxBrush backBrush(back_color);
 
-    wxMemoryDC mdc(wxNullBitmap);
-
     wxFont mfont( 9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL );
-    mdc.SetFont( mfont );
 
+    wxScreenDC sdc;
     int w, h;
-    mdc.GetTextExtent(labels, &w, &h);
+    sdc.GetTextExtent(labels, &w, &h, NULL, NULL, &mfont);
 
     int label_offset = 5;
 
     wxBitmap bm(w +  label_offset*2, h + 2);
-    mdc.SelectObject(bm);
+    wxMemoryDC mdc(bm);
     mdc.Clear();
 
+    mdc.SetFont( mfont );
     mdc.SetPen(penText);
     mdc.SetBrush(backBrush);
     mdc.SetTextForeground(text_color);

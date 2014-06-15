@@ -326,6 +326,11 @@ extern bool             g_bresponsive;
 extern ocpnGLOptions g_GLOptions;
 #endif
 
+#if !defined(NAN)
+static const long long lNaN = 0xfff8000000000000;
+#define NAN (*(double*)&lNaN)
+#endif
+
 //---------------------------------------------------------------------------------
 //    Track Implementation
 //---------------------------------------------------------------------------------
@@ -1054,12 +1059,18 @@ void MyConfig::CreateRotatingNavObjBackup()
         wxFile f;
         wxString oldname = m_sNavObjSetFile;
         wxString newname = wxString::Format( _T("%s.1"), m_sNavObjSetFile.c_str() );
-        f.Open(oldname);
-        wxFileOffset s_diff = f.Length();
-        f.Close();
-        f.Open(newname);
-        s_diff -= f.Length();
-        f.Close();
+        
+        wxFileOffset s_diff = 0;
+        if( f.Open(oldname) ){
+            wxFileOffset s_diff = f.Length();
+            f.Close();
+        }
+        
+        if( f.Open(newname) ){
+            s_diff -= f.Length();
+            f.Close();
+        }
+        
         if ( s_diff != 0 )
         {
             for( int i = g_navobjbackups - 1; i >= 1; i-- )
@@ -1525,6 +1536,11 @@ int MyConfig::LoadMyConfig( int iteration )
     for (size_t i = 0; i < confs.Count(); i++)
     {
         ConnectionParams * prm = new ConnectionParams(confs[i]);
+        if (!prm->Valid) {
+            wxLogMessage( _T( "Skipped invalid DataStream config") );
+            delete prm;
+            continue;
+        }
         g_pConnectionParams->Add(prm);
     }
 
@@ -1647,12 +1663,12 @@ int MyConfig::LoadMyConfig( int iteration )
                 prm->Port = port;
                 prm->OutputSentenceListType = WHITELIST;
                 prm->OutputSentenceList.Add( _T("RMB") );
-                prm->Output = true;
+                prm->IOSelect = DS_TYPE_INPUT_OUTPUT;
 
                 g_pConnectionParams->Add(prm);
             }
             else {                                  // port was found, so make sure it is set for output
-                cp->Output = true;
+                cp->IOSelect = DS_TYPE_INPUT_OUTPUT;
                 cp->OutputSentenceListType = WHITELIST;
                 cp->OutputSentenceList.Add( _T("RMB") );
             }
@@ -1814,7 +1830,11 @@ int MyConfig::LoadMyConfig( int iteration )
                 str = FontMgr::GetFontConfigKey( oldKey );
             }
 
-            FontMgr::Get().LoadFontNative( &str, pval );
+            if( pval->IsEmpty() || pval->StartsWith(_T(":")) ) {
+                deleteList.Add( str );
+            }
+            else
+                FontMgr::Get().LoadFontNative( &str, pval );
 
             bCont = GetNextEntry( str, dummy );
         }
@@ -1826,6 +1846,9 @@ int MyConfig::LoadMyConfig( int iteration )
         delete pval;
     }
 
+    if( 0 == iteration ) 
+        FontMgr::Get().ScrubList();
+    
 //  Tide/Current Data Sources
     SetPath( _T ( "/TideCurrentDataSources" ) );
     TideCurrentDataSet.Clear();
@@ -1941,7 +1964,7 @@ int MyConfig::LoadMyConfig( int iteration )
     Read( _T ( "NavObjectFileName" ), m_sNavObjSetFile );
 
     Read( _T ( "RouteLineWidth" ), &g_route_line_width, 2 );
-    Read( _T ( "TrackLineWidth" ), &g_track_line_width, 3 );
+    Read( _T ( "TrackLineWidth" ), &g_track_line_width, 2 );
     Read( _T ( "CurrentArrowScale" ), &g_current_arrow_scale, 100 );
     Read( _T ( "DefaultWPIcon" ), &g_default_wp_icon, _T("triangle") );
 
@@ -2008,7 +2031,7 @@ bool MyConfig::LoadLayers(wxString &path)
                         l->m_NoOfItems += nItems;
 
                         wxString objmsg;
-                        objmsg.Printf( wxT("Loaded GPX file %s with %d items."), file_path.c_str(), nItems );
+                        objmsg.Printf( wxT("Loaded GPX file %s with %ld items."), file_path.c_str(), nItems );
                         wxLogMessage( objmsg );
 
                         delete pSet;
@@ -2654,7 +2677,9 @@ void MyConfig::UpdateNavObj( void )
 
     delete pNavObjectSet;
 
-    wxRemoveFile( m_sNavObjSetChangesFile );
+    if( ::wxFileExists( m_sNavObjSetChangesFile ) )
+        wxRemoveFile( m_sNavObjSetChangesFile );
+    
     delete m_pNavObjectChangesSet;
     m_pNavObjectChangesSet = new NavObjectChanges();
 
@@ -3923,7 +3948,7 @@ bool LogMessageOnce(const wxString &msg)
 /**************************************************************************/
 double toUsrDistance( double nm_distance, int unit  )
 {
-    double ret;
+    double ret = NAN;
     if ( unit == -1 )
         unit = g_iDistanceFormat;
     switch( unit ){
@@ -3960,7 +3985,7 @@ double toUsrDistance( double nm_distance, int unit  )
 /**************************************************************************/
 double fromUsrDistance( double usr_distance, int unit )
 {
-    double ret;
+    double ret = NAN;
     if ( unit == -1 )
         unit = g_iDistanceFormat;
     switch( unit ){
@@ -4022,7 +4047,7 @@ wxString getUsrDistanceUnit( int unit )
 /**************************************************************************/
 double toUsrSpeed( double kts_speed, int unit )
 {
-    double ret;
+    double ret = NAN;
     if ( unit == -1 )
         unit = g_iSpeedFormat;
     switch( unit )
@@ -4048,7 +4073,7 @@ double toUsrSpeed( double kts_speed, int unit )
 /**************************************************************************/
 double fromUsrSpeed( double usr_speed, int unit )
 {
-    double ret;
+    double ret = NAN;
     if ( unit == -1 )
         unit = g_iSpeedFormat;
     switch( unit )
