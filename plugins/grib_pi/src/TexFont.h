@@ -1,9 +1,11 @@
-/******************************************************************************
+/***************************************************************************
  *
  * Project:  OpenCPN
+ * Purpose:  OpenGL text rendering
+ * Author:   Sean D'Epagnier
  *
  ***************************************************************************
- *   Copyright (C) 2013 by David S. Register                               *
+ *   Copyright (C) 2014 Sean D'Epagnier                                    *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -19,28 +21,41 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- ***************************************************************************
- */
+ **************************************************************************/
 
-#ifndef __GLTEXTUREDESCRIPTOR_H__
-#define __GLTEXTUREDESCRIPTOR_H__
+/* support ascii plus degree symbol for now pack font in a single texture 16x8 */
+#define DEGREE_GLYPH 127
+#define MIN_GLYPH 32
+#define MAX_GLYPH 128
 
-#include "dychart.h"
+#define NUM_GLYPHS (MAX_GLYPH - MIN_GLYPH)
 
-class glTextureDescriptor
-{
-public:
-    glTextureDescriptor();
-    ~glTextureDescriptor();
+#define COLS_GLYPHS 16
+#define ROWS_GLYPHS ((NUM_GLYPHS / COLS_GLYPHS)+1)
 
-    GLuint tex_name;
-    int level_min;
-    int x;
-    int y;
-
-    unsigned char *map_array[10];
-    unsigned char *comp_array[10];
+struct TexGlyphInfo {
+    int x, y, width, height;
+    float advance;
 };
 
+class TexFont {
+public:
+    TexFont() {}
 
-#endif
+    void Build( wxFont &font, bool blur = false, bool luminance = false );
+    void Delete();
+
+    void GetTextExtent( const wxString &string, int *width, int *height);
+    void RenderString( const wxString &string, int x=0, int y=0 );
+
+private:
+    void RenderGlyph( wchar_t c );
+
+    wxFont m_font;
+    bool m_blur;
+
+    TexGlyphInfo tgi[MAX_GLYPH];
+
+    unsigned int texobj;
+    int tex_w, tex_h;
+};

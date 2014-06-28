@@ -190,7 +190,9 @@ MESSAGE (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 IF (PREFIX)
     SET(CMAKE_INSTALL_PREFIX ${PREFIX})
 ELSE (PREFIX)
-    SET(CMAKE_INSTALL_PREFIX ${TENTATIVE_PREFIX})
+    IF (NOT CMAKE_INSTALL_PREFIX)
+        SET(CMAKE_INSTALL_PREFIX ${TENTATIVE_PREFIX})
+    ENDIF (NOT CMAKE_INSTALL_PREFIX)
 ENDIF (PREFIX)
 
 MESSAGE (STATUS "*** Will install to ${CMAKE_INSTALL_PREFIX}  ***")
@@ -596,9 +598,11 @@ SET(SRC_TINYXML
 IF(OPENGL_GLU_FOUND)
   SET(HDRS ${HDRS} include/glChartCanvas.h
                    include/glTextureDescriptor.h
+                   include/glTexCache.h
         )
   SET(SRCS ${SRCS} src/glChartCanvas.cpp
                    src/glTextureDescriptor.cpp
+                   src/glTexCache.cpp
         )
 ENDIF(OPENGL_GLU_FOUND)
 
@@ -770,12 +774,6 @@ ENDIF (USE_GARMINHOST)
 
 # Compile texcompression support library
 IF (OPENGL_GLU_FOUND)
-  # try to use sse if not using visual studio on x86 based systems
-  IF ( NOT MSVC AND (ARCH MATCHES "i386" OR ARCH MATCHES "amd64" OR ARCH MATCHES "x86_64"))
-      # this makes the compression run about 50% faster
-      message (STATUS "Compiling texture compression library with sse support")
-      ADD_DEFINITIONS( " -msse2 -DSQUISH_USE_SSE=2")
-  ENDIF ()
 
   SET(SRC_TEXCMP
     src/texcmp/lz4/lz4.c
@@ -796,6 +794,28 @@ IF (OPENGL_GLU_FOUND)
 
   ADD_LIBRARY(TEXCMP ${SRC_TEXCMP})
   SET(EXTRA_LIBS ${EXTRA_LIBS} TEXCMP)
+
+  # always use optimizations for the texture compression which is much faster
+  # not sure what to use for visual studio, but optimizations should be enabled here
+  IF ( NOT MSVC )
+      # try to use sse on x86 based systems
+      IF ( ARCH MATCHES "i386" OR ARCH MATCHES "amd64" OR ARCH MATCHES "x86_64")
+        # using sse which makes the compression run about 50% faster
+        message (STATUS "Compiling texture compression library with sse support")
+        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "-O3 -msse2 -DSQUISH_USE_SSE=2")
+      ELSE ()
+        # use standard optimizations for other architectures
+        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "-O3")
+      ENDIF ()
+  ELSE (NOT MSVC)
+        # try to use sse on x86 based systems
+      IF ( ARCH MATCHES "i386" OR ARCH MATCHES "amd64" OR ARCH MATCHES "x86_64")
+        # using sse which makes the compression run about 50% faster
+        message (STATUS "Compiling texture compression library with sse support")
+        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "/arch:SSE2 -DSQUISH_USE_SSE=2")
+      ENDIF ()
+  ENDIF (NOT MSVC)
+
 ENDIF (OPENGL_GLU_FOUND)
 
 #TODO
@@ -1321,6 +1341,7 @@ IF(UNIX AND NOT APPLE)
     SET(CPACK_DEBIAN_PACKAGE_ARCHITECTURE ${ARCH})
     SET(CPACK_DEBIAN_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}")
     SET(CPACK_DEBIAN_PACKAGE_SECTION "misc")
+    SET(CPACK_DEBIAN_COMPRESSION_TYPE "xz")
     SET(CPACK_RPM_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}")
     SET(CPACK_RPM_PACKAGE_ARCHITECTURE  ${ARCH})
     SET(CPACK_RPM_PACKAGE_REQUIRES  ${PACKAGE_DEPS})

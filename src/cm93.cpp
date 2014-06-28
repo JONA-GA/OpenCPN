@@ -50,6 +50,10 @@
 
 #include <stdio.h>
 
+#ifdef ocpnUSE_GL
+#include "glChartCanvas.h"
+#endif
+
 
 #ifdef __MSVC__
 #define _CRTDBG_MAP_ALLOC
@@ -5982,7 +5986,7 @@ bool cm93compchart::RenderNextSmallerCellOutlines ( ocpnDC &dc, ViewPort& vp )
                               glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 
                               glColor3ub(col.Red(), col.Green(), col.Blue());
-                              glLineWidth(pen.GetWidth() + .3 );
+                              glChartCanvas::SetSmoothLineWidth();
                               glDisable( GL_LINE_STIPPLE );
                               dc.SetGLStipple();
 

@@ -96,7 +96,8 @@ void wxCrashPrint::Report () {
     int status;
     wxString cur, addr, func, addrs;
     wxArrayString lines;
-    unsigned int pos1, pos2;
+
+    size_t pos1, pos2;
     for (int i = 0; i < btCount; ++i) {
         cur = wxString::FromAscii  (m_btStrings[i]);
         pos1 = cur.rfind ('[');
@@ -128,11 +129,12 @@ void wxCrashPrint::Report () {
     wxString cmd = wxString::Format (_T("addr2line -e /proc/%d/exe -s "), getpid());
     wxArrayString fnames;
     if (wxExecute (cmd + addrs, fnames) != -1) {
-        for (unsigned int i = 0; i < fnames.GetCount(); ++i) {
+
+        for (size_t i = 0; i < fnames.GetCount(); ++i) {
             wxPrintf (_T("%s at %s\n"), lines[i].c_str(), fnames[i].c_str());
         }
     }else{
-        for (unsigned int i = 0; i < lines.GetCount(); ++i) {
+        for (size_t i = 0; i < lines.GetCount(); ++i) {
             wxPrintf (_T("%s\n"), lines[i].c_str());
         }
     }
