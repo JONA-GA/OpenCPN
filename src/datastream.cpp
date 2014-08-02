@@ -144,12 +144,13 @@ void DataStream::Open(void)
         else if( m_bGarmin_GRMN_mode ) {
             m_GarminHandler = new GarminProtocolHandler(this, m_consumer,  false);
         }
-        else {
-            m_connection_type = SERIAL;
-            wxString comx;
-            comx =  m_portstring.AfterFirst(':');      // strip "Serial:"
+else {
+		m_connection_type = SERIAL;
+        wxString comx;
+        comx =  m_portstring.AfterFirst(':');      // strip "Serial:"
+		
 
- #ifdef __WXMSW__
+#ifdef __WXMSW__
             wxString scomx = comx;
             scomx.Prepend(_T("\\\\.\\"));                  // Required for access to Serial Ports greater than COM9
 
@@ -169,18 +170,36 @@ void DataStream::Open(void)
             }
             else
                 CloseHandle(hSerialComm);
+	
 #endif
     //    Kick off the DataSource RX thread
-            m_pSecondary_Thread = new OCP_DataStreamInput_Thread(this,
-                                                                 m_consumer,
-                                                                 comx, m_BaudRate,
-                                                                 &m_output_mutex, m_io_select);
-            m_Thread_run_flag = 1;
-            m_pSecondary_Thread->Run();
+switch (GetDataProtocol())
+            {
+			case PROTO_NMEA2000 :
+				break;
 
-            m_bok = true;
-        }
-    }
+			case PROTO_SEATALK	:
+				m_pSecondary_Thread = new OCP_StkDataStreamInput_Thread(this,
+                                                                     m_consumer,
+                                                                     comx, m_BaudRate,
+                                                                     &m_output_mutex, m_io_select);
+                m_Thread_run_flag = 1;
+                m_pSecondary_Thread->Run();
+
+                m_bok = true;
+				break;
+			case PROTO_NMEA0183:
+                m_pSecondary_Thread = new OCP_DataStreamInput_Thread(this,
+                                                                     m_consumer,
+                                                                     comx, m_BaudRate,
+                                                                     &m_output_mutex, m_io_select);
+                m_Thread_run_flag = 1;
+                m_pSecondary_Thread->Run();
+
+                m_bok = true;
+			}
+            }
+        } 
     else if(m_portstring.Contains(_T("GPSD"))){
         m_net_addr = _T("127.0.0.1");              // defaults
         m_net_port = _T("2947");
