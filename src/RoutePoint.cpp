@@ -42,6 +42,8 @@ extern Routeman *g_pRouteMan;
 extern wxRect g_blink_rect;
 extern Multiplexer *g_pMUX;
 extern MyFrame *gFrame;
+extern bool g_btouch;
+extern bool g_bresponsive;
 
 #include <wx/listimpl.cpp>
 WX_DEFINE_LIST ( RoutePointList );
@@ -303,7 +305,15 @@ void RoutePoint::Draw( ocpnDC& dc, wxPoint *rpn )
     hilitebox = r1;
     hilitebox.x -= r.x;
     hilitebox.y -= r.y;
-    hilitebox.Inflate( 2 );
+    float radius;
+    if( g_btouch ){
+        hilitebox.Inflate( 20 );
+        radius = 20.0f;
+    }
+    else{
+        hilitebox.Inflate( 4 );
+        radius = 4.0f;
+    }
 
     wxColour hi_colour = pen->GetColour();
     unsigned char transparency = 100;
@@ -315,7 +325,7 @@ void RoutePoint::Draw( ocpnDC& dc, wxPoint *rpn )
         
     //  Highlite any selected point
     if( m_bPtIsSelected || m_bIsBeingEdited) {
-        AlphaBlending( dc, r.x + hilitebox.x, r.y + hilitebox.y, hilitebox.width, hilitebox.height, 0.0,
+        AlphaBlending( dc, r.x + hilitebox.x, r.y + hilitebox.y, hilitebox.width, hilitebox.height, radius,
                 hi_colour, transparency );
     }
 
@@ -387,7 +397,7 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
 
     wxPoint r;
     wxRect hilitebox;
-    unsigned char transparency = 100;
+    unsigned char transparency = 150;
 
     cc1->GetCanvasPointPix( m_lat, m_lon, &r );
 
@@ -422,8 +432,16 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
     hilitebox = r3;
     hilitebox.x -= r.x;
     hilitebox.y -= r.y;
-    hilitebox.Inflate( 2 ); /* mouse poop? */
-
+    float radius;
+    if( g_btouch ){
+        hilitebox.Inflate( 20 );
+        radius = 20.0f;
+    }
+    else{
+        hilitebox.Inflate( 4 );
+        radius = 4.0f;
+    }
+    
     /* update bounding box */
     if(!m_wpBBox.GetValid() || vp.chart_scale != m_wpBBox_chart_scale || vp.rotation != m_wpBBox_rotation) {
         double lat1, lon1, lat2, lon2;
@@ -443,14 +461,17 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
 
     //  Highlite any selected point
     if( m_bPtIsSelected ) {
-        wxPen *pen;
-        if( m_bBlink )
-            pen = g_pRouteMan->GetActiveRoutePointPen();
-        else
-            pen = g_pRouteMan->GetRoutePointPen();
+        wxColour hi_colour;
+        if( m_bBlink ){
+            wxPen *pen = g_pRouteMan->GetActiveRoutePointPen();
+            hi_colour = pen->GetColour();
+        }
+        else{
+            hi_colour = GetGlobalColor( _T ( "YELO1" ) );
+        }
         
-        AlphaBlending( dc, r.x + hilitebox.x, r.y + hilitebox.y, hilitebox.width, hilitebox.height, 0.0,
-                       pen->GetColour(), transparency );
+        AlphaBlending( dc, r.x + hilitebox.x, r.y + hilitebox.y, hilitebox.width, hilitebox.height, radius,
+                       hi_colour, transparency );
     }
     
     bool bDrawHL = false;

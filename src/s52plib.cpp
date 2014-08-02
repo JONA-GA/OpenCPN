@@ -66,6 +66,12 @@
 extern s52plib *ps52plib;
 extern wxString g_csv_locn;
 extern float g_GLMinLineWidth;
+extern bool  g_b_EnableVBO;
+
+extern PFNGLGENBUFFERSPROC                 s_glGenBuffers;
+extern PFNGLBINDBUFFERPROC                 s_glBindBuffer;
+extern PFNGLBUFFERDATAPROC                 s_glBufferData;
+extern PFNGLDELETEBUFFERSPROC              s_glDeleteBuffers;
 
 void DrawAALine( wxDC *pDC, int x0, int y0, int x1, int y1, wxColour clrLine, int dash, int space );
 extern bool GetDoubleAttr( S57Obj *obj, const char *AttrName, double &val );
@@ -371,7 +377,7 @@ void s52plib::SetGLRendererString(const wxString &renderer)
     //    Some GL renderers do a poor job of Anti-aliasing very narrow line widths.
     //    Detect this case, and adjust the render parameters.
 
-    if( renderer.Upper().Find( _T("MESA") ) != wxNOT_FOUND ) g_GLMinLineWidth = 1.2;
+    if( renderer.Upper().Find( _T("MESA") ) != wxNOT_FOUND ) g_GLMinLineWidth = 1.2f;
 }
 
 /*
@@ -1432,6 +1438,19 @@ S52_TextC *S52_PL_parseTX( ObjRazRules *rzRules, Rules *rules, char *cmd )
         }
     }
 
+    //  We check to see if the formatted text has any "special" characters
+    wxCharBuffer buf = text->frmtd.ToUTF8();
+    
+    unsigned int n = text->frmtd.Length();
+    for(unsigned int i=0 ; i < n ; ++i){
+        unsigned char c =buf.data()[i];
+        if(c > 127){
+            text->bspecial_char = true;
+            break;
+        }
+    }
+    
+    
     return text;
 }
 
@@ -1523,7 +1542,9 @@ bool s52plib::RenderText( wxDC *pdc, S52_TextC *ptext, int x, int y, wxRect *pRe
 
         // We render National text the old, hard way, since the text will probably have full UTF-8 codepage elements
         // and we don't necessarily have the glyphs in our font, or if we do we would need a hashmap to cache and extract them
-        if(ptext->bnat) {       
+        
+        // We also do this if the string has been detected to contain "special" characters
+        if( (ptext->bnat) || (ptext->bspecial_char) ) {       
             if( !ptext->m_pRGBA ) // is RGBA bitmap ready?
             {
                 wxScreenDC sdc;
@@ -1906,7 +1927,22 @@ int s52plib::RenderT_All( ObjRazRules *rzRules, Rules *rules, ViewPort *vp, bool
         wxPoint r;
         GetPointPixSingle( rzRules, rzRules->obj->y, rzRules->obj->x, &r, vp );
 
-
+        //      Once more I don't understand these adjustments
+        //      They are very broken for west longitude objects.
+#if 0        
+        // if object is east of greenwich
+        if(r.x < -text->rText.width) {
+            double x = rzRules->obj->x + (mercator_k0 * WGS84_semimajor_axis_meters * 2.0 * PI)
+                / rzRules->obj->x_rate;
+            GetPointPixSingle( rzRules, rzRules->obj->y, x, &r, vp );
+        } else
+        // if object crosses greenwich
+        if(r.x > vp->pix_width) {
+            double x = rzRules->obj->x - (mercator_k0 * WGS84_semimajor_axis_meters * 2.0 * PI)
+                / rzRules->obj->x_rate;
+            GetPointPixSingle( rzRules, rzRules->obj->y, x, &r, vp );
+        }
+#endif
         wxRect rect;
 
         bool bwas_drawn = RenderText( m_pdc, text, r.x, r.y, &rect, rzRules->obj, m_bDeClutterText,
@@ -1944,13 +1980,15 @@ int s52plib::RenderT_All( ObjRazRules *rzRules, Rules *rules, ViewPort *vp, bool
 //            if ( rzRules->obj->Primitive_type == GEO_POINT )
         {
             wxBoundingBox bbtext;
-            double plat, plon;
+            double plat, plon, extent = 0;
 
             GetPixPointSingle( rect.GetX(), rect.GetY() + rect.GetHeight(), &plat, &plon, vp );
-            bbtext.SetMin( plon, plat );
+            if(plon >= 360)
+                extent = 360;
+            bbtext.SetMin( plon - extent, plat );
 
             GetPixPointSingle( rect.GetX() + rect.GetWidth(), rect.GetY(), &plat, &plon, vp );
-            bbtext.SetMax( plon, plat );
+            bbtext.SetMax( plon - extent, plat );
 
             if( rzRules->obj->bBBObj_valid )
                 rzRules->obj->BBObj.Expand( bbtext );
@@ -2341,7 +2379,7 @@ bool s52plib::RenderRasterSymbol( ObjRazRules *rzRules, Rule *prule, wxPoint &r,
     //  Special case for GEO_AREA objects with centred symbols
     if( rzRules->obj->Primitive_type == GEO_AREA ) {
         if( rzRules->obj->BBObj.Intersect( symbox, 0 ) != _IN ) // Symbol is wholly outside base object
-        return true;
+            return true;
     }
 
     //      Now render the symbol
@@ -2360,14 +2398,8 @@ bool s52plib::RenderRasterSymbol( ObjRazRules *rzRules, Rule *prule, wxPoint &r,
             glBindTexture(g_texture_rectangle_format, texture);
             glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
 
-            glPushMatrix();
-
-            glTranslatef(r.x, r.y, 0);
-            glRotatef(vp->rotation * 180/PI, 0, 0, -1);
-            glTranslatef(-pivot_x, -pivot_y, 0);
-
             int w = texrect.width, h = texrect.height;
-
+            
             float tx1 = texrect.x, ty1 = texrect.y;
             float tx2 = tx1 + w, ty2 = ty1 + h;
 
@@ -2376,15 +2408,33 @@ bool s52plib::RenderRasterSymbol( ObjRazRules *rzRules, Rule *prule, wxPoint &r,
                 tx1 /= size.x, tx2 /= size.x;
                 ty1 /= size.y, ty2 /= size.y;
             }
+            
+            if(fabs( vp->rotation ) > .01){
+                glPushMatrix();
 
-            glBegin(GL_QUADS);
-                glTexCoord2f(tx1, ty1);    glVertex2i( 0, 0);
-                glTexCoord2f(tx2, ty1);    glVertex2i( w, 0);
-                glTexCoord2f(tx2, ty2);    glVertex2i( w, h);
-                glTexCoord2f(tx1, ty2);    glVertex2i( 0, h);
-            glEnd();
+                glTranslatef(r.x, r.y, 0);
+                glRotatef(vp->rotation * 180/PI, 0, 0, -1);
+                glTranslatef(-pivot_x, -pivot_y, 0);
 
-            glPopMatrix();
+                glBegin(GL_QUADS);
+                    glTexCoord2f(tx1, ty1);    glVertex2i( 0, 0);
+                    glTexCoord2f(tx2, ty1);    glVertex2i( w, 0);
+                    glTexCoord2f(tx2, ty2);    glVertex2i( w, h);
+                    glTexCoord2f(tx1, ty2);    glVertex2i( 0, h);
+                glEnd();
+                
+                glPopMatrix();
+            }
+            else {
+                float ddx = pivot_x;
+                float ddy = pivot_y;
+                glBegin(GL_QUADS);
+                    glTexCoord2f(tx1, ty1);    glVertex2i(  r.x - ddx, r.y - ddy );
+                    glTexCoord2f(tx2, ty1);    glVertex2i(  r.x - ddx + w, r.y - ddy );
+                    glTexCoord2f(tx2, ty2);    glVertex2i(  r.x - ddx + w, r.y - ddy + h );
+                    glTexCoord2f(tx1, ty2);    glVertex2i(  r.x - ddx, r.y - ddy + h);
+                glEnd();
+            }
 
             glPopAttrib();
         } else { /* this is only for legacy mode, or systems without NPOT textures */
@@ -2395,10 +2445,14 @@ bool s52plib::RenderRasterSymbol( ObjRazRules *rzRules, Rule *prule, wxPoint &r,
 
             glColor4f( 1, 1, 1, 1 );
 
-            glRasterPos2f( r.x - ddx, r.y - ddy );
-            glPixelZoom( 1, -1 );
-            glDrawPixels( b_width, b_height, GL_RGBA, GL_UNSIGNED_BYTE, prule->pixelPtr );
-            glPixelZoom( 1, 1 );
+            //  Since draw pixels is so slow, lets not draw anything we don't have to
+            wxRect sym_rect(r.x - ddx, r.y - ddy, b_width, b_height);
+            if(vp->rv_rect.Intersects(sym_rect) ) {
+                glRasterPos2f( r.x - ddx, r.y - ddy );
+                glPixelZoom( 1, -1 );
+                glDrawPixels( b_width, b_height, GL_RGBA, GL_UNSIGNED_BYTE, prule->pixelPtr );
+                glPixelZoom( 1, 1 );
+            }
         }
 
         glDisable( GL_BLEND );
@@ -2426,13 +2480,16 @@ bool s52plib::RenderRasterSymbol( ObjRazRules *rzRules, Rule *prule, wxPoint &r,
                 unsigned char *psym = im_sym.GetData();
 
                 unsigned char *asym = NULL;
-                if( im_sym.HasAlpha() ) asym = im_sym.GetAlpha();
+                if( im_sym.HasAlpha() )
+                    asym = im_sym.GetAlpha();
 
                 //    Do alpha blending, the hard way
 
                 for( int i = 0; i < b_height; i++ ) {
                     for( int j = 0; j < b_width; j++ ) {
-                        double alpha = (double) ( *asym++ ) / 256.0;
+                        double alpha = 1.0;
+                        if(asym)
+                            alpha = ( *asym++ ) / 256.0;
                         unsigned char r = ( *psym++ * alpha ) + ( *pback++ * ( 1.0 - alpha ) );
                         *pdest++ = r;
                         unsigned char g = ( *psym++ * alpha ) + ( *pback++ * ( 1.0 - alpha ) );
@@ -3411,6 +3468,12 @@ int s52plib::RenderMPS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
 {
     if( !m_bShowSoundg )
         return 0;
+
+    if( m_bUseSCAMIN ) {
+        if( vp->chart_scale > rzRules->obj->Scamin )
+            return 0;
+    }
+    
     
     int npt = rzRules->obj->npt;
 
@@ -3448,7 +3511,7 @@ int s52plib::RenderMPS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
             double lat = *pdl++;
             point_obj->BBObj.SetMin( lon, lat );
             point_obj->BBObj.SetMax( lon, lat );
-
+            point_obj->bBBObj_valid = false;
             
             char *rule_str1 = RenderCS( point_rzRules, ru_cs );
             wxString cs_string( rule_str1, wxConvUTF8 );
@@ -3465,42 +3528,59 @@ int s52plib::RenderMPS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
     }
    
     
-    if( m_bUseSCAMIN ) {
-        if( vp->chart_scale > rzRules->obj->Scamin )
-        return 0;
-    }
+
+    //  I don't think we ever need to adjust the MPS bounding box more precisely than
+    //  was recorded in the SENC processing.
+    //  But if we do, here is one way to estimate it
+#if 0    
+    double *pdlbb = rzRules->obj->geoPtMulti; // and corresponding lat/lon
     
-    double *pd = rzRules->obj->geoPtz; // the SM points
+    if(!point_obj->bBBObj_valid) {
+        for( int ip = 0; ip < npt; ip++ ) {
+            double lon = *pdlbb++;
+            double lat = *pdlbb++;
+            
+            point_obj->BBObj.Expand(lon, lat);
+            
+            const int b_width = 29, b_height = 29;
+            double plat, plon;
+            GetPixPointSingle( b_width, b_height, &plat, &plon, vp );
+            point_obj->BBObj.Expand(lon + plon, lat + plat);
+        }
+        point_obj->bBBObj_valid = true;
+    }
+#endif
+
     double *pdl = rzRules->obj->geoPtMulti; // and corresponding lat/lon
 
-    ObjRazRules *point_rzRules = new ObjRazRules;
-    *point_rzRules = *rzRules; // take a copy of attributes, etc
-
-    S57Obj *point_obj = new S57Obj;
-    *point_obj = *( rzRules->obj );
-    point_rzRules->obj = point_obj;
+    //  We need a private unrotated copy of the Viewport
+    ViewPort vp_local = *vp;
+    vp_local.SetRotationAngle( 0. );
     
     for( int ip = 0; ip < npt; ip++ ) {
-        double east = *pd++;
-        double nort = *pd++;
-        double depth = *pd++;
-        
-        point_obj->x = east;
-        point_obj->y = nort;
-        point_obj->z = depth;
         
         double lon = *pdl++;
         double lat = *pdl++;
-        point_obj->BBObj.SetMin( lon, lat );
-        point_obj->BBObj.SetMax( lon, lat );
+
+        wxPoint r = vp_local.GetPixFromLL( lat, lon );
+        //      Use estimated symbol size
+        wxRect rr(r.x-16, r.y-16, 32, 32);
         
-  
-        if( !ObjectRenderCheckPos( point_rzRules, vp ) )
+        //      The render inclusion test is trivial....
+        if(!vp->rv_rect.Intersects(rr))
             continue;
+        
+        double angle = 0;
         
         Rules *rules =  rzRules->mps->cs_rules->Item(ip);
         while( rules ){
-            RenderSY( point_rzRules, rules, vp );
+            
+            //  Render a raster or vector symbol, as specified by LUP rules
+            if( rules->razRule->definition.SYDF == 'V' )
+                RenderHPGL( rzRules, rules->razRule, r, vp, angle );
+            
+            else if( rules->razRule->definition.SYDF == 'R' )
+                RenderRasterSymbol( rzRules, rules->razRule, r, vp, angle );
             
             rules = rules->next;
         }
@@ -3509,84 +3589,7 @@ int s52plib::RenderMPS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
     return 1;
 }
 
-#if 0
-// Multipoint Sounding
-int s52plib::RenderMPS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
-{
-    if( !m_bShowSoundg ) return 0;
 
-    int npt = rzRules->obj->npt;
-
-    wxPoint p;
-    double *pd = rzRules->obj->geoPtz; // the SM points
-    double *pdl = rzRules->obj->geoPtMulti; // and corresponding lat/lon
-    if( NULL == rzRules->child ) {
-        ObjRazRules *previous_rzRules = NULL;
-
-        for( int ip = 0; ip < npt; ip++ ) {
-            double east = *pd++;
-            double nort = *pd++;
-            ;
-            double depth = *pd++;
-
-            ObjRazRules *point_rzRules = new ObjRazRules;
-            *point_rzRules = *rzRules; // take a copy of attributes, etc
-
-            //  Need a new LUP
-            LUPrec *NewLUP = new LUPrec;
-
-            *NewLUP = *( rzRules->LUP ); // copy the parent's LUP
-            NewLUP->ATTCArray = NULL; //
-            NewLUP->INST = NULL;
-
-            point_rzRules->LUP = NewLUP;
-
-            //  Need a new S57Obj
-            S57Obj *point_obj = new S57Obj;
-            *point_obj = *( rzRules->obj );
-            point_rzRules->obj = point_obj;
-
-            //  Touchup the new items
-            point_rzRules->obj->bCS_Added = false;
-            point_rzRules->obj->bIsClone = true;
-            point_rzRules->obj->npt = 1;
-
-            point_rzRules->next = previous_rzRules;
-            Rules *ru = StringToRules( _T ( "CS(SOUNDG03;" ) );
-            point_rzRules->LUP->ruleList = ru;
-
-            point_obj->x = east;
-            point_obj->y = nort;
-            point_obj->z = depth;
-
-            double lon = *pdl++;
-            double lat = *pdl++;
-            point_obj->BBObj.SetMin( lon, lat );
-            point_obj->BBObj.SetMax( lon, lat );
-
-            previous_rzRules = point_rzRules;
-        }
-
-        //   Top of the chain is previous_rzRules
-        rzRules->child = previous_rzRules;
-    }
-
-    //   Walk the chain, drawing..
-    ObjRazRules *current = rzRules->child;
-    while( current ) {
-        if( m_pdc ) RenderObjectToDC( m_pdc, current, vp );
-        else {
-            wxRect NullRect;
-            RenderObjectToGL( *m_glcc, current, vp, NullRect );
-        }
-
-        current = current->next;
-    }
-
-    return 1;
-}
-
-#endif
 int s52plib::RenderCARC( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
 {
     char *str = (char*) rules->INSTstr;
@@ -4028,7 +4031,7 @@ int s52plib::RenderObjectToGL( const wxGLContext &glcc, ObjRazRules *rzRules, Vi
 
 int s52plib::DoRenderObject( wxDC *pdcin, ObjRazRules *rzRules, ViewPort *vp )
 {
-
+  
     if( !ObjectRenderCheckPos( rzRules, vp ) ) return 0;
 
     if( !ObjectRenderCheckCat( rzRules, vp ) ) {
@@ -5429,16 +5432,29 @@ void s52plib::RenderToBufferFilledPolygon( ObjRazRules *rzRules, S57Obj *obj, S5
                 //      Get and convert the points
                 wxPoint *pr = ptp;
 
-                double *pvert_list = p_tp->p_vertex;
+                if(ppg->data_type == DATA_TYPE_DOUBLE){
+                    double *pvert_list = p_tp->p_vertex;
 
-                for( int iv = 0; iv < p_tp->nVert; iv++ ) {
-                    double lon = *pvert_list++;
-                    double lat = *pvert_list++;
-                    GetPointPixSingle( rzRules, lat, lon, pr, vp );
+                    for( int iv = 0; iv < p_tp->nVert; iv++ ) {
+                        double lon = *pvert_list++;
+                        double lat = *pvert_list++;
+                        GetPointPixSingle( rzRules, lat, lon, pr, vp );
 
-                    pr++;
+                        pr++;
+                    }
                 }
-
+                else {
+                    float *pvert_list = (float *)p_tp->p_vertex;
+                    
+                    for( int iv = 0; iv < p_tp->nVert; iv++ ) {
+                        double lon = *pvert_list++;
+                        double lat = *pvert_list++;
+                        GetPointPixSingle( rzRules, lat, lon, pr, vp );
+                        
+                        pr++;
+                    }
+                }
+                
                 switch( p_tp->type ){
                     case PTG_TRIANGLE_FAN: {
                         for( int it = 0; it < p_tp->nVert - 2; it++ ) {
@@ -5579,21 +5595,156 @@ int s52plib::RenderToGLAC( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
     glColor3ub( c->R, c->G, c->B );
 
     wxBoundingBox BBView = vp->GetBBox();
+    //  Allow a little slop in calculating whether a triangle
+    //  is within the requested Viewport
+    double margin = BBView.GetWidth() * .05;
+//    if(rzRules->obj->Index != 2666)
+//        return 0;
+    
     if( rzRules->obj->pPolyTessGeo ) {
-        if( !rzRules->obj->pPolyTessGeo->IsOk() ) // perform deferred tesselation
-        rzRules->obj->pPolyTessGeo->BuildDeferredTess();
+        
+        bool b_temp_vbo = false;
+        
+        glPushMatrix();
 
-        wxPoint *ptp = (wxPoint *) malloc(
-                ( rzRules->obj->pPolyTessGeo->GetnVertexMax() + 1 ) * sizeof(wxPoint) );
+        // Set up the OpenGL transform matrix for this object
+        
+        //  First, the VP transform
+        glTranslatef( vp->pix_width / 2, vp->pix_height/2, 0 );
+        glScalef( vp->view_scale_ppm, -vp->view_scale_ppm, 0 );
+        glTranslatef( -rzRules->sm_transform_parms->easting_vp_center, -rzRules->sm_transform_parms->northing_vp_center, 0 );
+        
+        //  Next, the per-object transform
 
-        //  Allow a little slop in calculating whether a triangle
-        //  is within the requested Viewport
-        double margin = BBView.GetWidth() * .05;
+        //      For some chart types (e.g. cm93), the viewport bounding box is constructed
+        //      so as to be positive semi-definite. That is, the right hand side may have a longitude > 360.
+        //      In this case, we may need to translate object coordinates by 360 degrees to conform.
+        if( BBView.GetMaxX() > 360. ) {
+            
+            wxBoundingBox bbRight ( 0., vp->GetBBox().GetMinY(),
+                                    vp->GetBBox().GetMaxX() - 360., vp->GetBBox().GetMaxY() );
+//            if ( !bbRight.IntersectOut ( rzRules->obj->BBObj ) )
+//                glTranslatef( mercator_k0 * WGS84_semimajor_axis_meters * 2.0 * PI, 0, 0);
+            if(  (rzRules->obj->BBObj.GetMinX() >= 0) &&
+                 (rzRules->obj->BBObj.GetMinX() < BBView.GetMaxX() - 360.) ){
+                glTranslatef( mercator_k0 * WGS84_semimajor_axis_meters * 2.0 * PI, 0, 0);
+            }
+        }
+        
+        glTranslatef( rzRules->obj->x_origin, rzRules->obj->y_origin, 0);
+        glScalef( rzRules->obj->x_rate, rzRules->obj->y_rate, 0 );
+        
+        // perform deferred tesselation
+        if( !rzRules->obj->pPolyTessGeo->IsOk() ) 
+            rzRules->obj->pPolyTessGeo->BuildDeferredTess();
+
+        //  Get the vertex data
+        PolyTriGroup *ppg_vbo = rzRules->obj->pPolyTessGeo->Get_PolyTriGroup_head();
+            
+            //  Has the input vertex buffer been converted to "single_alloc float" model?
+            //  and is it allowed?
+        if(!ppg_vbo->bsingle_alloc && (rzRules->obj->auxParm1 >= 0) ){
+                
+                int data_size = sizeof(float);
+                
+                //  First calculate the required total byte size
+                    int total_byte_size = 0;
+                    TriPrim *p_tp = ppg_vbo->tri_prim_head;
+                    while( p_tp ) {
+                        total_byte_size += p_tp->nVert * 2 * data_size;
+                        p_tp = p_tp->p_next; // pick up the next in chain
+                    }
+                    
+                    float *vbuf = (float *)malloc(total_byte_size);
+                    p_tp = ppg_vbo->tri_prim_head;
+                    
+                    if( ppg_vbo->data_type == DATA_TYPE_DOUBLE){  //DOUBLE to FLOAT
+                            float *p_run = vbuf;
+                            while( p_tp ) {
+                                float *pfbuf = p_run;
+                                for( int i=0 ; i < p_tp->nVert * 2 ; ++i){
+                                    float x = (float)(p_tp->p_vertex[i]);
+                                    *p_run++ = x;
+                                }
+                                
+                                free(p_tp->p_vertex);
+                                p_tp->p_vertex = (double *)pfbuf;
+                                
+                                p_tp = p_tp->p_next; // pick up the next in chain
+                            }
+                    }
+                    else {          // FLOAT to FLOAT
+                            float *p_run = vbuf;
+                            while( p_tp ) {
+                                memcpy( p_run, p_tp->p_vertex, p_tp->nVert * 2 * sizeof(float) );
+                                
+                                free(p_tp->p_vertex);
+                                p_tp->p_vertex = (double *)p_run;
+                                
+                                p_run += p_tp->nVert * 2 * sizeof(float);
+                                
+                                p_tp = p_tp->p_next; // pick up the next in chain
+                            }
+                    }
+                    
+                    
+                    ppg_vbo->bsingle_alloc = true;
+                    ppg_vbo->single_buffer = (unsigned char *)vbuf;
+                    ppg_vbo->single_buffer_size = total_byte_size;
+                    ppg_vbo->data_type = DATA_TYPE_FLOAT;
+                    
+        }
+            
+        bool b_useVBO = g_b_EnableVBO  && !rzRules->obj->auxParm1;    // VBO allowed?
+
+        if( b_useVBO ){        
+        //  Has a VBO been built for this object?
+            if( 1 ) {
+                 
+                 if(rzRules->obj->auxParm0 <= 0) {
+                    b_temp_vbo = (rzRules->obj->auxParm0 == -5);
+                   
+                    GLuint vboId;
+                    // generate a new VBO and get the associated ID
+                    (s_glGenBuffers)(1, &vboId);
+                    
+                    rzRules->obj->auxParm0 = vboId;
+                    
+                    // bind VBO in order to use
+                    (s_glBindBuffer)(GL_ARRAY_BUFFER, vboId);
+                    
+                    // upload data to VBO
+                    glEnableClientState(GL_VERTEX_ARRAY);             // activate vertex coords array
+                    (s_glBufferData)(GL_ARRAY_BUFFER,
+                                    ppg_vbo->single_buffer_size, ppg_vbo->single_buffer, GL_STATIC_DRAW);
+                    
+                }
+                else {
+                    (s_glBindBuffer)(GL_ARRAY_BUFFER, rzRules->obj->auxParm0);
+                    glEnableClientState(GL_VERTEX_ARRAY);             // activate vertex coords array
+                }                    
+             }
+        }
+
+        
 
         PolyTriGroup *ppg = rzRules->obj->pPolyTessGeo->Get_PolyTriGroup_head();
 
         wxBoundingBox tp_box;
         TriPrim *p_tp = ppg->tri_prim_head;
+        GLintptr vbo_offset = 0;
+        
+        glEnableClientState(GL_VERTEX_ARRAY);             // activate vertex coords array
+
+        //      Set up the stride sizes for the array
+        int array_data_size = sizeof(float);
+        GLint array_gl_type = GL_FLOAT;
+        
+        if(ppg->data_type == DATA_TYPE_DOUBLE){
+            array_data_size = sizeof(double);
+            array_gl_type = GL_DOUBLE;
+        }
+            
         while( p_tp ) {
             
             tp_box.SetMin(p_tp->minx, p_tp->miny);
@@ -5610,87 +5761,36 @@ int s52plib::RenderToGLAC( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
             }
 
             if( b_greenwich || ( BBView.Intersect( tp_box, margin ) != _OUT ) ) {
-                //      Get and convert the points
-                /*
-                 wxPoint *pr = ptp;
-                 double *pvert_list = p_tp->p_vertex;
-
-                 for ( int iv =0 ; iv < p_tp->nVert ; iv++ )
-                 {
-                 double lon = *pvert_list++;
-                 double lat = *pvert_list++;
-                 rzRules->chart->GetPointPix ( rzRules, lat, lon, pr );
-
-                 pr++;
-                 }
-                 */
-//                rzRules->chart->GetPointPix( rzRules, (wxPoint2DDouble*) p_tp->p_vertex, ptp,
-//                        p_tp->nVert );
-
-                GetPointPixArray( rzRules, (wxPoint2DDouble*) p_tp->p_vertex, ptp, p_tp->nVert, vp );
                 
-                switch( p_tp->type ){
-                    case PTG_TRIANGLE_FAN: {
-                        glBegin( GL_TRIANGLE_FAN );
-                        for( int it = 0; it < p_tp->nVert; it++ )
-                            glVertex2f( ptp[it].x, ptp[it].y );
-                        glEnd();
-                        break;
-                    }
-
-                    case PTG_TRIANGLE_STRIP: {
-                        glBegin( GL_TRIANGLE_STRIP );
-                        for( int it = 0; it < p_tp->nVert; it++ )
-                            glVertex2f( ptp[it].x, ptp[it].y );
-                        glEnd();
-                        break;
-                    }
-                    case PTG_TRIANGLES: {
-                        for( int it = 0; it < p_tp->nVert; it += 3 ) {
-                            int xmin = wxMin(ptp[it].x, wxMin(ptp[it+1].x, ptp[it+2].x));
-                            int xmax = wxMax(ptp[it].x, wxMax(ptp[it+1].x, ptp[it+2].x));
-                            int ymin = wxMin(ptp[it].y, wxMin(ptp[it+1].y, ptp[it+2].y));
-                            int ymax = wxMax(ptp[it].y, wxMax(ptp[it+1].y, ptp[it+2].y));
-
-                            wxRect rect( xmin, ymin, xmax - xmin, ymax - ymin );
-                            if( rect.Intersects( m_render_rect ) ) {
-                                glBegin( GL_TRIANGLES );
-                                glVertex2f( ptp[it].x, ptp[it].y );
-                                glVertex2f( ptp[it + 1].x, ptp[it + 1].y );
-                                glVertex2f( ptp[it + 2].x, ptp[it + 2].y );
-                                glEnd();
-                            }
-                        }
-                        break;
-                    }
+                if(b_useVBO){
+                    glVertexPointer(2, array_gl_type, 2 * array_data_size, (GLvoid *)(vbo_offset));
+                    glDrawArrays(p_tp->type, 0, p_tp->nVert);
                 }
-            } // if bbox
+                else{
+                    glVertexPointer(2, array_gl_type, 2 * array_data_size, p_tp->p_vertex);
+                    glDrawArrays(p_tp->type, 0, p_tp->nVert);
+                }
+            }
+            
+            vbo_offset += p_tp->nVert * 2 * array_data_size;
             p_tp = p_tp->p_next; // pick up the next in chain
+            
         } // while
-        free( ptp );
+        
+        if(b_useVBO)
+            (s_glBindBuffer)(GL_ARRAY_BUFFER_ARB, 0);
+        
+        glDisableClientState(GL_VERTEX_ARRAY);            // deactivate vertex array
+        
+        glPopMatrix();
+        
+        if( b_useVBO && b_temp_vbo){
+            (s_glBufferData)(GL_ARRAY_BUFFER, 0, NULL, GL_STATIC_DRAW);
+            s_glDeleteBuffers(1, (unsigned int *)&rzRules->obj->auxParm0);
+            rzRules->obj->auxParm0 = 0;
+        }
     } // if pPolyTessGeo
 
-#if 0
-    //    At very small scales, the object could be visible on both the left and right sides of the screen.
-    //    Identify this case......
-    if(vp->chart_scale > 5e7)
-    {
-        //    Does the object hang out over the left side of the VP?
-        if((rzRules->obj->BBObj.GetMaxX() > vp->GetBBox().GetMinX()) && (rzRules->obj->BBObj.GetMinX() < vp->GetBBox().GetMinX()))
-        {
-            //    If we add 360 to the objects lons, does it intersect the the right side of the VP?
-            if(((rzRules->obj->BBObj.GetMaxX() + 360.) > vp->GetBBox().GetMaxX()) && ((rzRules->obj->BBObj.GetMinX() + 360.) < vp->GetBBox().GetMaxX()))
-            {
-                //  If so, this area oject should be drawn again, this time for the left side
-                //    Do this by temporarily adjusting the objects rendering offset
-                rzRules->obj->x_origin -= mercator_k0 * WGS84_semimajor_axis_meters * 2.0 * PI;
-                RenderToBufferFilledPolygon ( rzRules, rzRules->obj, c, vp->GetBBox(), pb_spec, NULL );
-                rzRules->obj->x_origin += mercator_k0 * WGS84_semimajor_axis_meters * 2.0 * PI;
-
-            }
-        }
-    }
-#endif
 
 #endif          //#ifdef ocpnUSE_GL
 
@@ -5793,23 +5893,40 @@ int s52plib::RenderToGLAP( ObjRazRules *rzRules, Rules *rules, ViewPort *vp )
                 //      Get and convert the points
 
                 wxPoint *pr = ptp;
-                double *pvert_list = p_tp->p_vertex;
+                if( ppg->data_type == DATA_TYPE_FLOAT ){
+                    float *pvert_list = (float *)p_tp->p_vertex;
 
-                for( int iv = 0; iv < p_tp->nVert; iv++ ) {
-                    double lon = *pvert_list++;
-                    double lat = *pvert_list++;
-//                    rzRules->chart->GetPointPix( rzRules, lat, lon, pr );
-                    GetPointPixSingle(rzRules, lat, lon, pr, vp );
-                    
-                    obj_xmin = wxMin(obj_xmin, pr->x);
-                    obj_xmax = wxMax(obj_xmax, pr->x);
-                    obj_ymin = wxMin(obj_ymin, pr->y);
-                    obj_ymax = wxMax(obj_ymax, pr->y);
+                    for( int iv = 0; iv < p_tp->nVert; iv++ ) {
+                        float lon = *pvert_list++;
+                        float lat = *pvert_list++;
+                        GetPointPixSingle(rzRules, lat, lon, pr, vp );
+                        
+                        obj_xmin = wxMin(obj_xmin, pr->x);
+                        obj_xmax = wxMax(obj_xmax, pr->x);
+                        obj_ymin = wxMin(obj_ymin, pr->y);
+                        obj_ymax = wxMax(obj_ymax, pr->y);
 
-                    pr++;
+                        pr++;
+                    }
                 }
+                else {
+                    double *pvert_list = p_tp->p_vertex;
+                    
+                    for( int iv = 0; iv < p_tp->nVert; iv++ ) {
+                        double lon = *pvert_list++;
+                        double lat = *pvert_list++;
+                        GetPointPixSingle(rzRules, lat, lon, pr, vp );
+                        
+                        obj_xmin = wxMin(obj_xmin, pr->x);
+                        obj_xmax = wxMax(obj_xmax, pr->x);
+                        obj_ymin = wxMin(obj_ymin, pr->y);
+                        obj_ymax = wxMax(obj_ymax, pr->y);
+                        
+                        pr++;
+                    }
+                }
+                
 
-//                        rzRules->chart->GetPointPix (  rzRules, (wxPoint2DDouble*)p_tp->p_vertex, ptp, p_tp->nVert );
 
                 switch( p_tp->type ){
                     case PTG_TRIANGLE_FAN: {
@@ -6491,25 +6608,6 @@ bool s52plib::ObjectRenderCheckPos( ObjRazRules *rzRules, ViewPort *vp )
 {
     if( rzRules->obj == NULL ) return false;
 
-    // Debug for testing US5FL51.000 slcons
-//    if((rzRules->obj->Index == 3868) || (rzRules->obj->Index == 3870))
-//        return false;
-
-//    if(rzRules->obj->Index == 0)
-//        return false;
-
-    /* invalid, so we must render once to update the bounding box..
-       so in this case we must render to get the correct data onscreen
-       the fbo is corrupted.  Without the fbo.. the text "pops" into view
-       at the wrong time when panning over it without this.
-
-       TODO:  calculate the bouding box correctly in s57chart::ResetPointBBoxes,
-       or else, after rendering the first time, set a dirty region to avoid corruption
-    so remove this test and the other cases that compute the box, otherwise
-    the first frame rendered after scale/rotation change may be very slow. */
-//    if(!rzRules->obj->bBBObj_valid)
-//        return true;
-
     // Of course, the object must be at least partly visible in the viewport
     const wxBoundingBox &vpBox = vp->GetBBox(), &testBox = rzRules->obj->BBObj;
 
@@ -6521,7 +6619,11 @@ bool s52plib::ObjectRenderCheckPos( ObjRazRules *rzRules, ViewPort *vp )
 
     //  Do a secondary test if the viewport crosses Greenwich
     //  This will pick up objects east of Greenwich
-    if( vpBox.GetMaxX() > 360. && vpBox.GetMaxX() - 360 >= testBox.GetMinX())
+    if( vpBox.GetMaxX() >= 360. && vpBox.GetMaxX() - 360 >= testBox.GetMinX())
+        return true;
+
+    // Tertiary test for objects which cross Greenwich
+    if( testBox.GetMaxX() >= 360. && vpBox.GetMinX() <= testBox.GetMaxX() - 360)
         return true;
 
     return false;

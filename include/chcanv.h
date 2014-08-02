@@ -122,6 +122,29 @@ enum {
       ID_AISDIALOGOK
 };
 
+const wxEventType wxEVT_OCPN_COMPRESSPROGRESS = wxNewEventType();
+
+//----------------------------------------------------------------------------
+// OCPN_CompressProgressEvent
+//----------------------------------------------------------------------------
+class OCPN_CompressProgressEvent: public wxEvent
+{
+public:
+    OCPN_CompressProgressEvent( wxEventType commandType = wxEVT_NULL, int id = 0 );
+    ~OCPN_CompressProgressEvent( );
+    
+    // accessors
+    void SetString(std::string string) { m_string = string; }
+    std::string GetString() { return m_string; }
+    
+    // required for sending with wxPostEvent()
+    wxEvent *Clone() const;
+    int count;
+    int thread;
+    
+    std::string m_string;
+};
+
 //----------------------------------------------------------------------------
 // ChartCanvas
 //----------------------------------------------------------------------------
@@ -275,9 +298,14 @@ public:
       void DrawBlinkObjects( void );
       void FinishRoute(void);
       
+      void InvalidateGL();
+      
 #ifdef ocpnUSE_GL
       glChartCanvas *GetglCanvas(){ return m_glcc; }
 #endif      
+
+      void OnEvtCompressProgress( OCPN_CompressProgressEvent & event );
+      void JaggyCircle(ocpnDC &dc, wxPen pen, int x, int y, int radius);
 
 private:
       ViewPort    VPoint;
@@ -315,6 +343,7 @@ private:
       bool        m_bRouteEditing;
       bool        m_bMarkEditing;
       RoutePoint  *m_pRoutePointEditTarget;
+      RoutePoint  *m_lastRoutePointEditTarget;
       SelectItem  *m_pFoundPoint;
       bool        m_bChartDragging;
       wxString    m_active_upload_port;
@@ -371,7 +400,7 @@ private:
       void PanTimerEvent(wxTimerEvent& event);
       void MovementTimerEvent(wxTimerEvent& );
       void MovementStopTimerEvent( wxTimerEvent& );
-      bool CheckEdgePan(int x, int y, bool bdragging);
+      bool CheckEdgePan( int x, int y, bool bdragging, int margin, int delta );
       void OnCursorTrackTimerEvent(wxTimerEvent& event);
 
       void DrawAllRoutesInBBox(ocpnDC& dc, LLBBox& BltBBox, const wxRegion& clipregion);
@@ -391,17 +420,7 @@ private:
 
       wxBitmap *DrawTCCBitmap( wxDC *pbackground_dc, bool bAddNewSelpoints = true);
 
-      void AISDraw(ocpnDC& dc);
-      void AISDrawAreaNotices (ocpnDC& dc );
-      void AISDrawTarget (AIS_Target_Data *td, ocpnDC& dc );
-
-
       void AlertDraw(ocpnDC& dc);                // pjotrc 2010.02.22
-
-      void TargetFrame(ocpnDC &dc, wxPen pen, int x, int y, int radius);   // pjotrc 2010.02.01
-      void AtoN_Diamond(ocpnDC &dc, wxPen pen, int x, int y, int radius, bool b_virtual);  // pjotrc 2010.02.01
-      void Base_Square(ocpnDC &dc, wxPen pen, int x, int y, int radius);
-      void SART_Render(ocpnDC &dc, wxPen pen, int x, int y, int radius);
 
       void GridDraw(ocpnDC& dc); // Display lat/lon Grid in chart display
       void ScaleBarDraw( ocpnDC& dc );
@@ -421,7 +440,6 @@ private:
 
       void DrawEmboss ( ocpnDC &dc, emboss_data *pemboss );
 
-      void JaggyCircle(ocpnDC &dc, wxPen pen, int x, int y, int radius);
       void ShowObjectQueryWindow( int x, int y, float zlat, float zlon);
       void ShowMarkPropertiesDialog( RoutePoint* markPoint );
       void ShowRoutePropertiesDialog(wxString title, Route* selected);

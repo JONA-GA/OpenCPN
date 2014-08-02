@@ -326,6 +326,9 @@ extern bool             portaudio_initialized;
 extern bool             g_btouch;
 extern bool             g_bresponsive;
 
+extern bool             bGPSValid;              // for track recording
+
+
 #ifdef ocpnUSE_GL
 extern ocpnGLOptions g_GLOptions;
 #endif
@@ -364,6 +367,7 @@ Track::Track( void )
     m_removeTP = NULL;
     m_fixedTP = NULL;
     m_track_run = 0;
+    m_CurrentTrackSeg = 0;
 }
 
 Track::~Track()
@@ -498,7 +502,9 @@ void Track::OnTimerTrack( wxTimerEvent& event )
         if( ( trackPointState == firstPoint ) && !g_bTrackDaily )
         {
             wxDateTime now = wxDateTime::Now();
-            pRoutePointList->GetFirst()->GetData()->SetCreateTime(now.ToUTC());
+            wxRoutePointListNode *node = pRoutePointList->GetFirst();
+            if(node)
+                node->GetData()->SetCreateTime(now.ToUTC());
         }
 
     m_TimerTrack.Start( 1000, wxTIMER_CONTINUOUS );
@@ -513,6 +519,8 @@ RoutePoint* Track::AddNewPoint( vector2D point, wxDateTime time ) {
     rPoint->SetCreateTime(time);
     AddPoint( rPoint );
 
+    pConfig->AddNewTrackPoint( rPoint, m_GUID );        // This will update the "changes" file only
+    
     //    This is a hack, need to undo the action of Route::AddPoint
     rPoint->m_bIsInRoute = false;
     rPoint->m_bIsInTrack = true;
@@ -779,7 +787,8 @@ Route *Track::RouteFromTrack( wxProgressDialog *pprog )
     int back_ic = 0;
     int nPoints = pRoutePointList->GetCount();
     bool isProminent = true;
-    double delta_dist, delta_hdg, xte;
+    double delta_dist = 0.;
+    double delta_hdg, xte;
     double leg_speed = 0.1;
 
     if( pRoutePropDialog ) leg_speed = pRoutePropDialog->m_planspeed;
@@ -1049,8 +1058,8 @@ MyConfig::MyConfig( const wxString &appName, const wxString &vendorName,
     m_sNavObjSetChangesFile = m_sNavObjSetFile + _T ( ".changes" );
 
     m_pNavObjectInputSet = NULL;
-    m_pNavObjectChangesSet = new NavObjectChanges();
-
+    m_pNavObjectChangesSet = NULL;
+    
     m_bSkipChangeSetUpdate = false;
 
     g_pConnectionParams = new wxArrayOfConnPrm();
@@ -1058,22 +1067,28 @@ MyConfig::MyConfig( const wxString &appName, const wxString &vendorName,
 
 void MyConfig::CreateRotatingNavObjBackup()
 {
-    //Rotate navobj backups, but just in case there are some changes in the current version to prevent the user trying to "fix" the problem by continuously starting the application to overwrite all of his good backups...
+    //Rotate navobj backups, but just in case there are some changes in the current version
+    //to prevent the user trying to "fix" the problem by continuously starting the
+    //application to overwrite all of his good backups...
     if( g_navobjbackups > 0 ) {
         wxFile f;
         wxString oldname = m_sNavObjSetFile;
         wxString newname = wxString::Format( _T("%s.1"), m_sNavObjSetFile.c_str() );
+      
+        wxFileOffset s_diff = 1;
+        if( ::wxFileExists( newname ) ) {
+            
+            if( f.Open(oldname) ){
+                s_diff = f.Length();
+                f.Close();
+            }
         
-        wxFileOffset s_diff = 0;
-        if( f.Open(oldname) ){
-            wxFileOffset s_diff = f.Length();
-            f.Close();
+            if( f.Open(newname) ){
+                s_diff -= f.Length();
+                f.Close();
+            }
         }
         
-        if( f.Open(newname) ){
-            s_diff -= f.Length();
-            f.Close();
-        }
         
         if ( s_diff != 0 )
         {
@@ -1898,6 +1913,9 @@ int MyConfig::LoadMyConfig( int iteration )
 
 
         if( ::wxFileExists( m_sNavObjSetChangesFile ) ) {
+            
+            wxULongLong size = wxFileName::GetSize(m_sNavObjSetChangesFile);
+            
             //We crashed last time :(
             //That's why this file still exists...
             //Let's reconstruct the unsaved changes
@@ -1907,15 +1925,21 @@ int MyConfig::LoadMyConfig( int iteration )
             //  Remove the file before applying the changes,
             //  just in case the changes file itself causes a fault.
             //  If it does fault, at least the next restart will proceed without fault.
-            if( ::wxFileExists( m_sNavObjSetChangesFile ) )
+           if( ::wxFileExists( m_sNavObjSetChangesFile ) )
                 ::wxRemoveFile( m_sNavObjSetChangesFile );
 
-            wxLogMessage( _T("Applying NavObjChanges") );
-            pNavObjectChangesSet->ApplyChanges();
-            delete pNavObjectChangesSet;
+           if(size != 0){
+                wxLogMessage( _T("Applying NavObjChanges") );
+                pNavObjectChangesSet->ApplyChanges();
+                delete pNavObjectChangesSet;
+                
 
-            UpdateNavObj();
+                UpdateNavObj();
+           }
         }
+        
+        m_pNavObjectChangesSet = new NavObjectChanges(m_sNavObjSetChangesFile);
+        
     }
 
     SetPath( _T ( "/Settings/Others" ) );
@@ -2115,8 +2139,10 @@ bool MyConfig::AddNewRoute( Route *pr, int crm )
 
 
     if( !m_bSkipChangeSetUpdate ) {
-        m_pNavObjectChangesSet->AddRoute( pr, "add" );
-        StoreNavObjChanges();
+        if( pr->m_bIsTrack )
+            m_pNavObjectChangesSet->AddTrack( (Track *)pr, "add" );
+        else
+            m_pNavObjectChangesSet->AddRoute( pr, "add" );
     }
 
     return true;
@@ -2133,7 +2159,6 @@ bool MyConfig::UpdateRoute( Route *pr )
         else
             m_pNavObjectChangesSet->AddRoute( pr, "update" );
 
-        StoreNavObjChanges();
     }
 
     return true;
@@ -2150,7 +2175,6 @@ bool MyConfig::DeleteConfigRoute( Route *pr )
         else
             m_pNavObjectChangesSet->AddTrack( (Track *)pr, "delete" );
 
-        StoreNavObjChanges();
     }
     return true;
 }
@@ -2160,9 +2184,11 @@ bool MyConfig::AddNewWayPoint( RoutePoint *pWP, int crm )
     if( pWP->m_bIsInLayer )
         return true;
 
+    if(!pWP->m_bIsolatedMark)
+        return true;
+    
     if( !m_bSkipChangeSetUpdate ) {
         m_pNavObjectChangesSet->AddWP( pWP, "add" );
-        StoreNavObjChanges();
     }
 
     return true;
@@ -2175,7 +2201,6 @@ bool MyConfig::UpdateWayPoint( RoutePoint *pWP )
 
     if( !m_bSkipChangeSetUpdate ) {
         m_pNavObjectChangesSet->AddWP( pWP, "update" );
-        StoreNavObjChanges();
     }
 
     return true;
@@ -2188,9 +2213,17 @@ bool MyConfig::DeleteWayPoint( RoutePoint *pWP )
 
     if( !m_bSkipChangeSetUpdate ) {
         m_pNavObjectChangesSet->AddWP( pWP, "delete" );
-        StoreNavObjChanges();
     }
 
+    return true;
+}
+
+bool MyConfig::AddNewTrackPoint( RoutePoint *pWP, const wxString& parent_GUID )
+{
+    if( !m_bSkipChangeSetUpdate ) {
+        m_pNavObjectChangesSet->AddTrackPoint( pWP, "add", parent_GUID );
+    }
+    
     return true;
 }
 
@@ -2586,7 +2619,7 @@ void MyConfig::UpdateSettings()
     }
     SetPath( _T ( "/Directories" ) );
     Write( _T ( "S57DataLocation" ), _T("") );
-    Write( _T ( "SENCFileLocation" ), _T("") );
+//    Write( _T ( "SENCFileLocation" ), _T("") );
 
 #endif
 
@@ -2685,13 +2718,8 @@ void MyConfig::UpdateNavObj( void )
         wxRemoveFile( m_sNavObjSetChangesFile );
     
     delete m_pNavObjectChangesSet;
-    m_pNavObjectChangesSet = new NavObjectChanges();
+    m_pNavObjectChangesSet = new NavObjectChanges(m_sNavObjSetChangesFile);
 
-}
-
-void MyConfig::StoreNavObjChanges( void )
-{
-    m_pNavObjectChangesSet->SaveFile( m_sNavObjSetChangesFile );
 }
 
 bool MyConfig::ExportGPXRoutes( wxWindow* parent, RouteList *pRoutes, const wxString suggestedName )
@@ -4318,6 +4346,9 @@ void AlphaBlending( ocpnDC &dc, int x, int y, int size_x, int size_y, float radi
         //    Create destination image
         wxBitmap olbm( size_x, size_y );
         wxMemoryDC oldc( olbm );
+        if(!oldc.IsOk())
+            return;
+            
         oldc.SetBackground( *wxBLACK_BRUSH );
         oldc.SetBrush( *wxWHITE_BRUSH );
         oldc.Clear();
@@ -4332,6 +4363,10 @@ void AlphaBlending( ocpnDC &dc, int x, int y, int size_x, int size_y, float radi
         unsigned char *box = dest.GetData();
         unsigned char *d = dest_data;
 
+        //  Sometimes, on Windows, the destination image is corrupt...
+        if(NULL == box)
+            return;
+        
         float alpha = 1.0 - (float)transparency / 255.0;
         int sb = size_x * size_y;
         for( int i = 0; i < sb; i++ ) {
@@ -4361,15 +4396,20 @@ void AlphaBlending( ocpnDC &dc, int x, int y, int size_x, int size_y, float radi
         glEnable( GL_BLEND );
         glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 
-        glColor4ub( color.Red(), color.Green(), color.Blue(), transparency );
-
-        glBegin( GL_QUADS );
-        glVertex2i( x, y );
-        glVertex2i( x + size_x, y );
-        glVertex2i( x + size_x, y + size_y );
-        glVertex2i( x, y + size_y );
-        glEnd();
-
+        if(radius > 1.0f){
+            wxColour c(color.Red(), color.Green(), color.Blue(), transparency);
+            dc.SetBrush(wxBrush(c));
+            dc.DrawRoundedRectangle( x, y, size_x, size_y, radius );
+        }
+        else {
+            glColor4ub( color.Red(), color.Green(), color.Blue(), transparency );
+            glBegin( GL_QUADS );
+            glVertex2i( x, y );
+            glVertex2i( x + size_x, y );
+            glVertex2i( x + size_x, y + size_y );
+            glVertex2i( x, y + size_y );
+            glEnd();
+        }
         glDisable( GL_BLEND );
 #endif
     }

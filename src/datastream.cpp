@@ -150,7 +150,8 @@ else {
         comx =  m_portstring.AfterFirst(':');      // strip "Serial:"
 		
 
-#ifdef __WXMSW__
+ #ifdef __WXMSW__
+            comx = comx.BeforeFirst(' ');               // strip off any description provided by Windows
             wxString scomx = comx;
             scomx.Prepend(_T("\\\\.\\"));                  // Required for access to Serial Ports greater than COM9
 

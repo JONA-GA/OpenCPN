@@ -164,6 +164,9 @@ S57Obj::S57Obj()
     y_rate = 1.0;
     x_origin = 0.0;
     y_origin = 0.0;
+    
+    auxParm0 = 0;
+    auxParm1 = 0;
 }
 
 //----------------------------------------------------------------------------------
@@ -208,6 +211,8 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
     att_array = NULL;
     attVal = NULL;
     n_attr = 0;
+    auxParm0 = 0;
+    auxParm1 = 0;
     
     pPolyTessGeo = NULL;
     pPolyTrapGeo = NULL;
@@ -482,8 +487,10 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
 
                         m_lon = xll;
                         m_lat = yll;
+
                         BBObj.SetMin( m_lon - .25, m_lat - .25 );
                         BBObj.SetMax( m_lon + .25, m_lat + .25 );
+                        bBBObj_valid = false;
 
                     } else {
                         Primitive_type = GEO_POINT;
@@ -543,6 +550,7 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
 
                         BBObj.SetMin( xmin, ymin );
                         BBObj.SetMax( xmax, ymax );
+                        bBBObj_valid = true;
 
                     }
                     break;
@@ -1295,6 +1303,9 @@ void s57chart::SetVPParms( const ViewPort &vpt )
     m_view_scale_ppm = vpt.view_scale_ppm;
 
     toSM( vpt.clat, vpt.clon, ref_lat, ref_lon, &m_easting_vp_center, &m_northing_vp_center );
+    
+    vp_transform.easting_vp_center = m_easting_vp_center;
+    vp_transform.northing_vp_center = m_northing_vp_center;
 }
 
 bool s57chart::AdjustVP( ViewPort &vp_last, ViewPort &vp_proposed )
@@ -1582,8 +1593,14 @@ bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& V
                     (ViewPort *) &VPoint );
 
             if( temp_lon_right < temp_lon_left )        // presumably crossing Greenwich
-            temp_lon_right += 360.;
-
+                temp_lon_right += 360.;
+            else if(temp_vp.GetBBox().GetMaxX() > 360){
+                if(temp_lon_left < 180.) {
+                    temp_lon_left += 360.;
+                    temp_lon_right += 360.;
+                }
+            }
+            
             temp_vp.GetBBox().SetMin( temp_lon_left, temp_lat_bot );
             temp_vp.GetBBox().SetMax( temp_lon_right, temp_lat_top );
 
@@ -1618,8 +1635,14 @@ bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& V
                 (ViewPort *) &VPoint );
 
         if( temp_lon_right < temp_lon_left )        // presumably crossing Greenwich
-        temp_lon_right += 360.;
-
+            temp_lon_right += 360.;
+        else if(temp_vp.GetBBox().GetMaxX() > 360){
+            if(temp_lon_left < 180.) {
+                temp_lon_left += 360.;
+                temp_lon_right += 360.;
+            }
+        }
+        
         temp_vp.GetBBox().SetMin( temp_lon_left, temp_lat_bot );
         temp_vp.GetBBox().SetMax( temp_lon_right, temp_lat_top );
 
@@ -1663,6 +1686,7 @@ bool s57chart::DoRenderRectOnGL( const wxGLContext &glc, const ViewPort& VPoint,
         while( top != NULL ) {
             crnt = top;
             top = top->next;               // next object
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderAreaToGL( glc, crnt, &tvp, rect );
         }
     }
@@ -1675,6 +1699,7 @@ bool s57chart::DoRenderRectOnGL( const wxGLContext &glc, const ViewPort& VPoint,
         while( top != NULL ) {
             crnt = top;
             top = top->next;               // next object
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderObjectToGL( glc, crnt, &tvp, rect );
         }
 
@@ -1682,6 +1707,7 @@ bool s57chart::DoRenderRectOnGL( const wxGLContext &glc, const ViewPort& VPoint,
         while( top != NULL ) {
             ObjRazRules *crnt = top;
             top = top->next;
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderObjectToGL( glc, crnt, &tvp, rect );
         }
 
@@ -1692,6 +1718,7 @@ bool s57chart::DoRenderRectOnGL( const wxGLContext &glc, const ViewPort& VPoint,
         while( top != NULL ) {
             crnt = top;
             top = top->next;
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderObjectToGL( glc, crnt, &tvp, rect );
         }
 
@@ -2107,6 +2134,7 @@ int s57chart::DCRenderRect( wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rec
         while( top != NULL ) {
             crnt = top;
             top = top->next;               // next object
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderAreaToDC( &dcinput, crnt, &tvp, &pb_spec );
         }
     }
@@ -2168,6 +2196,7 @@ bool s57chart::DCRenderLPB( wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rec
         while( top != NULL ) {
             crnt = top;
             top = top->next;               // next object
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderObjectToDC( &dcinput, crnt, &tvp );
         }
 
@@ -2175,6 +2204,7 @@ bool s57chart::DCRenderLPB( wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rec
         while( top != NULL ) {
             ObjRazRules *crnt = top;
             top = top->next;
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderObjectToDC( &dcinput, crnt, &tvp );
         }
 
@@ -2185,6 +2215,7 @@ bool s57chart::DCRenderLPB( wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rec
         while( top != NULL ) {
             crnt = top;
             top = top->next;
+            crnt->sm_transform_parms = &vp_transform;
             ps52plib->RenderObjectToDC( &dcinput, crnt, &tvp );
         }
 
@@ -4443,10 +4474,7 @@ void s57chart::ResetPointBBoxes( const ViewPort &vp_last, const ViewPort &vp_thi
     ObjRazRules *top;
     ObjRazRules *nxx;
 
-    double box_margin = 0.25;
-
-    //    Assume a 50x50 pixel box
-    box_margin = ( 50. / vp_this.view_scale_ppm ) / ( 1852. * 60. );  //degrees
+    double d = vp_last.view_scale_ppm / vp_this.view_scale_ppm;
 
     for( int i = 0; i < PRIO_NUM; ++i ) {
         for( int j = 0; j < 2; ++j ) {
@@ -4455,14 +4483,36 @@ void s57chart::ResetPointBBoxes( const ViewPort &vp_last, const ViewPort &vp_thi
             while( top != NULL ) {
                 if( !top->obj->geoPtMulti )                      // do not reset multipoints
                 {
-                    /* this function does not calculate the box as it should, just
-                       invalidate it and it is updated after the first render */
-                    top->obj->bBBObj_valid = false;
+                    if(top->obj->bBBObj_valid) { // scale bbobj
+                        double lat = top->obj->m_lat, lon = top->obj->m_lon;
 
-                    top->obj->BBObj.SetMin( top->obj->m_lon - box_margin,
-                                            top->obj->m_lat - box_margin );
-                    top->obj->BBObj.SetMax( top->obj->m_lon + box_margin,
-                                            top->obj->m_lat + box_margin );
+                        double lat1 = (lat - top->obj->BBObj.GetMinY()) * d;
+                        double lat2 = (lat - top->obj->BBObj.GetMaxY()) * d;
+
+                        double minx = top->obj->BBObj.GetMinX();
+                        double maxx = top->obj->BBObj.GetMaxX();
+
+                        //      Not sure what problems these longitude adjustments are trying to fix
+                        //      but certainly breaks point object display in western hemisphere S57 ENCs
+                        if(lon - minx > 180) {
+//                            minx += 360;
+//                            maxx += 360;
+                        }
+
+                        double lon1 = (lon - minx) * d;
+                        double lon2 = (lon - maxx) * d;
+                        
+                        if(lon - lon1 < 0) {
+//                            lon1 -= 360;
+//                            lon2 -= 360;
+                        }
+
+                        top->obj->BBObj.SetMin( lon - lon1, lat - lat1 );
+                        top->obj->BBObj.SetMax( lon - lon2, lat - lat2 );
+
+                        // this method is very close, but errors accumulate
+                        top->obj->bBBObj_valid = false;
+                    }
                 }
                 
                 nxx = top->next;
@@ -5347,6 +5397,8 @@ bool s57chart::DoesLatLonSelectObject( float lat, float lon, float select_radius
         //  For single Point objects, the integral object bounding box contains the lat/lon of the object,
         //  possibly expanded by text or symbol rendering
         case GEO_POINT: {
+            if( !obj->bBBObj_valid ) return false;
+            
             if( 1 == obj->npt ) {
                 //  Special case for LIGHTS
                 //  Sector lights have had their BBObj expanded to include the entire drawn sector
@@ -5560,65 +5612,127 @@ bool s57chart::IsPointInObjArea( float lat, float lon, float select_radius, S57O
             tp_box.SetMax(pTP->maxx, pTP->maxy);
 
             if( tp_box.PointInBox( lon, lat, 0 ) ) {
-                double *p_vertex = pTP->p_vertex;
+                
+                if(ppg->data_type == DATA_TYPE_DOUBLE) {
+                    double *p_vertex = pTP->p_vertex;
 
-                switch( pTP->type ){
-                    case PTG_TRIANGLE_FAN: {
-                        for( int it = 0; it < pTP->nVert - 2; it++ ) {
-                            pvert_list[0].x = p_vertex[0];
-                            pvert_list[0].y = p_vertex[1];
+                    switch( pTP->type ){
+                        case PTG_TRIANGLE_FAN: {
+                            for( int it = 0; it < pTP->nVert - 2; it++ ) {
+                                pvert_list[0].x = p_vertex[0];
+                                pvert_list[0].y = p_vertex[1];
 
-                            pvert_list[1].x = p_vertex[( it * 2 ) + 2];
-                            pvert_list[1].y = p_vertex[( it * 2 ) + 3];
+                                pvert_list[1].x = p_vertex[( it * 2 ) + 2];
+                                pvert_list[1].y = p_vertex[( it * 2 ) + 3];
 
-                            pvert_list[2].x = p_vertex[( it * 2 ) + 4];
-                            pvert_list[2].y = p_vertex[( it * 2 ) + 5];
+                                pvert_list[2].x = p_vertex[( it * 2 ) + 4];
+                                pvert_list[2].y = p_vertex[( it * 2 ) + 5];
 
-                            if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
-                                ret = true;
-                                break;
+                                if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
+                                    ret = true;
+                                    break;
+                                }
                             }
+                            break;
                         }
-                        break;
-                    }
-                    case PTG_TRIANGLE_STRIP: {
-                        for( int it = 0; it < pTP->nVert - 2; it++ ) {
-                            pvert_list[0].x = p_vertex[( it * 2 )];
-                            pvert_list[0].y = p_vertex[( it * 2 ) + 1];
+                        case PTG_TRIANGLE_STRIP: {
+                            for( int it = 0; it < pTP->nVert - 2; it++ ) {
+                                pvert_list[0].x = p_vertex[( it * 2 )];
+                                pvert_list[0].y = p_vertex[( it * 2 ) + 1];
 
-                            pvert_list[1].x = p_vertex[( it * 2 ) + 2];
-                            pvert_list[1].y = p_vertex[( it * 2 ) + 3];
+                                pvert_list[1].x = p_vertex[( it * 2 ) + 2];
+                                pvert_list[1].y = p_vertex[( it * 2 ) + 3];
 
-                            pvert_list[2].x = p_vertex[( it * 2 ) + 4];
-                            pvert_list[2].y = p_vertex[( it * 2 ) + 5];
+                                pvert_list[2].x = p_vertex[( it * 2 ) + 4];
+                                pvert_list[2].y = p_vertex[( it * 2 ) + 5];
 
-                            if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
-                                ret = true;
-                                break;
+                                if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
+                                    ret = true;
+                                    break;
+                                }
                             }
+                            break;
                         }
-                        break;
-                    }
-                    case PTG_TRIANGLES: {
-                        for( int it = 0; it < pTP->nVert; it += 3 ) {
-                            pvert_list[0].x = p_vertex[( it * 2 )];
-                            pvert_list[0].y = p_vertex[( it * 2 ) + 1];
+                        case PTG_TRIANGLES: {
+                            for( int it = 0; it < pTP->nVert; it += 3 ) {
+                                pvert_list[0].x = p_vertex[( it * 2 )];
+                                pvert_list[0].y = p_vertex[( it * 2 ) + 1];
 
-                            pvert_list[1].x = p_vertex[( it * 2 ) + 2];
-                            pvert_list[1].y = p_vertex[( it * 2 ) + 3];
+                                pvert_list[1].x = p_vertex[( it * 2 ) + 2];
+                                pvert_list[1].y = p_vertex[( it * 2 ) + 3];
 
-                            pvert_list[2].x = p_vertex[( it * 2 ) + 4];
-                            pvert_list[2].y = p_vertex[( it * 2 ) + 5];
+                                pvert_list[2].x = p_vertex[( it * 2 ) + 4];
+                                pvert_list[2].y = p_vertex[( it * 2 ) + 5];
 
-                            if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
-                                ret = true;
-                                break;
+                                if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
+                                    ret = true;
+                                    break;
+                                }
                             }
+                            break;
                         }
-                        break;
                     }
                 }
-
+                else {
+                    float *p_vertex = (float *)pTP->p_vertex;
+                                        
+                    switch( pTP->type ){
+                        case PTG_TRIANGLE_FAN: {
+                            for( int it = 0; it < pTP->nVert - 2; it++ ) {
+                                pvert_list[0].x = p_vertex[0];
+                                pvert_list[0].y = p_vertex[1];
+                                
+                                pvert_list[1].x = p_vertex[( it * 2 ) + 2];
+                                pvert_list[1].y = p_vertex[( it * 2 ) + 3];
+                                
+                                pvert_list[2].x = p_vertex[( it * 2 ) + 4];
+                                pvert_list[2].y = p_vertex[( it * 2 ) + 5];
+                                
+                                if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
+                                    ret = true;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        case PTG_TRIANGLE_STRIP: {
+                            for( int it = 0; it < pTP->nVert - 2; it++ ) {
+                                pvert_list[0].x = p_vertex[( it * 2 )];
+                                pvert_list[0].y = p_vertex[( it * 2 ) + 1];
+                                
+                                pvert_list[1].x = p_vertex[( it * 2 ) + 2];
+                                pvert_list[1].y = p_vertex[( it * 2 ) + 3];
+                                
+                                pvert_list[2].x = p_vertex[( it * 2 ) + 4];
+                                pvert_list[2].y = p_vertex[( it * 2 ) + 5];
+                                
+                                if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
+                                    ret = true;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        case PTG_TRIANGLES: {
+                            for( int it = 0; it < pTP->nVert; it += 3 ) {
+                                pvert_list[0].x = p_vertex[( it * 2 )];
+                                pvert_list[0].y = p_vertex[( it * 2 ) + 1];
+                                
+                                pvert_list[1].x = p_vertex[( it * 2 ) + 2];
+                                pvert_list[1].y = p_vertex[( it * 2 ) + 3];
+                                
+                                pvert_list[2].x = p_vertex[( it * 2 ) + 4];
+                                pvert_list[2].y = p_vertex[( it * 2 ) + 5];
+                                
+                                if( G_PtInPolygon( (MyPoint *) pvert_list, 3, easting, northing ) ) {
+                                    ret = true;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
             }
             pTP = pTP->p_next;
         }
@@ -6316,7 +6430,7 @@ wxString s57chart::CreateObjDescriptions( ListOfObjRazRules* rule_list )
                 lightsHtml << _T("<b>Light</b> <font size=-2>(LIGHTS)</font><br>");
                 lightsHtml << _T("<font size=-2>") << thisLight->position << _T("</font><br>\n");
 
-                if( curLight->hasSectors ) lightsHtml
+                if( curLight && curLight->hasSectors ) lightsHtml
                         <<_("<font size=-2>(Sector angles are True Bearings from Seaward)</font><br>");
 
                 lightsHtml << _T("<table>");
@@ -6721,6 +6835,9 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
             if(sec1 > 360) sec1 -= 360;
             if(sec2 > 360) sec2 -= 360;
             
+            if((sec2 == 360) && (sec1 == 0))  //FS#1437
+                continue;
+                
             for( unsigned int j=0; j<sectorangles.size(); j++ ) {
                 
                 if( sectorangles[j] == sec1 ) haveAngle1 = true;

@@ -252,7 +252,7 @@ wxArrayOfConnPrm          *g_pConnectionParams;
 
 wxDateTime                g_start_time;
 wxDateTime                g_loglast_time;
-OCPN_Sound                bells_sound[8];
+OCPN_Sound                bells_sound[2];
 
 OCPN_Sound                g_anchorwatch_sound;
 
@@ -522,6 +522,7 @@ bool                      g_bEnableZoomToCursor;
 
 bool                      g_bTrackActive;
 bool                      g_bTrackCarryOver;
+bool                      g_bDeferredStartTrack;
 bool                      g_bTrackDaily;
 bool                      g_bHighliteTracks;
 int                       g_route_line_width;
@@ -626,12 +627,7 @@ int                       g_GPU_MemSize;
 bool                      g_bserial_access_checked;
 
 
-char bells_sound_file_name[8][12] =    // pjotrc 2010.02.09
-
-        { "1bells.wav", "2bells.wav", "3bells.wav", "4bells.wav", "5bells.wav", "6bells.wav",
-                "7bells.wav", "8bells.wav"   // pjotrc 2010.02.09
-
-        };
+char bells_sound_file_name[2][12] = { "1bells.wav", "2bells.wav" };
 
 int                       portaudio_initialized;
 
@@ -649,6 +645,8 @@ wxString g_config_version_string;
 
 bool             g_btouch;
 bool             g_bresponsive;
+
+bool             b_inCompressAllCharts;
 
 #ifdef LINUX_CRASHRPT
 wxCrashPrint g_crashprint;
@@ -1014,8 +1012,10 @@ bool MyApp::OnInit()
 #endif
 
 #ifdef LINUX_CRASHRPT
+#if wxUSE_ON_FATAL_EXCEPTION
     // fatal exceptions handling
     wxHandleFatalExceptions (true);
+#endif
 #endif
 
     //  Seed the random number generator
@@ -1028,6 +1028,7 @@ bool MyApp::OnInit()
 
     //    On MSW, force the entire process to run on one CPU core only
     //    This resolves some difficulty with wxThread syncronization
+#if 0    
 #ifdef __WXMSW__
     //Gets the current process handle
     HANDLE hProc = GetCurrentProcess();
@@ -1055,6 +1056,7 @@ bool MyApp::OnInit()
     if( res == 0 ) {
         //Error setting affinity mask!!
     }
+#endif
 #endif
 
 //Fulup: force floating point to use dot as separation.
@@ -1217,7 +1219,7 @@ bool MyApp::OnInit()
     wxString large_log_message;
     if( ::wxFileExists( glog_file ) ) {
         if( wxFileName::GetSize( glog_file ) > 1000000 ) {
-            wxString oldlog = glog_file;                      // pjotrc 2010.02.09
+            wxString oldlog = glog_file;                      
             oldlog.Append( _T(".log") );
             //  Defer the showing of this messagebox until the system locale is established.
             large_log_message = ( _("Old log will be moved to opencpn.log.log") );
@@ -1685,8 +1687,13 @@ bool MyApp::OnInit()
 if( 0 == g_memCacheLimit )
     g_memCacheLimit = (int) ( g_mem_total * 0.5 );
     g_memCacheLimit = wxMin(g_memCacheLimit, 1024 * 1024); // math in kBytes
-#endif
+#else
+    g_memCacheLimit = (int) ( (g_mem_total - g_mem_initial) * 0.5 );
+#endif    
 
+    
+    
+    
 //      Establish location and name of chart database
 #ifdef __WXMSW__
     pChartListFileName = new wxString( _T("CHRTLIST.DAT") );
@@ -2190,8 +2197,8 @@ extern ocpnGLOptions g_GLOptions;
     g_bVAR_Rx = false;
 
 //  Start up a new track if enabled in config file
-//        test this
-    if( g_bTrackCarryOver ) gFrame->TrackOn();
+    if( g_bTrackCarryOver )
+        g_bDeferredStartTrack = true;
 
 //    Re-enable anchor watches if set in config file
     if( !g_AW1GUID.IsEmpty() ) {
@@ -2466,6 +2473,7 @@ EVT_TIMER(FRAME_TIMER_1, MyFrame::OnFrameTimer1)
 EVT_TIMER(FRAME_TC_TIMER, MyFrame::OnFrameTCTimer)
 EVT_TIMER(FRAME_COG_TIMER, MyFrame::OnFrameCOGTimer)
 EVT_TIMER(MEMORY_FOOTPRINT_TIMER, MyFrame::OnMemFootTimer)
+EVT_TIMER(BELLS_TIMER, MyFrame::OnBellsTimer)
 EVT_ACTIVATE(MyFrame::OnActivate)
 EVT_MAXIMIZE(MyFrame::OnMaximize)
 EVT_COMMAND(wxID_ANY, wxEVT_COMMAND_TOOL_RCLICKED, MyFrame::RequestNewToolbarArgEvent)
@@ -2495,6 +2503,9 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
 
     //      Redirect the Memory Footprint Management timer to this frame
     MemFootTimer.SetOwner( this, MEMORY_FOOTPRINT_TIMER );
+
+    //      Redirect the Bells timer to this frame
+    BellsTimer.SetOwner( this, BELLS_TIMER );
 
     //      Set up some assorted member variables
     nRoute_State = 0;
@@ -2961,7 +2972,8 @@ ocpnToolBarSimple *MyFrame::CreateAToolbar()
         tb->ToggleTool( ID_TIDE, cc1->GetbShowTide() );
     }
 
-    if( pConfig ) tb->ToggleTool( ID_FOLLOW, cc1->m_bFollow );
+    if( pConfig && cc1 )
+        tb->ToggleTool( ID_FOLLOW, cc1->m_bFollow );
 
 #ifdef USE_S57
     if( ( pConfig ) && ( ps52plib ) ) if( ps52plib->m_bOK ) tb->ToggleTool( ID_TEXT,
@@ -3191,6 +3203,11 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
         return;
     }
 
+    //  If the multithread chart compressor engine is running, cancel the close command
+    if( b_inCompressAllCharts ) {
+        return;
+    }
+    
     b_inCloseWindow = true;
 
     ::wxSetCursor( wxCURSOR_WAIT );
@@ -3335,7 +3352,8 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     if( g_pCM93OffsetDialog ) g_pCM93OffsetDialog->Destroy();
 #endif
 
-    g_FloatingToolbarDialog->Destroy();
+    if(g_FloatingToolbarDialog)
+        g_FloatingToolbarDialog->Destroy();
 
     if( g_pAISTargetList ) {
         g_pAISTargetList->Disconnect_decoder();
@@ -3949,8 +3967,11 @@ void MyFrame::TrackOn( void )
     g_pActiveTrack = new Track();
 
     pRouteList->Append( g_pActiveTrack );
+    if(pConfig)
+        pConfig->AddNewRoute( g_pActiveTrack, 0 );
+    
     g_pActiveTrack->Start();
-
+    
     if( g_toolbar )
         g_toolbar->ToggleTool( ID_TRACK, g_bTrackActive );
 
@@ -4874,7 +4895,8 @@ void MyFrame::SetupQuiltMode( void )
     if( !cc1->GetQuiltMode() ) {
         if( ChartData && ChartData->IsValid() ) {
             ChartData->UnLockCache();
-
+            ChartData->UnLockAllCacheCharts();
+            
             double tLat, tLon;
             if( cc1->m_bFollow == true ) {
                 tLat = gLat;
@@ -5098,6 +5120,37 @@ void MyFrame::OnMemFootTimer( wxTimerEvent& event )
     MemFootTimer.Start( 9000, wxTIMER_CONTINUOUS );
 }
 
+// play an arbitrary number of bells by using 1 and 2 bell sounds
+void MyFrame::OnBellsTimer(wxTimerEvent& event)
+{
+    int bells = wxMin(m_BellsToPlay, 2);
+
+    if(bells <= 0)
+        return;
+
+    if( !bells_sound[bells - 1].IsOk() )            // load the bells sound
+    {
+        wxString soundfile = _T("sounds");
+        appendOSDirSlash( &soundfile );
+        soundfile += wxString( bells_sound_file_name[bells - 1], wxConvUTF8 );
+        soundfile.Prepend( g_SData_Locn );
+        bells_sound[bells - 1].Create( soundfile );
+        if( !bells_sound[bells - 1].IsOk() ) {
+            wxLogMessage( _T("Failed to load bells sound file: ") + soundfile );
+            return;
+        }
+
+        wxLogMessage( _T("Using bells sound file: ") + soundfile );
+    }
+
+    if(!bells_sound[bells - 1].IsPlaying()) {
+        bells_sound[bells - 1].Play();
+        m_BellsToPlay -= bells;
+    }
+
+    BellsTimer.Start(20, wxTIMER_ONE_SHOT);
+}
+
 int ut_index;
 
 void MyFrame::OnFrameTimer1( wxTimerEvent& event )
@@ -5202,6 +5255,20 @@ void MyFrame::OnFrameTimer1( wxTimerEvent& event )
 
     FrameTimer1.Stop();
 
+    //  If tracking carryover was found in config file, enable tracking as soon as
+    //  GPS become valid
+    if(g_bDeferredStartTrack){
+        if(!g_bTrackActive){
+            if(bGPSValid){
+                gFrame->TrackOn();
+                g_bDeferredStartTrack = false;
+            }
+        }
+        else {                                  // tracking has been manually activated
+            g_bDeferredStartTrack = false;
+        }            
+    }
+        
 //  Update and check watchdog timer for GPS data source
     gGPS_Watchdog--;
     if( gGPS_Watchdog <= 0 ) {
@@ -5360,18 +5427,8 @@ void MyFrame::OnFrameTimer1( wxTimerEvent& event )
             if( !bells ) bells = 8;     // 0 is 8 bells
 
             if( g_bPlayShipsBells && ( ( minute == 0 ) || ( minute == 30 ) ) ) {
-                if( !bells_sound[bells - 1].IsOk() )            // load the bells sound
-                {
-                    wxString soundfile = _T("sounds");
-                    appendOSDirSlash( &soundfile );
-                    soundfile += wxString( bells_sound_file_name[bells - 1], wxConvUTF8 );
-                    soundfile.Prepend( g_SData_Locn );
-                    bells_sound[bells - 1].Create( soundfile );
-                    wxLogMessage( _T("Using bells sound file: ") + soundfile );
-
-                }
-
-                if( bells_sound[bells - 1].IsOk() ) bells_sound[bells - 1].Play();
+                m_BellsToPlay = bells;
+                BellsTimer.Start(0, wxTIMER_ONE_SHOT);
             }
         }
     }

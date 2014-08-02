@@ -44,8 +44,11 @@ public:
     wxString Get_vessel_type_string(bool b_short = false);
     wxString Get_class_string(bool b_short = false);
     wxString GetFullName( void );
+    wxString GetCountryCode(bool b_CntryLongStr);
     void Toggle_AIS_CPA(void);
     void ToggleShowTrack(void);
+    void CloneFrom( AIS_Target_Data* q );
+    
 
     int                       MID;
     int                       MMSI;
@@ -95,7 +98,7 @@ public:
     int                       RecentPeriod;
     bool                      b_active;
     bool                      b_lost;
-    ais_alarm_type            n_alarm_state;
+    ais_alert_type            n_alert_state;
     bool                      b_suppress_audio;
     bool                      b_positionDoubtful;
     bool                      b_positionOnceValid;
@@ -105,6 +108,8 @@ public:
     int                       m_utc_hour;
     int                       m_utc_min;
     int                       m_utc_sec;
+    wxString                  m_date_string;
+    
     wxDateTime                m_ack_time;
     bool                      b_in_ack_timeout;
 

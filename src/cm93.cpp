@@ -2130,7 +2130,9 @@ void cm93chart::SetVPParms ( const ViewPort &vpt )
 
       toSM ( vpt.clat, vpt.clon, ref_lat, ref_lon, &m_easting_vp_center, &m_northing_vp_center );
 
-
+      vp_transform.easting_vp_center = m_easting_vp_center;
+      vp_transform.northing_vp_center = m_northing_vp_center;
+      
       if ( g_bDebugCM93 )
       {
             //    Fetch the lat/lon of the screen corner points
@@ -2172,7 +2174,7 @@ void cm93chart::SetVPParms ( const ViewPort &vpt )
                   if ( loadcell_in_sequence ( cell_index, '0' ) ) // Base cell
                   {
                         ProcessVectorEdges();
-                        CreateObjChain ( cell_index, ( int ) '0' );
+                        CreateObjChain ( cell_index, ( int ) '0', vpt.view_scale_ppm );
 
                         ForceEdgePriorityEvaluate();              // need to re-evaluate priorities
 
@@ -2190,7 +2192,7 @@ void cm93chart::SetVPParms ( const ViewPort &vpt )
                   while ( loadcell_in_sequence ( cell_index, loadcell_key ) )
                   {
                         ProcessVectorEdges();
-                        CreateObjChain ( cell_index, ( int ) loadcell_key );
+                        CreateObjChain ( cell_index, ( int ) loadcell_key, vpt.view_scale_ppm );
 
                         ForceEdgePriorityEvaluate();              // need to re-evaluate priorities
 
@@ -2319,7 +2321,7 @@ void cm93chart::ProcessVectorEdges ( void )
 
 
 
-int cm93chart::CreateObjChain ( int cell_index, int subcell )
+int cm93chart::CreateObjChain ( int cell_index, int subcell, double view_scale_ppm )
 {
       LUPrec           *LUP;
       LUPname          LUP_Name = PAPER_CHART;
@@ -2345,7 +2347,8 @@ int cm93chart::CreateObjChain ( int cell_index, int subcell )
 
                   obj = NULL;
                   if ( NULL != xgeom )
-                        obj = CreateS57Obj ( cell_index, iObj, subcell, pobjectDef, m_pDict, xgeom, ref_lat, ref_lon, GetNativeScale() );
+                      obj = CreateS57Obj ( cell_index, iObj, subcell, pobjectDef, m_pDict, xgeom,
+                                           ref_lat, ref_lon, GetNativeScale(), view_scale_ppm );
 
                   if ( obj )
                   {
@@ -2769,6 +2772,8 @@ Extended_Geometry *cm93chart::BuildGeom ( Object *pobject, wxFileOutputStream *p
 
                   ret_ptr->n_contours = ncontours;                          // parameters passed to trapezoid tesselator
 
+                  if(0 == ncontours)
+                      ncontours = 1;            // avoid 0 alloc
                   ret_ptr->contour_array = ( int * ) malloc ( ncontours * sizeof ( int ) );
                   memcpy ( ret_ptr->contour_array, m_pcontour_array, ncontours * sizeof ( int ) );
 
@@ -3221,7 +3226,7 @@ void cm93chart::translate_colmar(const wxString &sclass, S57attVal *pattValTmp)
 
 
 S57Obj *cm93chart::CreateS57Obj ( int cell_index, int iobject, int subcell, Object *pobject, cm93_dictionary *pDict, Extended_Geometry *xgeom,
-                                  double ref_lat, double ref_lon, double scale )
+                                  double ref_lat, double ref_lon, double scale, double view_scale_ppm )
 {
 
 #define MAX_HDR_LINE    4000
@@ -3751,9 +3756,15 @@ S57Obj *cm93chart::CreateS57Obj ( int cell_index, int iobject, int subcell, Obje
                   pobj->m_lat = lat;
                   pobj->m_lon = lon;
 
-                  pobj->BBObj.SetMin ( lon-.25, lat-.25 );
-                  pobj->BBObj.SetMax ( lon+.25, lat+.25 );
+                  // make initial bounding box large enough for worst possible case
+                  // it's not possible to know unless we knew the font, but this works
+                  // except for huge font sizes
+                  // this is not very good or accurate or efficient and hopefully we can
+                  // replace the current bounding box logic with calculating logic
+                  double llsize = 1e-3 / view_scale_ppm;
 
+                  pobj->BBObj.SetMin ( lon-llsize, lat-llsize );
+                  pobj->BBObj.SetMax ( lon+llsize, lat+llsize );
 
                   break;
             }
@@ -4815,8 +4826,8 @@ int cm93compchart::GetCMScaleFromVP ( const ViewPort &vpt )
       //        If overzoomed possible, switch to larger scale chart if available
       double zoom_factor = scale_breaks[7 - cmscale_calc] / vpt.chart_scale ;
       if( zoom_factor > 4.0) {
-          if( cmscale_calc < 7 )
-              cmscale_calc ++;
+//          if( cmscale_calc < 7 )
+//              cmscale_calc ++;
       }
       
       return cmscale_calc;
@@ -5014,6 +5025,14 @@ int cm93compchart::PrepareChartScale ( const ViewPort &vpt, int cmscale, bool bO
             while ( new_scale <= 7 ){
                 if ( m_bScale_Array[new_scale] ){
                     double new_zoom_factor = scale_breaks[7 - new_scale] / vpt.chart_scale ;
+                    
+                    //  Do not allow excessive "under-zoom", for performance reasons
+                    if( new_zoom_factor  < 1.0 ){
+                        b_found = true;
+                        new_scale = cmscale;
+                        break;
+                    }
+                        
                     if( new_zoom_factor < 4.0) {
                         if ( NULL == m_pcm93chart_array[new_scale] ) {
                             m_pcm93chart_array[new_scale] = new cm93chart();
@@ -5654,6 +5673,9 @@ bool cm93compchart::DoRenderRegionViewOnDC ( wxMemoryDC& dc, const ViewPort& VPo
                         // restore the base chart pointer
                         m_pcm93chart_current = m_pcm93chart_save;
 
+                        //  We can unselect the target from the dummy DC, to avoid having to copy it.
+                        dumm_dc.SelectObject( wxNullBitmap );
+                        
                         //    And the return dc is the quilt
                         dc.SelectObject ( *m_pDummyBM );
 

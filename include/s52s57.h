@@ -209,7 +209,7 @@ typedef struct _S52color{
 class S52_TextC
 {
 public:
-      S52_TextC(){ pcol = NULL, pFont = NULL, m_pRGBA = NULL, bnat = false; }
+      S52_TextC(){ pcol = NULL, pFont = NULL, m_pRGBA = NULL, bnat = false, bspecial_char = false; }
       ~S52_TextC(){ free(m_pRGBA); }
 
     wxString   frmtd;       // formated text string
@@ -232,6 +232,7 @@ public:
     int           rendered_char_height;
     wxRect      rText;          // rectangle of the text as currently rendered, used for declutter
     bool        bnat;           // frmtd is National text, UTF-8 encoded
+    bool        bspecial_char;  // frmtd has special ASCII characters, i.e. > 127
 };
 
 
@@ -381,7 +382,8 @@ public:
       double                  y_origin;
       
       chart_context           *m_chart_context;       // per-chart constants, carried in each object for convenience
-
+      int auxParm0;                                   // some per-object auxiliary parameters, used for OpenGL
+      int auxParm1;
 };
 
 

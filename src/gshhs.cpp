@@ -39,8 +39,9 @@
 
 #include <wx/file.h>
 
+#ifdef ocpnUSE_GL
 #include <wx/glcanvas.h>
-
+#endif
 
 #include "gshhs.h"
 
@@ -820,8 +821,6 @@ void GshhsReader::LoadQuality( int newQuality ) // 5 levels: 0=low ... 4=full
     wxStopWatch perftimer;
 
     wxString fname;
-    FILE *file;
-    bool ok;
 
     quality = newQuality;
     if( quality < 0 ) quality = 0;
@@ -890,8 +889,6 @@ int GshhsReader::GSHHS_scaledPoints( GshhsPolygon *pol, wxPoint *pts, double dec
         return 0;
 
     // Remove small polygons.
-    int a1, b1;
-    int a2, b2;
 
     wxPoint p1 = GetPixFromLL(vp,  pol->west + decx, pol->north );
     wxPoint p2 = GetPixFromLL(vp,  pol->east + decx, pol->south );
