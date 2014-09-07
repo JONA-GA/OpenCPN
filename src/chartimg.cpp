@@ -334,6 +334,8 @@ InitReturn ChartGEO::Init( const wxString& name, ChartInitFlag init_flags)
 
       ifs_hdr = new wxFileInputStream(name);          // open the file as a read-only stream
 
+      m_filesize = wxFileName::GetSize( name );
+      
       if(!ifs_hdr->Ok())
             return INIT_FAIL_REMOVE;
 
@@ -784,6 +786,8 @@ InitReturn ChartKAP::Init( const wxString& name, ChartInitFlag init_flags )
 
       ifs_hdr = new wxFileInputStream(name);          // open the Header file as a read-only stream
 
+      m_filesize = wxFileName::GetSize( name );
+      
       if(!ifs_hdr->Ok())
 	  {
             free(pPlyTable);
@@ -1736,76 +1740,77 @@ InitReturn ChartBaseBSB::PostInit(void)
       bool bline_index_ok = true;
       m_nLineOffset = 0;
 
-      for(int iplt=0 ; iplt<Size_Y - 1 ; iplt++)
+      //  look logically at the line offset table 
+      for(int iplt=0 ; iplt< Size_Y - 1 ; iplt++)
       {
+          if( pline_table[iplt] > m_filesize )
+          {
+              wxString msg(_("   Chart File corrupt in PostInit() on chart "));
+              msg.Append(m_FullPath);
+              wxLogMessage(msg);
+              
+              return INIT_FAIL_REMOVE;
+          }
+          
+          int thisline_size = pline_table[iplt+1] - pline_table[iplt] ;
+          if(thisline_size < 0)
+          {
+              wxString msg(_("   Chart File corrupt in PostInit() on chart "));
+              msg.Append(m_FullPath);
+              wxLogMessage(msg);
+              
+              return INIT_FAIL_REMOVE;
+          }
+      }
+
+      
+      //  For older charts, say Version 1.x, we will try to read the chart and check the lines for coherence
+      //  These older charts are more likely to have index troubles....
+      //  We only need to check a few lines.  Errors are quickly apparent.
+      double ver;
+      m_bsb_ver.ToDouble(&ver);
+      if( ver < 2.0){
+        for(int iplt=0 ; iplt< 10 ; iplt++)
+        {
             if( wxInvalidOffset == ifs_bitmap->SeekI(pline_table[iplt], wxFromStart))
             {
-                  wxString msg(_("   Chart File corrupt in PostInit() on chart "));
-                  msg.Append(m_FullPath);
-                  wxLogMessage(msg);
-
-                  return INIT_FAIL_REMOVE;
+                wxString msg(_("   Chart File corrupt in PostInit() on chart "));
+                msg.Append(m_FullPath);
+                wxLogMessage(msg);
+                
+                return INIT_FAIL_REMOVE;
             }
-
+            
             int thisline_size = pline_table[iplt+1] - pline_table[iplt] ;
-
-            if(thisline_size < 0)
-            {
-                  wxString msg(_("   Chart File corrupt in PostInit() on chart "));
-                  msg.Append(m_FullPath);
-                  wxLogMessage(msg);
-
-                  return INIT_FAIL_REMOVE;
-            }
-
-            if(thisline_size > ifs_bufsize)
-            {
-                  wxString msg(_T("   ifs_bufsize too small PostInit() on chart "));
-                  msg.Append(m_FullPath);
-                  wxLogMessage(msg);
-
-                  return INIT_FAIL_REMOVE;
-            }
-
             ifs_bitmap->Read(ifs_buf, thisline_size);
-
+                
             unsigned char *lp = ifs_buf;
-
+                
             unsigned char byNext;
             int nLineMarker = 0;
             do
             {
-                  byNext = *lp++;
-                  nLineMarker = nLineMarker * 128 + (byNext & 0x7f);
+                byNext = *lp++;
+                nLineMarker = nLineMarker * 128 + (byNext & 0x7f);
             } while( (byNext & 0x80) != 0 );
-
-
+                
+                
             //  Linemarker Correction factor needed here
             //  Some charts start with LineMarker = 0, some with LineMarker = 1
             //  Assume the first LineMarker found is the index base, and use
             //  as a correction offset
-
+                
             if(iplt == 0)
                 m_nLineOffset = nLineMarker;
-
+                
             if(nLineMarker != iplt + m_nLineOffset)
             {
                 bline_index_ok = false;
                 break;
             }
-
+        }
       }
-/*
-      if(!bline_index_ok)
-      {
-            wxString msg(_T("   Line Index corrupt on chart "));
-            msg.Append(m_FullPath);
-            wxLogMessage(msg);
-
-            wxLogMessage(_T("   Assuming chart data is otherwise OK."));
-            bline_index_ok = true;
-      }
-*/
+      
         // Recreate the scan line index if the embedded version seems corrupt
       if(!bline_index_ok)
       {
@@ -4072,8 +4077,27 @@ int   ChartBaseBSB::BSBScanScanline(wxInputStream *pinStream )
 
       return nLineMarker;
 }
+//      MSVC compiler makes a bad decision about when to inline (or not) some intrinsics, like memset().
+//      So,...
+//      Here is a little hand-crafted memset() substitue for known short strings.
+//      It will be inlined by MSVC compiler using /02 settings 
 
-
+void memset_short(unsigned char *dst, unsigned char cbyte, int count)
+{
+#ifdef __MSVC__
+    __asm {
+        pushf                           // save Direction flag
+        cld                             // set direction "up"
+        mov edi, dst
+        mov ecx, count
+        mov al, cbyte
+        rep stosb
+        popf
+    }
+#else    
+    memset(dst, cbyte, count);
+#endif    
+}
 
 //-----------------------------------------------------------------------
 //    Get a BSB Scan Line Using Cache and scan line index if available
@@ -4186,7 +4210,7 @@ int   ChartBaseBSB::BSBGetScanline( unsigned char *pLineBuf, int y, int xs, int 
                       nRunCount = 0;
 
 //          Store nPixValue in the destination
-                  memset(pCL, nPixValue, nRunCount+1);
+                  memset_short(pCL, nPixValue, nRunCount+1);
                   pCL += nRunCount+1;
                   iPixel += nRunCount+1;
 
@@ -4317,10 +4341,6 @@ int   ChartBaseBSB::BSBGetScanline( unsigned char *pLineBuf, int y, int xs, int 
 
       return 1;
 }
-
-
-
-
 
 
 

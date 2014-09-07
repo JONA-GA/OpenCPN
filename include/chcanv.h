@@ -291,7 +291,7 @@ public:
       double      m_prev_rlon;
       RoutePoint  *m_prev_pMousePoint;
 
-      bool PurgeGLCanvasChartCache(ChartBase *pc);
+      bool PurgeGLCanvasChartCache(ChartBase *pc, bool b_purge_full = false);
 
       void RemovePointFromRoute( RoutePoint* point, Route* route );
 
@@ -608,6 +608,8 @@ private:
       
       int         m_AISRollover_MMSI;
       bool        m_bsectors_shown;
+      double      m_last_max_scale;
+      bool        m_bedge_pan;
       
 DECLARE_EVENT_TABLE()
 };

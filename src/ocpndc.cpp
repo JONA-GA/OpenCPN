@@ -54,7 +54,7 @@
 
 #include "ocpndc.h"
 
-extern float g_GLMinLineWidth;
+extern float g_GLMinSymbolLineWidth;
 wxArrayPtrVoid gTesselatorVertices;
 
 //----------------------------------------------------------------------------
@@ -352,7 +352,7 @@ void ocpnDC::DrawLine( wxCoord x1, wxCoord y1, wxCoord x2, wxCoord y2, bool b_hi
             
             bool b_draw_thick = false;
 
-            float pen_width = wxMax(g_GLMinLineWidth, m_pen.GetWidth());
+            float pen_width = wxMax(g_GLMinSymbolLineWidth, m_pen.GetWidth());
 
             //      Enable anti-aliased lines, at best quality
             if( b_hiqual ) {
@@ -499,7 +499,7 @@ void DrawGLThickLines( int n, wxPoint points[],wxCoord xoffset,
         float aa = (a0 + a1) / 2;
         float diff = fabsf(a0 - a1);
         if(diff > M_PI)
-            diff -= 2*M_PI;
+            diff -= 2 * (float)M_PI;
         float rad = t1 / 2 / wxMax(cosf(diff / 2), .4);
 
         float t2sina1 = rad * sinf( aa );
@@ -560,18 +560,18 @@ void ocpnDC::DrawLines( int n, wxPoint points[], wxCoord xoffset, wxCoord yoffse
                 glGetIntegerv( GL_SMOOTH_LINE_WIDTH_RANGE, &parms[0] );
                 if( m_pen.GetWidth() > parms[1] ) b_draw_thick = true;
                 else
-                    glLineWidth( wxMax(g_GLMinLineWidth, m_pen.GetWidth()) );
+                    glLineWidth( wxMax(g_GLMinSymbolLineWidth, m_pen.GetWidth()) );
             } else
-                glLineWidth( wxMax(g_GLMinLineWidth, 1) );
+                glLineWidth( wxMax(g_GLMinSymbolLineWidth, 1) );
         } else {
             if( m_pen.GetWidth() > 1 ) {
                 GLint parms[2];
                 glGetIntegerv( GL_ALIASED_LINE_WIDTH_RANGE, &parms[0] );
                 if( m_pen.GetWidth() > parms[1] ) b_draw_thick = true;
                 else
-                    glLineWidth( wxMax(g_GLMinLineWidth, m_pen.GetWidth()) );
+                    glLineWidth( wxMax(g_GLMinSymbolLineWidth, m_pen.GetWidth()) );
             } else
-                glLineWidth( wxMax(g_GLMinLineWidth, 1) );
+                glLineWidth( wxMax(g_GLMinSymbolLineWidth, 1) );
         }
 
         if( b_draw_thick) {
@@ -687,32 +687,32 @@ void ocpnDC::DrawRoundedRectangle( wxCoord x, wxCoord y, wxCoord w, wxCoord h, w
 
             glBegin( GL_TRIANGLE_FAN );
             glVertex2i( x1, y2 );
-            drawrrhelper( x1, y2, r, M_PI/2, M_PI );
+            drawrrhelper( x1, y2, r, (float)M_PI / 2., (float)M_PI );
             glEnd();
 
             glBegin( GL_TRIANGLE_FAN );
             glVertex2i( x2, y2 );
-            drawrrhelper( x2, y2, r, 0, M_PI / 2 );
+            drawrrhelper( x2, y2, r, 0, (float)M_PI / 2. );
             glEnd();
 
             glBegin( GL_TRIANGLE_FAN );
             glVertex2i( x2, y1 );
-            drawrrhelper( x2, y1, r, -M_PI / 2, 0 );
+            drawrrhelper( x2, y1, r, (float)-M_PI / 2., 0 );
             glEnd();
 
             glBegin( GL_TRIANGLE_FAN );
             glVertex2i( x1, y1 );
-            drawrrhelper( x1, y1, r, -M_PI, -M_PI/2 );
+            drawrrhelper( x1, y1, r, (float)-M_PI, (float)-M_PI / 2. );
             glEnd();
             
         }
 
         if( ConfigurePen() ) {
             glBegin( GL_LINE_LOOP );
-            drawrrhelper( x1, y2, r, -M_PI, -M_PI / 2 );
-            drawrrhelper( x2, y2, r, -M_PI / 2, 0 );
-            drawrrhelper( x2, y1, r, 0, M_PI / 2 );
-            drawrrhelper( x1, y1, r, M_PI / 2, M_PI );
+            drawrrhelper( x1, y2, r, (float)-M_PI, (float)-M_PI / 2. );
+            drawrrhelper( x2, y2, r, (float)-M_PI / 2., 0 );
+            drawrrhelper( x2, y1, r, 0, (float)M_PI / 2. );
+            drawrrhelper( x1, y1, r, (float)M_PI / 2., (float)M_PI );
             glEnd();
         }
         
@@ -1112,7 +1112,7 @@ bool ocpnDC::ConfigurePen()
     wxColour c = m_pen.GetColour();
     int width = m_pen.GetWidth();
     glColor4ub( c.Red(), c.Green(), c.Blue(), c.Alpha() );
-    glLineWidth( wxMax(g_GLMinLineWidth, width) );
+    glLineWidth( wxMax(g_GLMinSymbolLineWidth, width) );
 #endif    
     return true;
 }

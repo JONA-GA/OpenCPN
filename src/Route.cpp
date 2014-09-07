@@ -436,7 +436,7 @@ void Route::DrawGL( ViewPort &VP, OCPNRegion &region )
 
         if( m_nPoints == 1 ) {
             dc.StrokeLine( r0.x, r0.y, r0.x + 2, r0.y + 2 );
-            return;
+//            return;
         }
             
         
@@ -455,8 +455,8 @@ void Route::DrawGL( ViewPort &VP, OCPNRegion &region )
         }
     }
     
-    if( m_nPoints < 2  )
-        return;
+//    if( m_nPoints < 2  )
+//        return;
     
     /* determine color and width */
     wxColour col;
@@ -612,7 +612,7 @@ void Route::RenderSegment( ocpnDC& dc, int xa, int ya, int xb, int yb, ViewPort 
         //    Draw a direction arrow
 
         double theta = atan2( (double) ( yb - ya ), (double) ( xb - xa ) );
-        theta -= PI / 2;
+        theta -= PI / 2.;
 
         wxPoint icon[10];
         double icon_scale_factor = 100 * VP.view_scale_ppm;
@@ -662,7 +662,7 @@ void Route::RenderSegmentArrowsGL( int xa, int ya, int xb, int yb, ViewPort &VP)
     //    Get the absolute line length
     //    and constrain the arrow to be no more than xx% of the line length
     float nom_arrow_size = 20.;
-    float max_arrow_to_leg = .20;
+    float max_arrow_to_leg = (float).20;
     float lpp = sqrtf( powf( (float) (xa - xb), 2) + powf( (float) (ya - yb), 2) );
     
     float icon_size = icon_scale_factor * nom_arrow_size;
@@ -671,7 +671,7 @@ void Route::RenderSegmentArrowsGL( int xa, int ya, int xb, int yb, ViewPort &VP)
             / nom_arrow_size;
 
     float theta = atan2f( (float)yb - ya, (float)xb - xa );
-    theta -= PI;
+    theta -= (float)PI;
 
     glPushMatrix();
     glTranslatef(xb, yb, 0);
@@ -1179,7 +1179,7 @@ int Route::SendToGPS(const wxString & com_name, bool bsend_waypoints, wxGauge *p
 
     wxString msg;
     if( 0 == result )
-        msg = _("Route Uploaded successfully.");
+        msg = _("Route Transmitted.");
     else{
         if( result == ERR_GARMIN_INITIALIZE )
             msg = _("Error on Route Upload.  Garmin GPS not connected");
