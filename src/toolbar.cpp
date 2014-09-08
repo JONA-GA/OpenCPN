@@ -171,6 +171,7 @@ public:
         m_toggled = false;
         rollover = false;
         bitmapOK = false;
+        m_btooltip_hiviz = false;
 
         toolname = g_pi_manager->GetToolOwnerCommonName( id );
         if( toolname == _T("") ) {
@@ -214,6 +215,8 @@ public:
         return iconName;
     }
 
+    void SetTooltipHiviz( bool enable){ m_btooltip_hiviz = enable; }
+    
     wxCoord m_x;
     wxCoord m_y;
     wxCoord m_width;
@@ -229,6 +232,7 @@ public:
     bool bitmapOK;
     bool isPluginTool;
     bool b_hilite;
+    bool m_btooltip_hiviz;
 };
 
 //---------------------------------------------------------------------------------------
@@ -653,39 +657,44 @@ void ocpnFloatingToolbarDialog::OnToolLeftClick( wxCommandEvent& event )
     if( event.GetId() >= ID_PLUGIN_BASE + 100 ) {
 
         int itemId = event.GetId() - ID_PLUGIN_BASE - 100;
-        bool toolIsChecked = g_FloatingToolbarConfigMenu->FindItem( event.GetId() )->IsChecked();
+        wxMenuItem *item = g_FloatingToolbarConfigMenu->FindItem( event.GetId() );
+        
+        if(item){
+            bool toolIsChecked = item->IsChecked();
 
-        if( toolIsChecked ) {
-            g_toolbarConfig.SetChar( itemId, _T('X') );
-        } else {
+            if( toolIsChecked ) {
+                g_toolbarConfig.SetChar( itemId, _T('X') );
+            } else {
 
-            if( itemId + ID_ZOOMIN == ID_MOB ) {
-                ToolbarMOBDialog mdlg( this );
-                int dialog_ret = mdlg.ShowModal();
-                int answer = mdlg.GetSelection();
+                if( itemId + ID_ZOOMIN == ID_MOB ) {
+                    ToolbarMOBDialog mdlg( this );
+                    int dialog_ret = mdlg.ShowModal();
+                    int answer = mdlg.GetSelection();
 
-                if( answer == 0 || answer == 1 || dialog_ret == wxID_CANCEL ) {
-                    g_FloatingToolbarConfigMenu->FindItem( event.GetId() )->Check( true );
-                    if( answer == 1 && dialog_ret == wxID_OK ) {
-                        g_bPermanentMOBIcon = true;
-                        delete g_FloatingToolbarConfigMenu;
-                        g_FloatingToolbarConfigMenu = new wxMenu();
-                        toolbarConfigChanged = true;
+                    if( answer == 0 || answer == 1 || dialog_ret == wxID_CANCEL ) {
+                        g_FloatingToolbarConfigMenu->FindItem( event.GetId() )->Check( true );
+                        if( answer == 1 && dialog_ret == wxID_OK ) {
+                            g_bPermanentMOBIcon = true;
+                            delete g_FloatingToolbarConfigMenu;
+                            g_FloatingToolbarConfigMenu = new wxMenu();
+                            toolbarConfigChanged = true;
+                        }
+                        return;
                     }
+                }
+
+                if( m_ptoolbar->GetVisibleToolCount() == 1 ) {
+                    OCPNMessageBox( this,
+                            _("You can't hide the last tool from the toolbar\nas this would make it inaccessible."),
+                            _("OpenCPN Alert"), wxOK );
+                    g_FloatingToolbarConfigMenu->FindItem( event.GetId() )->Check( true );
                     return;
                 }
-            }
 
-            if( m_ptoolbar->GetVisibleToolCount() == 1 ) {
-                OCPNMessageBox( this,
-                        _("You can't hide the last tool from the toolbar\nas this would make it inaccessible."),
-                        _("OpenCPN Alert"), wxOK );
-                g_FloatingToolbarConfigMenu->FindItem( event.GetId() )->Check( true );
-                return;
+                g_toolbarConfig.SetChar( itemId, _T('.') );
             }
-
-            g_toolbarConfig.SetChar( itemId, _T('.') );
         }
+        
         toolbarConfigChanged = true;
         return;
     }
@@ -747,6 +756,8 @@ public:
         m_position = pt;
     }
     void SetBitmap( void );
+    
+    void SetHiviz( bool hiviz){ m_hiviz = hiviz; }
 
 private:
 
@@ -756,7 +767,9 @@ private:
     wxBitmap *m_pbm;
     wxColour m_back_color;
     wxColour m_text_color;
-
+    ColorScheme m_cs ;
+    bool m_hiviz;
+    
 DECLARE_EVENT_TABLE()
 };
 //-----------------------------------------------------------------------
@@ -780,6 +793,8 @@ ToolTipWin::ToolTipWin( wxWindow *parent ) :
 
     SetBackgroundStyle( wxBG_STYLE_CUSTOM );
     SetBackgroundColour( m_back_color );
+    m_cs = GLOBAL_COLOR_SCHEME_RGB;
+    
     Hide();
 }
 
@@ -792,6 +807,8 @@ void ToolTipWin::SetColorScheme( ColorScheme cs )
 {
     m_back_color = GetGlobalColor( _T ( "UIBCK" ) );
     m_text_color = FontMgr::Get().GetFontColor( _("ToolTips") );
+    
+    m_cs = cs;
 }
 
 void ToolTipWin::SetBitmap()
@@ -817,6 +834,12 @@ void ToolTipWin::SetBitmap()
     mdc.SetPen( pborder );
     mdc.SetBrush( bback );
 
+    if(m_hiviz){
+        if((m_cs == GLOBAL_COLOR_SCHEME_DUSK) || (m_cs == GLOBAL_COLOR_SCHEME_NIGHT)){
+            wxBrush hv_back( wxColour(200,200,200));
+            mdc.SetBrush( hv_back );
+        }
+    }
     mdc.DrawRectangle( 0, 0, m_size.x, m_size.y );
 
     //    Draw the text
@@ -825,7 +848,8 @@ void ToolTipWin::SetBitmap()
     mdc.SetTextBackground( m_back_color );
 
     mdc.DrawText( m_string, 4, 2 );
-
+//    mdc.SelectObject( wxNullBitmap );
+    
     int parent_width;
     cdc.GetSize( &parent_width, NULL );
     SetSize( m_position.x, m_position.y, m_size.x, m_size.y );
@@ -1282,6 +1306,7 @@ void ocpnToolBarSimple::OnToolTipTimerEvent( wxTimerEvent& event )
 
             if( s.Len() ) {
                 m_pToolTipWin->SetString( s );
+                m_pToolTipWin->SetHiviz(m_last_ro_tool->m_btooltip_hiviz);
 
                 wxPoint pos_in_toolbar( m_last_ro_tool->m_x, m_last_ro_tool->m_y );
                 pos_in_toolbar.x += m_last_ro_tool->m_width + 2;
@@ -1740,6 +1765,15 @@ void ocpnToolBarSimple::SetToolBitmaps( int id, wxBitmap *bmp, wxBitmap *bmpRoll
         tool->bitmapOK = false;
     }
 }
+
+void ocpnToolBarSimple::SetToolTooltipHiViz( int id, bool b_hiviz )
+{
+    ocpnToolBarTool *tool = (ocpnToolBarTool*)FindById( id );
+    if( tool ) {
+        tool->SetTooltipHiviz( b_hiviz );
+    }
+}
+
 
 void ocpnToolBarSimple::ClearTools()
 {
