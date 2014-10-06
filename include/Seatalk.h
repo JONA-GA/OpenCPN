@@ -38,6 +38,9 @@
 #include "wx/string.h"
 #include "OCP_DataStreamInput_Thread.h"
 
+
+#define DEGREES_TO_RADIANS 		57.259f
+
 //class OCP_DataStreamInput_Thread;
 //class DataStream;
 class StkToNmea ;
