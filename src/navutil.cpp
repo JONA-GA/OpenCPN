@@ -231,7 +231,6 @@ extern int              g_cm93detail_dialog_x, g_cm93detail_dialog_y;
 extern bool             g_bUseGreenShip;
 
 extern bool             g_b_overzoom_x;                      // Allow high overzoom
-extern bool             g_bshow_overzoom_emboss;
 extern int              g_nautosave_interval_seconds;
 extern int              g_OwnShipIconType;
 extern double           g_n_ownship_length_meters;
@@ -720,13 +719,13 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
             cohen_sutherland_line_clip_i( &x0, &y0, &x1, &y1, 0, sx, 0, sy ) != Visible ) {
             prp->Draw( dc, &rpt );
 
-            pointlist.push_back(rpt);
             if( ToSegNo != FromSegNo ) {
                 if(pointlist.size()) {
                     pointlists.push_back(pointlist);
                     pointlist.clear();
                 }
             }
+            pointlist.push_back(rpt);
         }
 
         node = node->GetNext();
@@ -1162,9 +1161,7 @@ int MyConfig::LoadMyConfig( int iteration )
     Read( _T ( "DebugGPSD" ), &g_bDebugGPSD, 0 );
 
     Read( _T ( "UseGreenShipIcon" ), &g_bUseGreenShip, 0 );
-//    Read( _T ( "AllowExtremeOverzoom" ), &g_b_overzoom_x, 1 );
     g_b_overzoom_x = true;
-    Read( _T ( "ShowOverzoomEmbossWarning" ), &g_bshow_overzoom_emboss, 1 );
     Read( _T ( "AutosaveIntervalSeconds" ), &g_nautosave_interval_seconds, 300 );
 
     Read( _T ( "GPSIdent" ), &g_GPS_Ident, wxT("Generic") );
@@ -1290,7 +1287,7 @@ int MyConfig::LoadMyConfig( int iteration )
 
     Read( _T ( "OwnshipCOGPredictorMinutes" ), &g_ownship_predictor_minutes, 5 );
     Read( _T ( "OwnshipCOGPredictorWidth" ), &g_cog_predictor_width, 3 );
-    Read( _T ( "OwnshipHDTPredictorMinutes" ), &g_ownship_HDTpredictor_miles, 1 );
+    Read( _T ( "OwnshipHDTPredictorMiles" ), &g_ownship_HDTpredictor_miles, 1 );
     
     Read( _T ( "OwnShipIconType" ), &g_OwnShipIconType, 0 );
     Read( _T ( "OwnShipLength" ), &g_n_ownship_length_meters, 0 );
@@ -2406,7 +2403,6 @@ void MyConfig::UpdateSettings()
     Write( _T ( "CM93DetailZoomPosX" ), g_cm93detail_dialog_x );
     Write( _T ( "CM93DetailZoomPosY" ), g_cm93detail_dialog_y );
     Write( _T ( "ShowCM93DetailSlider" ), g_bShowCM93DetailSlider );
-    Write( _T ( "AllowExtremeOverzoom" ), g_b_overzoom_x );
 
     Write( _T ( "SkewToNorthUp" ), g_bskew_comp );
     Write( _T ( "OpenGL" ), g_bopengl );
@@ -2533,7 +2529,7 @@ void MyConfig::UpdateSettings()
             Write( _T ( "VPLatLon" ), st1 );
             st1.Printf( _T ( "%g" ), vp.view_scale_ppm );
             Write( _T ( "VPScale" ), st1 );
-            st1.Printf( _T ( "%g" ), vp.rotation * 180 / PI );
+            st1.Printf( _T ( "%i" ), ((int)(vp.rotation * 180 / PI)) % 360 );
             Write( _T ( "VPRotation" ), st1 );
         }
     }

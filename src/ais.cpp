@@ -426,6 +426,10 @@ wxString trimAISField( char *data )
     wxString field = wxString::From8BitData( data );
     while( field.Right( 1 ) == '@' || field.Right( 1 ) == ' ' )
         field.RemoveLast();
+    
+    //  And remove any leading spaces to properly sort and display
+    field.Trim(false);
+    
     return field;
 }
 
@@ -1205,7 +1209,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                     arrow[1] = wxPoint(  0, 27 );
                     arrow[2] = wxPoint(  4, 20 );
                     transrot_pts(3, arrow, sin_theta, cos_theta, TargetPoint);
-                    dc.StrokePolygon( 3, arrow, TargetPoint.x, TargetPoint.y );
+                    dc.StrokePolygon( 3, arrow );
 
                     arrow[0] = wxPoint( -4, 27 );
                     arrow[1] = wxPoint(  0, 34 );
