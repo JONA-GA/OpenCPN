@@ -87,7 +87,7 @@ extern bool             g_bopengl;
 extern bool             g_bsmoothpanzoom;
 extern bool             g_bShowMag;
 extern double           g_UserVar;
-
+extern int              g_chart_zoom_modifier;
 
 extern wxString         *pInit_Chart_Dir;
 extern wxArrayOfConnPrm *g_pConnectionParams;
@@ -368,7 +368,7 @@ void MMSIEditDialog::CreateControls()
      m_IgnoreButton = new wxCheckBox( itemDialog1, wxID_ANY, _("Ignore this MMSI") );
      itemStaticBoxSizer4->Add( m_IgnoreButton, 0, wxEXPAND, 5 );
      
-     m_MOBButton = new wxCheckBox( itemDialog1, wxID_ANY, _("Handle this MMSI as PLB/MOB") );
+     m_MOBButton = new wxCheckBox( itemDialog1, wxID_ANY, _("Handle this MMSI as SART/PLB(AIS) MOB.") );
      itemStaticBoxSizer4->Add( m_MOBButton, 0, wxEXPAND, 5 );
      
      m_VDMButton = new wxCheckBox( itemDialog1, wxID_ANY, _("Convert AIVDM to AIVDO for this MMSI") );
@@ -559,7 +559,10 @@ void MMSIListCtrl::OnListItemActivated( wxListEvent &event)
 
 void MMSIListCtrl::OnListItemRightClick( wxListEvent &event)
 {
-    m_context_item = event.GetIndex();
+    m_context_item = GetNextItem( -1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED );
+    
+    if(-1 == m_context_item)
+        return;
     
     wxMenu* menu = new wxMenu( _("MMSI Properties") );
 
@@ -2394,6 +2397,15 @@ void options::CreatePanel_UI( size_t parent, int border_size, int group_item_spa
                                                _("Confirm deletion of tracks and routes") );
     pConfirmObjectDeletion->SetValue( FALSE );
     miscOptions->Add( pConfirmObjectDeletion, 0, wxALL, border_size );
+    
+    wxStaticBox *zoomDetailBox = new wxStaticBox( itemPanelFont, wxID_ANY, _("Chart Zoom Detail Level") );
+    wxStaticBoxSizer* zoomDetailBoxSizer = new wxStaticBoxSizer( zoomDetailBox, wxVERTICAL );
+    m_pSlider_Zoom = new wxSlider( itemPanelFont, ID_CM93ZOOM, 0, -5,
+                                        5, wxDefaultPosition, wxSize( 200, 50),
+                                        wxSL_HORIZONTAL | wxSL_AUTOTICKS | wxSL_LABELS );
+    zoomDetailBoxSizer->Add( m_pSlider_Zoom, 0, wxALL | wxEXPAND, border_size );
+    m_itemBoxSizerFontPanel->Add( zoomDetailBoxSizer, 1, wxALL, border_size );
+    
 }
 
 void options::CreateControls()
@@ -2754,6 +2766,8 @@ void options::SetInitialSettings()
     m_pCheck_Rollover_COG->SetValue( g_bAISRolloverShowCOG );
     m_pCheck_Rollover_CPA->SetValue( g_bAISRolloverShowCPA );
 
+    m_pSlider_Zoom->SetValue( g_chart_zoom_modifier );
+    
 #ifdef USE_S57
     m_pSlider_CM93_Zoom->SetValue( g_cm93_zoom_factor );
 
@@ -2785,7 +2799,7 @@ void options::SetInitialSettings()
         }
 
         int nset = 2;                             // default OTHER
-        switch( ps52plib->m_nDisplayCategory ){
+        switch( ps52plib->GetDisplayCategory() ){
             case ( DISPLAYBASE ):
                 nset = 0;
                 break;
@@ -2805,9 +2819,9 @@ void options::SetInitialSettings()
 
         pDispCat->SetSelection( nset );
 
-        ps57CtlListBox->Enable( MARINERS_STANDARD == ps52plib->m_nDisplayCategory );
-        itemButtonClearList->Enable( MARINERS_STANDARD == ps52plib->m_nDisplayCategory );
-        itemButtonSelectList->Enable( MARINERS_STANDARD == ps52plib->m_nDisplayCategory );
+        ps57CtlListBox->Enable( MARINERS_STANDARD == ps52plib->GetDisplayCategory() );
+        itemButtonClearList->Enable( MARINERS_STANDARD == ps52plib->GetDisplayCategory() );
+        itemButtonSelectList->Enable( MARINERS_STANDARD == ps52plib->GetDisplayCategory() );
 
         //  Other Display Filters
         pCheck_SOUNDG->SetValue( ps52plib->m_bShowSoundg );
@@ -2911,7 +2925,7 @@ void options::OnRadarringSelect( wxCommandEvent& event )
 void options::OnOpenGLOptions( wxCommandEvent& event )
 {
 #ifdef ocpnUSE_GL
-    OpenGLOptionsDlg dlg(this);
+    OpenGLOptionsDlg dlg(this, pOpenGL->GetValue());
 
     if(dlg.ShowModal() == wxID_OK) {
         if(g_bexpert)
@@ -3541,6 +3555,8 @@ void options::OnApplyClick( wxCommandEvent& event )
     else
         g_GPS_Ident = _T("Generic");
 
+    g_chart_zoom_modifier = m_pSlider_Zoom->GetValue();
+    
 #ifdef USE_S57
     //    Handle Vector Charts Tab
 
@@ -3586,7 +3602,7 @@ void options::OnApplyClick( wxCommandEvent& event )
                 nset = MARINERS_STANDARD;
                 break;
         }
-        ps52plib->m_nDisplayCategory = nset;
+        ps52plib-> SetDisplayCategory( nset );
 
         ps52plib->m_bShowSoundg = pCheck_SOUNDG->GetValue();
         ps52plib->m_bShowMeta = pCheck_META->GetValue();
@@ -5392,7 +5408,7 @@ void SentenceListDlg::OnOkClick( wxCommandEvent& event ) { event.Skip(); }
  
 //OpenGLOptionsDlg
 
-OpenGLOptionsDlg::OpenGLOptionsDlg( wxWindow* parent )
+OpenGLOptionsDlg::OpenGLOptionsDlg( wxWindow* parent, bool glTicked )
 {
     long style = wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER;
 #ifdef __WXOSX__
@@ -5449,9 +5465,17 @@ OpenGLOptionsDlg::OpenGLOptionsDlg( wxWindow* parent )
 
         /* disable caching if unsupported */
     extern PFNGLCOMPRESSEDTEXIMAGE2DPROC s_glCompressedTexImage2D;
-    if(!s_glCompressedTexImage2D) {
-        g_GLOptions.m_bTextureCompressionCaching = false;
+    extern bool  b_glEntryPointsSet;
+    
+    if(!glTicked)
         m_cbTextureCompression->Disable();
+    
+    if(b_glEntryPointsSet){
+        if(!s_glCompressedTexImage2D) {
+            g_GLOptions.m_bTextureCompressionCaching = false;
+            m_cbTextureCompression->Disable();
+            m_cbTextureCompression->SetValue(false);
+        }
     }
         
  
@@ -5473,10 +5497,14 @@ OpenGLOptionsDlg::OpenGLOptionsDlg( wxWindow* parent )
     m_cbRebuildTextureCache = new wxCheckBox(this, wxID_ANY, _("Rebuild Texture Cache") );
     m_bSizer1->Add(m_cbRebuildTextureCache, 0, wxALL | wxEXPAND, 5);
     m_cbRebuildTextureCache->Enable(g_GLOptions.m_bTextureCompressionCaching);
+    if(!glTicked)
+        m_cbRebuildTextureCache->Disable();
     
     m_cbClearTextureCache = new wxCheckBox(this, wxID_ANY, _("Clear Texture Cache") );
     m_bSizer1->Add(m_cbClearTextureCache, 0, wxALL | wxEXPAND, 5);
     m_cbClearTextureCache->Enable(g_GLOptions.m_bTextureCompressionCaching);
+    if(!glTicked)
+        m_cbClearTextureCache->Disable();
     
     wxStdDialogButtonSizer * m_sdbSizer4 = new wxStdDialogButtonSizer();
     wxButton *bOK = new wxButton( this, wxID_OK );

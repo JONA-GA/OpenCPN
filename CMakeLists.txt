@@ -1382,7 +1382,7 @@ GETTEXT_BUILD_MO(po/opencpn_nl_NL.po nl)
 GETTEXT_BUILD_MO(po/opencpn_pl_PL.po pl)
 GETTEXT_BUILD_MO(po/opencpn_ru_RU.po ru)
 GETTEXT_BUILD_MO(po/opencpn_sv_SE.po sv)
-GETTEXT_BUILD_MO(po/opencpn_et_ET.po et)
+GETTEXT_BUILD_MO(po/opencpn_et_EE.po et)
 GETTEXT_BUILD_MO(po/opencpn_pt_PT.po pt_PT)
 GETTEXT_BUILD_MO(po/opencpn_pt_BR.po pt_BR)
 GETTEXT_BUILD_MO(po/opencpn_nb_NO.po nb_NO)
@@ -1399,13 +1399,31 @@ ADD_DEPENDENCIES(${PACKAGE_NAME} i18n)
 ENDIF(GETTEXT_MSGFMT_EXECUTABLE)
 
 
+#       Install wxstd.mo in Windows and Mac
+IF(WIN32 OR APPLE)
+
+    FILE(GLOB WXWIDGETS_MO_FILES ${CMAKE_SOURCE_DIR}/wxWidgets/locale/*.mo)
+
+    FOREACH ( _current_wx_mofile ${WXWIDGETS_MO_FILES})
+      GET_FILENAME_COMPONENT(_absFile ${_current_wx_mofile} ABSOLUTE)
+      GET_FILENAME_COMPONENT(_mlang ${_absFile} NAME_WE)
+
+      IF(APPLE)
+        INSTALL(FILES ${_current_wx_mofile} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app/Contents/Resources/${_mlang}.lproj RENAME wxstd.mo )
+      ELSE(APPLE)
+        INSTALL(FILES ${_current_wx_mofile} DESTINATION ${PREFIX_DATA}/locale/${_mlang}/LC_MESSAGES RENAME wxstd.mo PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+      ENDIF(APPLE)
+
+    ENDFOREACH (_current_wx_mofile )
+
+ENDIF(WIN32 OR APPLE)
 
 
 # On Windows builds, copy the wxWidgets dlls and helpers to the executable directory
 IF(WIN32 AND NOT UNIX)
-INSTALL(DIRECTORY wxWidgets/ DESTINATION "." )
+FILE(GLOB wxdll_files "${CMAKE_CURRENT_SOURCE_DIR}/wxWidgets/*.dll")
+INSTALL(FILES ${wxdll_files} DESTINATION ".")
 INSTALL(DIRECTORY buildwin/vc10/ DESTINATION ".\\\\vc10" )
-#INSTALL(DIRECTORY buildwin/NSIS_Unicode/Bitmaps/ DESTINATION ".\\\\NSISBmps" ) #Gunther
 
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1401.dll DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashSender1401.exe DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
@@ -1538,6 +1556,7 @@ IF(UNIX AND NOT APPLE)
 ENDIF(UNIX AND NOT APPLE)
 
 IF(WIN32 AND NOT UNIX)
+IF(NOT SKIP_VERSION_CONFIG)
  configure_file(${CMAKE_SOURCE_DIR}/src/opencpn.rc.in ${CMAKE_SOURCE_DIR}/src/opencpn.rc)
  configure_file("${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_GERMAN.nsh.in" "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_GERMAN.nsh" @ONLY)
  configure_file("${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_FRENCH.nsh.in" "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_FRENCH.nsh" @ONLY)
@@ -1555,6 +1574,7 @@ IF(WIN32 AND NOT UNIX)
  configure_file("${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_NORWEGIAN.nsh.in" "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_NORWEGIAN.nsh" @ONLY)
  configure_file("${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_CHINESETW.nsh.in" "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_CHINESETW.nsh" @ONLY)
  configure_file("${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_TURKISH.nsh.in" "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_TURKISH.nsh" @ONLY)
+ENDIF(NOT SKIP_VERSION_CONFIG)
 ENDIF(WIN32 AND NOT UNIX)
 
 IF(NOT SKIP_VERSION_CONFIG)

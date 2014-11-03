@@ -213,6 +213,7 @@ void GRIBUIDialog::OpenFile(bool newestFile)
                 pPlugIn->GetGRIBOverlayFactory()->SetMessage( m_bGRIBActiveFile->GetLastMessage() );
         }
         this->SetTitle(title);
+        SetTimeLineMax(false);
         SetFactoryOptions();
         if( pPlugIn->GetStartOptions() && m_TimeLineHours != 0)                             //fix a crash for one date files
             ComputeBestForecastForNow();
@@ -331,7 +332,19 @@ GRIBUIDialog::GRIBUIDialog(wxWindow *parent, grib_pi *ppi)
         pConf->SetPath ( _T ( "/Directories" ) );
         pConf->Read ( _T ( "GRIBDirectory" ), &m_grib_dir, spath.GetDocumentsDir()  );
     }
+    //set checkboxes ID to have a formal link to data type
+    m_cbWind->SetId( GribOverlaySettings::WIND );
+    m_cbWindGust->SetId( GribOverlaySettings::WIND_GUST );
+    m_cbPressure->SetId( GribOverlaySettings::PRESSURE );
+    m_cbCurrent->SetId( GribOverlaySettings::CURRENT );
+    m_cbWave->SetId( GribOverlaySettings::WAVE );
+    m_cbPrecipitation->SetId( GribOverlaySettings::PRECIPITATION );
+    m_cbCloud->SetId( GribOverlaySettings::CLOUD );
+    m_cbAirTemperature->SetId( GribOverlaySettings::AIR_TEMPERATURE );
+    m_cbSeaTemperature->SetId( GribOverlaySettings::SEA_TEMPERATURE );
+    m_cbCAPE->SetId( GribOverlaySettings::CAPE );
 
+    //set buttons bitmap
     m_bpPrev->SetBitmap(wxBitmap( prev ));
     m_bpNext->SetBitmap(wxBitmap( next ));
     m_bpNow->SetBitmap(wxBitmap( now ));
@@ -573,7 +586,7 @@ void GRIBUIDialog::PopulateTrackingControls( bool Populate_Altitude )
                     m_tcRelHumid->SetValue( _("N/A") );
         }
 
-        m_stAltitudeText->SetLabel((m_OverlaySettings.GetAltitudeFromIndex(
+        m_stAltitudeText->SetLabel( wxString(_("Data at")).Append(_T(" ")).Append(m_OverlaySettings.GetAltitudeFromIndex(
             pPlugIn->GetGRIBOverlayFactory()->m_Altitude, m_OverlaySettings.Settings[GribOverlaySettings::PRESSURE].m_Units))
             .Append( _T(" ") ).Append( m_OverlaySettings.GetUnitSymbol(GribOverlaySettings::PRESSURE) ) );
     } else
@@ -880,9 +893,9 @@ void GRIBUIDialog::OnSettings( wxCommandEvent& event )
         m_OverlaySettings.Write();
     } else
         m_OverlaySettings = initSettings;
-
-    SetFactoryOptions(true);
-    TimelineChanged();
+    if( !m_OverlaySettings.m_bInterpolate ) m_InterpolateMode = false;        //Interpolate could have been unchecked
+    SetTimeLineMax(true);
+    SetFactoryOptions();
     PopulateTrackingControls();
 }
 
@@ -894,9 +907,8 @@ void GRIBUIDialog::OnPlayStop( wxCommandEvent& event )
         m_bpPlay->SetBitmap(wxBitmap( stop ));
         m_bpPlay->SetToolTip( _("Stop") );
         m_tPlayStop.Start( 1000/m_OverlaySettings.m_UpdatesPerSecond, wxTIMER_CONTINUOUS );
+        m_InterpolateMode = m_OverlaySettings.m_bInterpolate;
     }
-
-    m_InterpolateMode = m_OverlaySettings.m_bInterpolate;
 }
 
 void GRIBUIDialog::OnPlayStopTimer( wxTimerEvent & event )
@@ -905,7 +917,6 @@ void GRIBUIDialog::OnPlayStopTimer( wxTimerEvent & event )
         if(m_OverlaySettings.m_bLoopMode) {
             if(m_OverlaySettings.m_LoopStartPoint) {
                 ComputeBestForecastForNow();
-                m_InterpolateMode = m_OverlaySettings.m_bInterpolate;
                 if(m_sTimeline->GetValue() >= m_sTimeline->GetMax()) StopPlayBack();        //will stop playback
                 return;
             } else
@@ -1125,17 +1136,32 @@ void GRIBUIDialog::OnAltitudeChange( wxCommandEvent& event )
 
 void GRIBUIDialog::OnCBAny( wxCommandEvent& event )
 {
-    //Ovoid to have more than one overlay at a time
-    if(m_cbWind->IsShown() && event.GetId() != m_cbWind->GetId()) m_cbWind->SetValue(false);
-    if(m_cbPressure->IsShown() && event.GetId() != m_cbPressure->GetId()) m_cbPressure->SetValue(false);
-    if(m_cbWindGust->IsShown() && event.GetId() != m_cbWindGust->GetId()) m_cbWindGust->SetValue(false);
-    if(m_cbWave->IsShown() && event.GetId() != m_cbWave->GetId()) m_cbWave->SetValue(false);
-    if(m_cbPrecipitation->IsShown() && event.GetId() != m_cbPrecipitation->GetId()) m_cbPrecipitation->SetValue(false);
-    if(m_cbCloud->IsShown() && event.GetId() != m_cbCloud->GetId()) m_cbCloud->SetValue(false);
-    if(m_cbAirTemperature->IsShown() && event.GetId() != m_cbAirTemperature->GetId()) m_cbAirTemperature->SetValue(false);
-    if(m_cbSeaTemperature->IsShown() && event.GetId() != m_cbSeaTemperature->GetId()) m_cbSeaTemperature->SetValue(false);
-    if(m_cbCAPE->IsShown() && event.GetId() != m_cbCAPE->GetId()) m_cbCAPE->SetValue(false);
-    if(m_cbCurrent->IsShown() && event.GetId() != m_cbCurrent->GetId()) m_cbCurrent->SetValue(false);
+    //allow multi selection if there is no display type superposition
+    int event_id = event.GetId(), win_id;
+    wxWindowList list = this->GetChildren();
+    wxWindowListNode *node = list.GetFirst();
+    for( size_t i = 0; i < list.GetCount(); i++ ) {
+        wxWindow *win = node->GetData();
+        if( win->IsKindOf(CLASSINFO(wxCheckBox)) && ((wxCheckBox*) win )->IsChecked() ) {
+            win_id = win->GetId();
+            if( event_id != win_id ) {
+                if( (m_OverlaySettings.Settings[event_id].m_bBarbedArrows &&
+                        m_OverlaySettings.Settings[win_id].m_bBarbedArrows)
+                        || (m_OverlaySettings.Settings[event_id].m_bDirectionArrows &&
+                        m_OverlaySettings.Settings[win_id].m_bDirectionArrows)
+                        || (m_OverlaySettings.Settings[event_id].m_bIsoBars &&
+                        m_OverlaySettings.Settings[win_id].m_bIsoBars)
+                        || (m_OverlaySettings.Settings[event_id].m_bNumbers &&
+                        m_OverlaySettings.Settings[win_id].m_bNumbers)
+                        || (m_OverlaySettings.Settings[event_id].m_bOverlayMap &&
+                        m_OverlaySettings.Settings[win_id].m_bOverlayMap)
+                        || (m_OverlaySettings.Settings[event_id].m_bParticles &&
+                        m_OverlaySettings.Settings[win_id].m_bParticles) )
+                    ((wxCheckBox*) win )->SetValue(false);
+            }
+        }
+        node = node->GetNext();
+    }
 
     SetFactoryOptions();                     // Reload the visibility options
 }
@@ -1152,7 +1178,7 @@ void GRIBUIDialog::OnOpenFile( wxCommandEvent& event )
     }
 
     wxFileDialog *dialog = new wxFileDialog(NULL, _("Select a GRIB file"), m_grib_dir,
-        _T(""), wxT ( "Grib files (*.grb;*.bz2|*.grb;*.bz2|All files (*)|*.*"), wxFD_OPEN, wxDefaultPosition,
+        _T(""), wxT ( "Grib files (*.grb;*.bz2)|*.grb;*.bz2|All files (*)|*.*"), wxFD_OPEN, wxDefaultPosition,
         wxDefaultSize, _T("File Dialog") );
 
     if( dialog->ShowModal() == wxID_OK ) {
@@ -1302,7 +1328,7 @@ void GRIBUIDialog::ComputeBestForecastForNow()
     }
 
     if( pPlugIn->GetStartOptions() != 2 ) {         //no interpolation at start : take the nearest forecast
-        m_OverlaySettings.m_bInterpolate ? m_InterpolateMode = true : m_InterpolateMode = false;
+        m_InterpolateMode = m_OverlaySettings.m_bInterpolate;
         TimelineChanged();
         return;
     }
@@ -1335,25 +1361,30 @@ void GRIBUIDialog::SetGribTimelineRecordSet(GribTimelineRecordSet *pTimelineSet)
     pPlugIn->GetGRIBOverlayFactory()->SetGribTimelineRecordSet(m_pTimelineSet);
 }
 
-void GRIBUIDialog::SetFactoryOptions( bool set_val )
+void GRIBUIDialog::SetTimeLineMax( bool SetValue )
 {
-    int max = wxMax(m_sTimeline->GetMax(), 1), val = m_sTimeline->GetValue();             //memorize the old range and value
+    int oldmax = wxMax(m_sTimeline->GetMax(), 1), oldval = m_sTimeline->GetValue();             //memorize the old range and value
 
     if(m_OverlaySettings.m_bInterpolate){
         int stepmin = m_OverlaySettings.GetMinFromIndex(m_OverlaySettings.m_SlicesPerUpdate);
         m_sTimeline->SetMax(m_TimeLineHours * 60 / stepmin );
-    }
-    else {
+    } else {
         if(m_bGRIBActiveFile && m_bGRIBActiveFile->IsOK()) {
             ArrayOfGribRecordSets *rsa = m_bGRIBActiveFile->GetRecordSetArrayPtr();
             m_sTimeline->SetMax(rsa->GetCount()-1);
         }
     }
-
     //try to retrieve a coherent timeline value with the new timeline range if it has changed
-        if( set_val && m_sTimeline->GetMax() != 0 )
-            m_sTimeline->SetValue( m_sTimeline->GetMax() * val / max );
+        if( SetValue && m_sTimeline->GetMax() != 0 ) {
+            if( m_pNowMode )
+                ComputeBestForecastForNow();
+            else
+                m_sTimeline->SetValue( m_sTimeline->GetMax() * oldval / oldmax );
+        }
+}
 
+void GRIBUIDialog::SetFactoryOptions()
+{
     if(m_pTimelineSet)
         m_pTimelineSet->ClearCachedData();
 

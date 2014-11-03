@@ -339,12 +339,13 @@ bool DoCompress(JobTicket *pticket, glTextureDescriptor *ptd, int level)
 
         if(pticket->bpost_zip_compress) {
             int max_compressed_size = LZ4_COMPRESSBOUND(g_tile_size);
-            unsigned char *compressed_data = (unsigned char *)malloc(max_compressed_size);
-            int compressed_size = LZ4_compressHC2( (char *)ptd->CompressedArrayAccess( CA_READ, NULL, level),
+            if(max_compressed_size){
+                unsigned char *compressed_data = (unsigned char *)malloc(max_compressed_size);
+                int compressed_size = LZ4_compressHC2( (char *)ptd->CompressedArrayAccess( CA_READ, NULL, level),
                                                    (char *)compressed_data, size, 4);
-            ptd->CompCompArrayAccess( CA_WRITE, compressed_data, level);
-            ptd->compcomp_size[level] = compressed_size;
-            
+                ptd->CompCompArrayAccess( CA_WRITE, compressed_data, level);
+                ptd->compcomp_size[level] = compressed_size;
+            }
         }
         
     
@@ -1653,36 +1654,37 @@ bool glTexFactory::LoadHeader(void)
 {
     bool ret = false;
     if( !m_hdrOK) {
-        
+
         if(wxFileName::FileExists(m_CompressedCacheFilePath)) {
             
             m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+            if(m_fs->IsOpened()){
             
-            CompressedCacheHeader hdr;
-            
-            //  Header is located at the end of the file
-            wxFileOffset hdr_offset = m_fs->Length() -sizeof( hdr);
-            hdr_offset = m_fs->Seek( hdr_offset );
-            
-            if( sizeof( hdr) == m_fs->Read(&hdr, sizeof( hdr ))) {
-                if( hdr.magic != COMPRESSED_CACHE_MAGIC ||
-                    hdr.chartdate != m_chart_date_binary ||
-                    hdr.format != m_raster_format) {
+                CompressedCacheHeader hdr;
+                
+                //  Header is located at the end of the file
+                wxFileOffset hdr_offset = m_fs->Length() -sizeof( hdr);
+                hdr_offset = m_fs->Seek( hdr_offset );
+                
+                if( sizeof( hdr) == m_fs->Read(&hdr, sizeof( hdr ))) {
+                    if( hdr.magic != COMPRESSED_CACHE_MAGIC ||
+                        hdr.chartdate != m_chart_date_binary ||
+                        hdr.format != m_raster_format) {
+                        
+                        //  Bad header signature    
+                        m_fs->Close();
+                        delete m_fs;
                     
-                    //  Bad header signature    
-                    m_fs->Close();
-                    delete m_fs;
-                
-                    m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::write);
-                    n_catalog_entries = 0;
-                    m_catalog_offset = 0;
-                    WriteCatalogAndHeader();
-                    m_fs->Close();
-                    delete m_fs;
-                
-                    m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
-                
-                    m_hdrOK = true;
+                        m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::write);
+                        n_catalog_entries = 0;
+                        m_catalog_offset = 0;
+                        WriteCatalogAndHeader();
+                        m_fs->Close();
+                        delete m_fs;
+                    
+                        m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+                    
+                        m_hdrOK = true;
                     }
                     else {      // good header
                         n_catalog_entries = hdr.m_nentries;
@@ -1691,14 +1693,34 @@ bool glTexFactory::LoadHeader(void)
                         ret = true;
                     }
                 }
-            else{  // file exists, and is empty
+                else{  // file exists, and is empty
+                    n_catalog_entries = 0;
+                    m_catalog_offset = 0;
+                    WriteCatalogAndHeader();
+                    m_hdrOK = true;
+                    ret = true;
+                }
+            }  // is open
+            
+            else{               // some problem opening file, probably permissions on Win7
+                delete m_fs;
+                m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::write);
                 n_catalog_entries = 0;
                 m_catalog_offset = 0;
                 WriteCatalogAndHeader();
+                m_fs->Close();
+                delete m_fs;
+                
+                m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+                
                 m_hdrOK = true;
                 ret = true;
+                
+                
             }
-        }
+            
+        }   // exists
+       
         else {   // File does not exist
             wxFileName fn(m_CompressedCacheFilePath);
             if(!fn.DirExists())

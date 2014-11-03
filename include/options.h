@@ -319,7 +319,7 @@ public:
     wxTextCtrl              *pMagVar;
     wxCheckBox              *pMobile;
     wxCheckBox              *pResponsive;
-    
+    wxSlider                *m_pSlider_Zoom;    
     int                      k_tides;
 
     
@@ -946,7 +946,7 @@ public:
     wxSpinCtrl *m_sTextureDimension;
     wxSpinCtrl *m_sTextureMemorySize;
 
-    OpenGLOptionsDlg( wxWindow* parent );
+    OpenGLOptionsDlg( wxWindow* parent, bool glTicked );
 };
 
 

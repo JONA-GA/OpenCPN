@@ -29,6 +29,8 @@
 #include <wx/event.h>
 #include <wx/arrstr.h>
 
+#include <queue>                // std::queue
+
 #ifdef __WXMSW__
 	#include <windows.h>
 	#include <winioctl.h>
@@ -56,16 +58,17 @@ public:
                                   wxEvtHandler *MessageTarget,
                                   const wxString& PortName,
                                   const wxString& strBaudRate,
-                                  wxMutex *out_mutex,
                                   dsPortType io_select
                               );
 
     ~OCP_DataStreamInput_Thread(void);
     void *Entry();
-    bool SetOutMsg(const wxString & msg);
+    bool SetOutMsg(const wxString &msg);
     void OnExit(void);
 
-protected:
+
+private:
+
     void ThreadMessage(const wxString &msg);
     void Parse_And_Send_Posn(const char *s);
     int OpenComPortPhysical(const wxString &com_name, int baud_rate);
@@ -74,8 +77,10 @@ protected:
     int WriteComPortPhysical(int port_descriptor, char *msg);
     int ReadComPortPhysical(int port_descriptor, int count, unsigned char *p);
     bool CheckComPortPhysical(int port_descriptor);
-
-    wxMutex                 *m_pout_mutex;
+    
+    void HandleASuccessfulRead( char *buf, int nread );
+    
+    wxCriticalSection       m_outCritical;
     wxEvtHandler            *m_pMessageTarget;
     DataStream              *m_launcher;
     wxString                m_PortName;
@@ -95,13 +100,16 @@ protected:
     int                     m_baud;
     int                     m_n_timeout;
 
-    int                     m_takIndex;
-    int                     m_putIndex;
-    char                    *m_poutQueue[OUT_QUEUE_LENGTH];
+    //int                     m_takIndex;
+    //int                     m_putIndex;
+    //char                    *m_poutQueue[OUT_QUEUE_LENGTH];
+    
+    std::queue<char *>  out_que;
     
 
 #ifdef __WXMSW__
     HANDLE                  m_hSerialComm;
+    bool                    m_nl_found;
 #endif
 
 };
