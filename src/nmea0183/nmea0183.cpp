@@ -91,7 +91,8 @@ NMEA0183::NMEA0183()
    response_table.Append( (RESPONSE *) &GPwpl );
    
    response_table.Append( (RESPONSE *) &Apb );
-   response_table.Append( (RESPONSE *) &Vhw );
+   response_table.Append( (RESPONSE *) &Xte );
+
    
 
 /*

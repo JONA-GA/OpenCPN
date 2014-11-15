@@ -703,7 +703,28 @@ bool Routeman::UpdateAutopilot()
             g_pMUX->SendNMEAMessage( snt.Sentence );
         }
         
+        // XTE
+        {
+            m_NMEA0183.TalkerID = _T("EC");
+            
+            SENTENCE snt;
+             
+            m_NMEA0183.Xte.IsLoranBlinkOK = NTrue;
+            m_NMEA0183.Xte.IsLoranCCycleLockOK = NTrue;
+            
+            m_NMEA0183.Xte.CrossTrackErrorDistance = CurrentXTEToActivePoint;
+            
+            if( XTEDir < 0 ) m_NMEA0183.Xte.DirectionToSteer = Left;
+            else
+                m_NMEA0183.Xte.DirectionToSteer = Right;
+            
+            m_NMEA0183.Xte.CrossTrackUnits = _T("N");
+
+            m_NMEA0183.Xte.Write( snt );
+            g_pMUX->SendNMEAMessage( snt.Sentence );
+        }
         
+       
     return true;
 }
 
@@ -997,6 +1018,17 @@ Route *Routeman::FindRouteByGUID(wxString &guid)
     return pRoute;
 }
 
+void Routeman::ZeroCurrentXTEToActivePoint()
+{
+    // When zeroing XTE create a "virtual" waypoint at present position
+    if( pRouteActivatePoint ) delete pRouteActivatePoint;
+    pRouteActivatePoint = new RoutePoint( gLat, gLon, wxString( _T("") ), wxString( _T("") ),
+    GPX_EMPTY_STRING, false ); // Current location
+    pRouteActivatePoint->m_bShowName = false;
+
+    pActiveRouteSegmentBeginPoint = pRouteActivatePoint;
+    m_arrival_min = 1e6;
+}
 
 //--------------------------------------------------------------------------------
 //      WayPointman   Implementation
@@ -1175,6 +1207,7 @@ void WayPointman::ProcessIcon(wxBitmap pimage, const wxString & key, const wxStr
 
     bool newIcon = true;
 
+    // avoid adding duplicates
     for( unsigned int i = 0; i < m_pIconArray->GetCount(); i++ ) {
         pmi = (MarkIcon *) m_pIconArray->Item( i );
         if( pmi->icon_name.IsSameAs( key ) ) {
@@ -1352,18 +1385,21 @@ wxBitmap *WayPointman::GetIconBitmap( const wxString& icon_key )
 
     for( i = 0; i < m_pIconArray->GetCount(); i++ ) {
         pmi = (MarkIcon *) m_pIconArray->Item( i );
-        if( pmi->icon_name.IsSameAs( icon_key ) ) break;
+        if( pmi->icon_name.IsSameAs( icon_key ) )
+            break;
     }
 
     if( i == m_pIconArray->GetCount() )              // key not found
-            {
+    {
+        // find and return bitmap for "circle"
         for( i = 0; i < m_pIconArray->GetCount(); i++ ) {
             pmi = (MarkIcon *) m_pIconArray->Item( i );
-            if( pmi->icon_name.IsSameAs( _T("circle") ) ) break;
+//            if( pmi->icon_name.IsSameAs( _T("circle") ) )
+//                break;
         }
     }
 
-    if( i == m_pIconArray->GetCount() )              // not found again
+    if( i == m_pIconArray->GetCount() )              // "circle" not found
         pmi = (MarkIcon *) m_pIconArray->Item( 0 );       // use item 0
 
     if( pmi )
@@ -1458,7 +1494,7 @@ wxString *WayPointman::GetIconKey( int index )
 {
     wxString *pret = NULL;
 
-    if( index >= 0 ) {
+    if( (index >= 0)  && ((unsigned int)index < m_pIconArray->GetCount()) ) {
         MarkIcon *pmi = (MarkIcon *) m_pIconArray->Item( index );
         pret = &pmi->icon_name;
     }
@@ -1595,7 +1631,7 @@ void WayPointman::DeleteAllWaypoints( bool b_delete_used )
     while( node ) {
         RoutePoint *prp = node->GetData();
         // if argument is false, then only delete non-route waypoints
-        if( !prp->m_bIsInLayer && ( prp->m_IconName != _T("mob") )
+        if( !prp->m_bIsInLayer && ( prp->GetIconName() != _T("mob") )
             && ( ( b_delete_used && prp->m_bKeepXRoute )
                         || ( ( !prp->m_bIsInRoute ) && ( !prp->m_bIsInTrack )
                                 && !( prp == pAnchorWatchPoint1 ) && !( prp == pAnchorWatchPoint2 ) ) ) ) {

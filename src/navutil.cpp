@@ -133,6 +133,7 @@ extern bool             g_bskew_comp;
 extern bool             g_bopengl;
 extern bool             g_bdisable_opengl;
 extern bool             g_bsmoothpanzoom;
+extern bool             g_fog_overzoom;
 
 extern bool             g_bShowOutlines;
 extern bool             g_bShowActiveRouteHighway;
@@ -226,6 +227,7 @@ extern s52plib          *ps52plib;
 #endif
 
 extern int              g_cm93_zoom_factor;
+extern bool             g_b_legacy_input_filter_behaviour;
 extern bool             g_bShowCM93DetailSlider;
 extern int              g_cm93detail_dialog_x, g_cm93detail_dialog_y;
 
@@ -334,6 +336,8 @@ extern int              g_SENC_LOD_pixels;
 extern ArrayOfMMSIProperties   g_MMSI_Props_Array;
 
 extern int              g_chart_zoom_modifier;
+
+extern int              g_NMEAAPBPrecision;
 
 #ifdef ocpnUSE_GL
 extern ocpnGLOptions g_GLOptions;
@@ -526,7 +530,7 @@ RoutePoint* Track::AddNewPoint( vector2D point, wxDateTime time ) {
     AddPoint( rPoint );
 
     pConfig->AddNewTrackPoint( rPoint, m_GUID );        // This will update the "changes" file only
-    
+
     //    This is a hack, need to undo the action of Route::AddPoint
     rPoint->m_bIsInRoute = false;
     rPoint->m_bIsInTrack = true;
@@ -662,13 +666,13 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
 
     //  Establish basic colour
     wxColour basic_colour;
-    if( m_bRunning || prp->m_IconName.StartsWith( _T("xmred") ) ) {
+    if( m_bRunning || prp->GetIconName().StartsWith( _T("xmred") ) ) {
             basic_colour = GetGlobalColor( _T ( "URED" ) );
     } else
-        if( prp->m_IconName.StartsWith( _T("xmblue") ) ) {
+        if( prp->GetIconName().StartsWith( _T("xmblue") ) ) {
                 basic_colour = GetGlobalColor( _T ( "BLUE3" ) );
         } else
-            if( prp->m_IconName.StartsWith( _T("xmgreen") ) ) {
+            if( prp->GetIconName().StartsWith( _T("xmgreen") ) ) {
                     basic_colour = GetGlobalColor( _T ( "UGREN" ) );
             } else {
                     basic_colour = GetGlobalColor( _T ( "CHMGD" ) );
@@ -758,13 +762,13 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
             wxPen psave = dc.GetPen();
 
             dc.StrokeLines( i, points );
-                    
+
             wxColour y = GetGlobalColor( _T ( "YELO1" ) );
             wxColour hilt( y.Red(), y.Green(), y.Blue(), 128 );
-            
+
             wxPen HiPen( hilt, hilite_width, wxSOLID );
             dc.SetPen( HiPen );
-            
+
             dc.StrokeLines( i, points );
 
             dc.SetPen( psave );
@@ -1065,7 +1069,7 @@ MyConfig::MyConfig( const wxString &appName, const wxString &vendorName,
 
     m_pNavObjectInputSet = NULL;
     m_pNavObjectChangesSet = NULL;
-    
+
     m_bSkipChangeSetUpdate = false;
 
     g_pConnectionParams = new wxArrayOfConnPrm();
@@ -1080,22 +1084,22 @@ void MyConfig::CreateRotatingNavObjBackup()
         wxFile f;
         wxString oldname = m_sNavObjSetFile;
         wxString newname = wxString::Format( _T("%s.1"), m_sNavObjSetFile.c_str() );
-      
+
         wxFileOffset s_diff = 1;
         if( ::wxFileExists( newname ) ) {
-            
+
             if( f.Open(oldname) ){
                 s_diff = f.Length();
                 f.Close();
             }
-        
+
             if( f.Open(newname) ){
                 s_diff -= f.Length();
                 f.Close();
             }
         }
-        
-        
+
+
         if ( s_diff != 0 )
         {
             for( int i = g_navobjbackups - 1; i >= 1; i-- )
@@ -1215,6 +1219,8 @@ int MyConfig::LoadMyConfig( int iteration )
 
     Read( _T ( "ActiveChartGroup" ), &g_GroupIndex, 0 );
 
+    Read( _T( "NMEAAPBPrecision" ), &g_NMEAAPBPrecision, 3 );
+
     /* opengl options */
 #ifdef ocpnUSE_GL
     Read( _T ( "OpenGLExpert" ), &g_bexpert, false );
@@ -1229,7 +1235,7 @@ int MyConfig::LoadMyConfig( int iteration )
         g_GLOptions.m_iTextureMemorySize = wxMax(128, g_GLOptions.m_iTextureMemorySize);
         g_GLOptions.m_bTextureCompressionCaching = g_GLOptions.m_bTextureCompression;
     }
-        
+
 #endif
     Read( _T ( "SmoothPanZoom" ), &g_bsmoothpanzoom, 0 );
 
@@ -1245,13 +1251,15 @@ int MyConfig::LoadMyConfig( int iteration )
     Read( _T ( "InitialdBIndex" ), &g_restore_dbindex, -1 );
 
     Read( _T ( "ChartNotRenderScaleFactor" ), &g_ChartNotRenderScaleFactor, 1.5 );
-    
+
     Read( _T ( "MobileTouch" ), &g_btouch, 0 );
     Read( _T ( "ResponsiveGraphics" ), &g_bresponsive, 0 );
-    
+
     Read( _T ( "ZoomDetailFactor" ), &g_chart_zoom_modifier, 0 );
     g_chart_zoom_modifier = wxMin(g_chart_zoom_modifier,5);
     g_chart_zoom_modifier = wxMax(g_chart_zoom_modifier,-5);
+
+    Read( _T ( "FogOnOverzoom" ), &g_fog_overzoom, 1 );
     
 #ifdef USE_S57
     Read( _T ( "CM93DetailFactor" ), &g_cm93_zoom_factor, 0 );
@@ -1268,13 +1276,16 @@ int MyConfig::LoadMyConfig( int iteration )
     Read( _T ( "ShowCM93DetailSlider" ), &g_bShowCM93DetailSlider, 0 );
 
     Read( _T ( "SENC_LOD_Pixels" ), &g_SENC_LOD_pixels, 2 );
-    
+
 #endif
 
     Read( _T ( "SkewCompUpdatePeriod" ), &g_SkewCompUpdatePeriod, 10 );
 
     Read( _T ( "SetSystemTime" ), &s_bSetSystemTime, 0 );
     Read( _T ( "ShowStatusBar" ), &m_bShowStatusBar, 1 );
+#ifndef __WXOSX__
+    Read( _T ( "ShowMenuBar" ), &m_bShowMenuBar, 0 );
+#endif
     Read( _T ( "ShowCompassWindow" ), &m_bShowCompassWin, 1 );
     Read( _T ( "ShowGrid" ), &g_bDisplayGrid, 0 );
     Read( _T ( "PlayShipsBells" ), &g_bPlayShipsBells, 0 );
@@ -1295,7 +1306,7 @@ int MyConfig::LoadMyConfig( int iteration )
     Read( _T ( "OwnshipCOGPredictorMinutes" ), &g_ownship_predictor_minutes, 5 );
     Read( _T ( "OwnshipCOGPredictorWidth" ), &g_cog_predictor_width, 3 );
     Read( _T ( "OwnshipHDTPredictorMiles" ), &g_ownship_HDTpredictor_miles, 1 );
-    
+
     Read( _T ( "OwnShipIconType" ), &g_OwnShipIconType, 0 );
     Read( _T ( "OwnShipLength" ), &g_n_ownship_length_meters, 0 );
     Read( _T ( "OwnShipWidth" ), &g_n_ownship_beam_meters, 0 );
@@ -1339,6 +1350,9 @@ int MyConfig::LoadMyConfig( int iteration )
     NMEALogWindow::Get().SetSize(Read(_T("NMEALogWindowSizeX"), 600L), Read(_T("NMEALogWindowSizeY"), 400L));
     NMEALogWindow::Get().SetPos(Read(_T("NMEALogWindowPosX"), 10L), Read(_T("NMEALogWindowPosY"), 10L));
     NMEALogWindow::Get().CheckPos(display_width, display_height);
+
+    // Boolean to cater for legacy Input COM Port filer behaviour, i.e. show msg filtered but put msg on bus.
+    Read( _T ( "LegacyInputCOMPortFilterBehaviour" ), &g_b_legacy_input_filter_behaviour, 0 );
 
     SetPath( _T ( "/Settings/GlobalState" ) );
     Read( _T ( "bFollow" ), &st_bFollow );
@@ -1884,9 +1898,9 @@ int MyConfig::LoadMyConfig( int iteration )
         delete pval;
     }
 
-    if( 0 == iteration ) 
+    if( 0 == iteration )
         FontMgr::Get().ScrubList();
-    
+
 //  Tide/Current Data Sources
     SetPath( _T ( "/TideCurrentDataSources" ) );
     TideCurrentDataSet.Clear();
@@ -1933,9 +1947,9 @@ int MyConfig::LoadMyConfig( int iteration )
 
 
         if( ::wxFileExists( m_sNavObjSetChangesFile ) ) {
-            
+
             wxULongLong size = wxFileName::GetSize(m_sNavObjSetChangesFile);
-            
+
             //We crashed last time :(
             //That's why this file still exists...
             //Let's reconstruct the unsaved changes
@@ -1952,14 +1966,14 @@ int MyConfig::LoadMyConfig( int iteration )
                 wxLogMessage( _T("Applying NavObjChanges") );
                 pNavObjectChangesSet->ApplyChanges();
                 delete pNavObjectChangesSet;
-                
+
 
                 UpdateNavObj();
            }
         }
-        
+
         m_pNavObjectChangesSet = new NavObjectChanges(m_sNavObjSetChangesFile);
-        
+
     }
 
     SetPath( _T ( "/Settings/Others" ) );
@@ -2015,7 +2029,7 @@ int MyConfig::LoadMyConfig( int iteration )
     Read( _T ( "TrackLineWidth" ), &g_track_line_width, 2 );
     Read( _T ( "CurrentArrowScale" ), &g_current_arrow_scale, 100 );
     Read( _T ( "DefaultWPIcon" ), &g_default_wp_icon, _T("triangle") );
-    
+
     if(0 == iteration){
         SetPath( _T ( "/MMSIProperties" ) );
         int iPMax = GetNumberOfEntries();
@@ -2027,16 +2041,16 @@ int MyConfig::LoadMyConfig( int iteration )
             bool bCont = pConfig->GetFirstEntry( str, dummy );
             while( bCont ) {
                 pConfig->Read( str, &val );              // Get an entry
-                
+
                 MMSIProperties *pProps = new MMSIProperties( val );
                 g_MMSI_Props_Array.Add(pProps);
-                
+
                 bCont = pConfig->GetNextEntry( str, dummy );
-                
+
             }
         }
     }
-                
+
 
     return ( 0 );
 }
@@ -2228,7 +2242,7 @@ bool MyConfig::AddNewWayPoint( RoutePoint *pWP, int crm )
 
     if(!pWP->m_bIsolatedMark)
         return true;
-    
+
     if( !m_bSkipChangeSetUpdate ) {
         m_pNavObjectChangesSet->AddWP( pWP, "add" );
     }
@@ -2265,7 +2279,7 @@ bool MyConfig::AddNewTrackPoint( RoutePoint *pWP, const wxString& parent_GUID )
     if( !m_bSkipChangeSetUpdate ) {
         m_pNavObjectChangesSet->AddTrackPoint( pWP, "add", parent_GUID );
     }
-    
+
     return true;
 }
 
@@ -2406,6 +2420,9 @@ void MyConfig::UpdateSettings()
     Write( _T ( "ChartNotRenderScaleFactor" ), g_ChartNotRenderScaleFactor );
 
     Write( _T ( "ShowStatusBar" ), m_bShowStatusBar );
+#ifndef __WXOSX__
+    Write( _T ( "ShowMenuBar" ), m_bShowMenuBar );
+#endif
     Write( _T ( "ShowCompassWindow" ), m_bShowCompassWin );
     Write( _T ( "SetSystemTime" ), s_bSetSystemTime );
     Write( _T ( "ShowGrid" ), g_bDisplayGrid );
@@ -2438,7 +2455,7 @@ void MyConfig::UpdateSettings()
     Write( _T ( "OpenGL" ), g_bopengl );
 
     Write( _T ( "ZoomDetailFactor" ), g_chart_zoom_modifier );
-    
+
 #ifdef ocpnUSE_GL
     /* opengl options */
     Write( _T ( "UseAcceleratedPanning" ), g_GLOptions.m_bUseAcceleratedPanning );
@@ -2494,6 +2511,8 @@ void MyConfig::UpdateSettings()
     Write( _T ( "InitialdBIndex" ), g_restore_dbindex );
     Write( _T ( "ActiveChartGroup" ), g_GroupIndex );
 
+    Write( _T( "NMEAAPBPrecision" ), g_NMEAAPBPrecision );
+
     Write( _T ( "AnchorWatch1GUID" ), g_AW1GUID );
     Write( _T ( "AnchorWatch2GUID" ), g_AW2GUID );
 
@@ -2507,7 +2526,7 @@ void MyConfig::UpdateSettings()
 
     Write( _T ( "MobileTouch" ), g_btouch );
     Write( _T ( "ResponsiveGraphics" ), g_bresponsive );
-    
+
     wxString st0;
     st0.Printf( _T ( "%g" ), g_PlanSpeed );
     Write( _T ( "PlanSpeed" ), st0 );
@@ -2527,7 +2546,7 @@ void MyConfig::UpdateSettings()
     Write( _T ( "Locale" ), g_locale );
 
     Write( _T ( "KeepNavobjBackups" ), g_navobjbackups );
-
+Write( _T ( "LegacyInputCOMPortFilterBehaviour" ), g_b_legacy_input_filter_behaviour );
 //    S57 Object Filter Settings
 
     SetPath( _T ( "/Settings/ObjectFilter" ) );
@@ -2751,8 +2770,8 @@ void MyConfig::UpdateSettings()
         p.Printf(_T("Props%d"), i);
         Write( p, g_MMSI_Props_Array.Item(i)->Serialize() );
     }
-        
-    
+
+
     Flush();
 }
 
@@ -2769,7 +2788,7 @@ void MyConfig::UpdateNavObj( void )
 
     if( ::wxFileExists( m_sNavObjSetChangesFile ) )
         wxRemoveFile( m_sNavObjSetChangesFile );
-    
+
     delete m_pNavObjectChangesSet;
     m_pNavObjectChangesSet = new NavObjectChanges(m_sNavObjSetChangesFile);
 
@@ -3311,7 +3330,7 @@ static wxString scaleable_pointsize[SCALEABLE_SIZES] =
     wxT ( "36" )
 };
 
-#define NUM_COLS 48
+#define NUM_COLS 49
 static wxString wxColourDialogNames[NUM_COLS]= {wxT ( "ORANGE" ),
     wxT ( "GOLDENROD" ),
     wxT ( "WHEAT" ),
@@ -3365,6 +3384,7 @@ static wxString wxColourDialogNames[NUM_COLS]= {wxT ( "ORANGE" ),
     wxT ( "LIGHT GREY" ),
     wxT ( "MEDIUM SLATE BLUE" ),
     wxT ( "WHITE" )
+    wxT ( "SIENNA" )
 };
 
 /*
@@ -4401,7 +4421,7 @@ void AlphaBlending( ocpnDC &dc, int x, int y, int size_x, int size_y, float radi
         wxMemoryDC oldc( olbm );
         if(!oldc.IsOk())
             return;
-            
+
         oldc.SetBackground( *wxBLACK_BRUSH );
         oldc.SetBrush( *wxWHITE_BRUSH );
         oldc.Clear();
@@ -4419,7 +4439,7 @@ void AlphaBlending( ocpnDC &dc, int x, int y, int size_x, int size_y, float radi
         //  Sometimes, on Windows, the destination image is corrupt...
         if(NULL == box)
             return;
-        
+
         float alpha = 1.0 - (float)transparency / 255.0;
         int sb = size_x * size_y;
         for( int i = 0; i < sb; i++ ) {
