@@ -53,13 +53,11 @@ OCP_StkDataStreamInput_Thread::OCP_StkDataStreamInput_Thread(DataStream *Launche
 								wxEvtHandler *MessageTarget,
 								const wxString& PortName,
 								const wxString& strBaudRate,
-								wxMutex *pout_mutex,
 								dsPortType io_select):
 	OCP_DataStreamInput_Thread( Launcher,
 							MessageTarget,
 							PortName,
 							strBaudRate,
-							pout_mutex,
 							io_select){}
 							
 OCP_StkDataStreamInput_Thread::~OCP_StkDataStreamInput_Thread(void)	{}
@@ -213,46 +211,31 @@ void *OCP_StkDataStreamInput_Thread::Entry()
 		}
         //      Check for any pending output message
 
-        if( m_pout_mutex && (wxMUTEX_NO_ERROR == m_pout_mutex->TryLock()) ){
-            bool b_qdata = (m_takIndex != (-1) || m_putIndex != (-1));
+        m_outCritical.Enter();
+        {
+            bool b_qdata = !out_que.empty();
             
             while(b_qdata){
-                if(m_takIndex < OUT_QUEUE_LENGTH) {
                     
                     //  Take a copy of message
+                    char *qmsg = out_que.front();
                     char msg[MAX_OUT_QUEUE_MESSAGE_LENGTH];
-                    strncpy( msg, m_poutQueue[m_takIndex], MAX_OUT_QUEUE_MESSAGE_LENGTH-1 );
-                    
-                    //  Update and release the taker index
-                    if(m_takIndex==m_putIndex)
-                        m_takIndex=m_putIndex=(-1);
-                    else if(m_takIndex == (OUT_QUEUE_LENGTH-1) )
-                        m_takIndex=0;
-                    else
-                        m_takIndex++;
-                    
-                    
-                    m_pout_mutex->Unlock();
+                    strncpy( msg, qmsg, MAX_OUT_QUEUE_MESSAGE_LENGTH-1 );
+                    out_que.pop();
+                    free(qmsg);
+
+                    m_outCritical.Leave();
                     WriteComPortPhysical(m_gps_fd, msg);
+                    m_outCritical.Enter();
                     
-                    if( wxMUTEX_NO_ERROR == m_pout_mutex->TryLock() )
-                        b_qdata = (m_takIndex != (-1) || m_putIndex != (-1));
-                    else
-                        b_qdata = false;
-                }
-                else {                                  // some index error
-                    m_takIndex = (-1);
-                    m_putIndex = (-1);
-                    b_qdata = false;
-                }
+                    b_qdata = !out_que.empty();
                 
                 
             } //while b_qdata
-            m_pout_mutex->Unlock();
         }
+        m_outCritical.Leave();
         
- bail_output:
-    bool bail = true;
+        
     }                          // the big while...
 
 //          Close the port cleanly

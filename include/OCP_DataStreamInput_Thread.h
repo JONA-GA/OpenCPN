@@ -67,7 +67,7 @@ public:
     void OnExit(void);
 
 
-private:
+protected:
 
     void ThreadMessage(const wxString &msg);
     void Parse_And_Send_Posn(const char *s);

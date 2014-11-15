@@ -52,7 +52,6 @@ class OCP_StkDataStreamInput_Thread: public OCP_DataStreamInput_Thread
 								wxEvtHandler *MessageTarget,
 								const wxString& PortName,
 								const wxString& strBaudRate,
-								wxMutex *pout_mutex,
 								dsPortType io_select);
 							
 	~OCP_StkDataStreamInput_Thread(void);
