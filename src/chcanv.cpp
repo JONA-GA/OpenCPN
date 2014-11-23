@@ -182,6 +182,7 @@ extern CM93OffsetDialog  *g_pCM93OffsetDialog;
 extern bool             bGPSValid;
 extern bool             g_bShowOutlines;
 extern bool             g_bShowDepthUnits;
+extern bool             g_bTempShowMenuBar;
 
 extern AIS_Decoder      *g_pAIS;
 extern bool             g_bShowAIS;
@@ -374,10 +375,10 @@ enum
     ID_DEF_MENU_NORTHUP,
     ID_DEF_MENU_TIDEINFO,
     ID_DEF_MENU_CURRENTINFO,
-
-    ID_DEF_MENU_GROUPBASE,
-
     ID_DEF_ZERO_XTE,
+    
+    ID_DEF_MENU_GROUPBASE,  // Must be last entry, as chart group identifiers are created dynamically
+
     
     ID_DEF_MENU_LAST
 };
@@ -1083,7 +1084,8 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
     m_bRouteEditing = false;
     m_bMarkEditing = false;
     m_bIsInRadius = false;
-    
+    m_bMayToggleMenuBar = true;
+
     m_bFollow = false;
     m_bTCupdate = false;
     m_bAppendingRoute = false;          // was true in MSW, why??
@@ -1957,15 +1959,42 @@ void ChartCanvas::OnKeyChar( wxKeyEvent &event )
         }
     }
 #endif    
+
+    event.Skip();
 }    
 
 
 
 void ChartCanvas::OnKeyDown( wxKeyEvent &event )
 {
+    bool b_handled = false;
+    
     m_modkeys = event.GetModifiers();
 
     int panspeed = m_modkeys == wxMOD_ALT ? 2 : 100;
+
+#ifndef __WXOSX__
+    // If the permanent menubar is disabled, we show it temporarily when Alt is pressed or when
+    // Alt + a letter is presssed (for the top-menu-level hotkeys).
+    // The toggling normally takes place in OnKeyUp, but here we handle some special cases.
+    if ( event.AltDown()  &&  !pConfig->m_bShowMenuBar ) {
+        // If Alt + a letter is pressed, and the menubar is hidden, show it now
+        if ( event.GetKeyCode() >= 'A' && event.GetKeyCode() <= 'Z' ) {
+            if ( !g_bTempShowMenuBar ) {
+                g_bTempShowMenuBar = true;
+                parent_frame->ApplyGlobalSettings(false, false);
+            }
+            m_bMayToggleMenuBar = false; // don't hide it again when we release Alt
+            event.Skip();
+            return;
+        }
+        // If another key is pressed while Alt is down, do NOT toggle the menus when Alt is released
+        if ( event.GetKeyCode() != WXK_ALT ) {
+            m_bMayToggleMenuBar = false;
+        }
+    }
+#endif
+
 
     // HOTKEYS
     switch( event.GetKeyCode() ) {
@@ -2073,6 +2102,7 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
 
     case WXK_F11:
         parent_frame->ToggleFullScreen();
+        b_handled = true;
         break;
 
     case WXK_F12: {
@@ -2143,6 +2173,7 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
                 break;
             }
         }
+
 
         if ( event.ControlDown() )
             key_char -= 64;
@@ -2367,7 +2398,8 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
 #ifndef __WXMAC__
     // Allow OnKeyChar to catch the key events too.
     // On OS X this is unnecessary since we handle all key events here.
-    event.Skip();
+    if(!b_handled)
+        event.Skip();
 #endif
 }
 
@@ -2400,6 +2432,15 @@ void ChartCanvas::OnKeyUp( wxKeyEvent &event )
 
     case WXK_ALT:
         m_modkeys &= ~wxMOD_ALT;
+#ifndef __WXOSX__
+        // If the permanent menu bar is disabled, and we are not in the middle of another key combo,
+        // then show the menu bar temporarily when Alt is released (or hide it if already visible).
+        if ( !pConfig->m_bShowMenuBar  &&  m_bMayToggleMenuBar ) {
+            g_bTempShowMenuBar = !g_bTempShowMenuBar;
+            parent_frame->ApplyGlobalSettings(false, false);
+        }
+        m_bMayToggleMenuBar = true;
+#endif
         break;
 
     case WXK_CONTROL:
@@ -4949,6 +4990,18 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
     // windows who return focus to the canvas.
     static bool leftIsDown = false;
 
+#ifndef __WXOSX__
+    if (event.LeftDown()) {
+        if ( pConfig->m_bShowMenuBar == false && g_bTempShowMenuBar == true ) {
+            // The menu bar is temporarily visible due to alt having been pressed.
+            // Clicking will hide it, and do nothing else.
+            g_bTempShowMenuBar = false;
+            parent_frame->ApplyGlobalSettings(false, false);
+            return;
+        }
+    }
+#endif
+
     // Protect from very small cursor slips during double click, which produce a
     // single Drag event.
     
@@ -7047,7 +7100,7 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
         if( !lightsVis ) gFrame->ToggleLights( true, true );
 
         wxString objText;
-        wxFont *dFont = FontMgr::Get().GetFont( _("ObjectQuery"), 12 );
+        wxFont *dFont = FontMgr::Get().GetFont( _("ObjectQuery") );
         wxString face = dFont->GetFaceName();
 
         if( NULL == g_pObjectQueryDialog ) {
@@ -7061,30 +7114,20 @@ void ChartCanvas::ShowObjectQueryWindow( int x, int y, float zlat, float zlon )
         wxColor bg = g_pObjectQueryDialog->GetBackgroundColour();
         wxColor fg = FontMgr::Get().GetFontColor( _("ObjectQuery") );
 
-        objText.Printf( _T("<html><body bgcolor=#%02x%02x%02x><font color=#%02x%02x%02x face="), bg.Red(), bg.Blue(),
-                        bg.Green(), fg.Red(), fg.Blue(), fg.Green() );
-        objText += _T("\"");
-        objText += face;
-        objText += _T("\" ");
+        objText.Printf( _T("<html><body bgcolor=#%02x%02x%02x><font color=#%02x%02x%02x>"),
+                       bg.Red(), bg.Blue(), bg.Green(), fg.Red(), fg.Blue(), fg.Green() );
 
+#ifdef __WXOSX__
         int points = dFont->GetPointSize();
-        wxString ss;
-        switch (points & 0xFE){
-            case 8:  ss = _T("size=\"2\""); break;
-            case 10: ss = _T("size=\"3\""); break;
-            case 12: ss = _T("size=\"3\""); break;
-            case 14: ss = _T("size=\"4\""); break;
-            case 16: ss = _T("size=\"4\""); break;
-            case 18: ss = _T("size=\"5\""); break;
-            case 20: ss = _T("size=\"6\""); break;
-            default: ss = _T(" "); break;
+#else
+        int points = dFont->GetPointSize() + 1;
+#endif
+
+        int sizes[7];
+        for ( int i=-2; i<5; i++ ) {
+            sizes[i+2] = points + i + (i>0?i:0);
         }
-        
-        if(points > 20)
-            ss = _T("size=\"6\"");
-        
-        objText += ss;
-        objText += _T(">");
+        g_pObjectQueryDialog->m_phtml->SetFonts(face, face, sizes);
 
         if(wxFONTSTYLE_ITALIC == dFont->GetStyle())
             objText += _T("<i>");
@@ -8513,7 +8556,7 @@ wxString ChartCanvas::FormatDistanceAdaptive( double distance ) {
 
 void RenderExtraRouteLegInfo( ocpnDC &dc, wxPoint ref_point, wxString s )
 {
-    wxFont *dFont = FontMgr::Get().GetFont( _("RouteLegInfoRollover"), 12 );
+    wxFont *dFont = FontMgr::Get().GetFont( _("RouteLegInfoRollover") );
     dc.SetFont( *dFont );
 
     int w, h;
@@ -8600,7 +8643,7 @@ void ChartCanvas::RenderRouteLegs( ocpnDC &dc )
 
         routeInfo << _T(" ") << FormatDistanceAdaptive( dist );
 
-        wxFont *dFont = FontMgr::Get().GetFont( _("RouteLegInfoRollover"), 12 );
+        wxFont *dFont = FontMgr::Get().GetFont( _("RouteLegInfoRollover") );
         dc.SetFont( *dFont );
 
         int w, h;
@@ -9866,7 +9909,7 @@ void ChartCanvas::DrawAllTidesInBBox( ocpnDC& dc, LLBBox& BBox )
     wxBrush *brc_1 = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T ( "BLUE2" ) ), wxSOLID );
     wxBrush *brc_2 = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T ( "YELO1" ) ), wxSOLID );
 
-    wxFont *dFont = FontMgr::Get().GetFont( _("ExtendedTideIcon"), 12 );
+    wxFont *dFont = FontMgr::Get().GetFont( _("ExtendedTideIcon") );
     dc.SetTextForeground( FontMgr::Get().GetFontColor( _("ExtendedTideIcon") ) );
     int font_size = wxMax(8, dFont->GetPointSize());
     wxFont *plabelFont = wxTheFontList->FindOrCreateFont( font_size, dFont->GetFamily(),
@@ -10127,7 +10170,7 @@ void ChartCanvas::DrawAllCurrentsInBBox( ocpnDC& dc, LLBBox& BBox )
     if( !g_bskew_comp )
         skew_angle += GetVPSkew();
 
-    pTCFont = FontMgr::Get().GetFont( _("CurrentValue"), 12 );
+    pTCFont = FontMgr::Get().GetFont( _("CurrentValue") );
     
     int now = time( NULL );
 
