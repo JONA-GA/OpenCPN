@@ -92,7 +92,7 @@ NMEA0183::NMEA0183()
    
    response_table.Append( (RESPONSE *) &Apb );
    response_table.Append( (RESPONSE *) &Xte );
-
+   response_table.Append( (RESPONSE *) &Vhw );
    
 
 /*
@@ -105,7 +105,7 @@ NMEA0183::NMEA0183()
    response_table.Add( (RESPONSE *) &Trf );
    response_table.Add( (RESPONSE *) &Ttm );
    response_table.Add( (RESPONSE *) &Vbw );
-   response_table.Add( (RESPONSE *) &Vhw );
+   
    response_table.Add( (RESPONSE *) &Vdr );
    response_table.Add( (RESPONSE *) &Vlw );
    response_table.Add( (RESPONSE *) &Vpw );

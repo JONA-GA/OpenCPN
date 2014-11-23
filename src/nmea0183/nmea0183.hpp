@@ -103,6 +103,7 @@
 #include "GPwpl.hpp"
 #include "apb.hpp"
 #include "xte.hpp"
+#include "vhw.hpp"
 /*
 #include "ROT.hpp"
 #include "RPM.hpp"
@@ -196,14 +197,9 @@ class NMEA0183
        GSV Gsv;
        GGA Gga;
        GPWPL GPwpl;
-<<<<<<< HEAD
-	   
-	   APB Apb;
-	   VHW Vhw;
-=======
        APB Apb;
        XTE Xte;
->>>>>>> upstream/master
+		VHW Vhw;
  /*
       ROT Rot;
       RPM Rpm;
