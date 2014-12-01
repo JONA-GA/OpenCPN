@@ -104,6 +104,7 @@ public:
     bool                      b_positionOnceValid;
     bool                      b_nameValid;
     bool                      b_OwnShip;
+    bool                      b_PersistTrack;
 
     int                       m_utc_hour;
     int                       m_utc_min;
@@ -132,6 +133,7 @@ public:
     AIS_Area_Notice_Hash     area_notices;
     bool                     b_SarAircraftPosnReport;
     int                      altitude;                  // Metres, from special position report(9)
+    bool                     b_nameFromCache;
     
 };
 

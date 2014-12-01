@@ -373,6 +373,7 @@ enum
     ID_DEF_MENU_QUILTREMOVE,
     ID_DEF_MENU_COGUP,
     ID_DEF_MENU_NORTHUP,
+    ID_DEF_MENU_TOGGLE_FULL,
     ID_DEF_MENU_TIDEINFO,
     ID_DEF_MENU_CURRENTINFO,
     ID_DEF_ZERO_XTE,
@@ -1009,7 +1010,8 @@ BEGIN_EVENT_TABLE ( ChartCanvas, wxWindow )
     EVT_MENU ( ID_DEF_MENU_GOTOPOSITION,       ChartCanvas::PopupMenuHandler )
     EVT_MENU ( ID_DEF_MENU_COGUP,              ChartCanvas::PopupMenuHandler )
     EVT_MENU ( ID_DEF_MENU_NORTHUP,            ChartCanvas::PopupMenuHandler )
-
+    EVT_MENU ( ID_DEF_MENU_TOGGLE_FULL,        ChartCanvas::PopupMenuHandler )
+    
     EVT_MENU ( ID_RT_MENU_ACTIVATE,     ChartCanvas::PopupMenuHandler )
     EVT_MENU ( ID_RT_MENU_DEACTIVATE,   ChartCanvas::PopupMenuHandler )
     EVT_MENU ( ID_RT_MENU_INSERT,       ChartCanvas::PopupMenuHandler )
@@ -3690,6 +3692,12 @@ bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double
 
     if( VPoint.GetBBox().GetValid() ) {
 
+        //      Update the viewpoint reference scale
+        if( Current_Ch )
+            VPoint.ref_scale = Current_Ch->GetNativeScale();
+        else 
+            VPoint.ref_scale = m_pQuilt->GetRefNativeScale();
+        
         //    Calculate the on-screen displayed actual scale
         //    by a simple traverse northward from the center point
         //    of roughly 10 % of the Viewport extent
@@ -3731,11 +3739,7 @@ bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double
             double true_scale_display = floor( VPoint.chart_scale / 100. ) * 100.;
             wxString text;
 
-            
-            if( Current_Ch )
-                m_displayed_scale_factor = Current_Ch->GetNativeScale()/VPoint.chart_scale;
-            else 
-                m_displayed_scale_factor = m_pQuilt->GetRefNativeScale()/VPoint.chart_scale;
+            m_displayed_scale_factor = VPoint.ref_scale / VPoint.chart_scale;
             
             if( m_displayed_scale_factor > 10.0 )
                 text.Printf( _("Scale %4.0f (%1.0fx)"), true_scale_display, m_displayed_scale_factor );
@@ -6645,6 +6649,10 @@ void ChartCanvas::CanvasPopupMenu( int x, int y, int seltype )
         else
             MenuAppend( contextMenu, ID_DEF_MENU_NORTHUP, _("North Up Mode") );
     }
+
+    if(g_btouch){
+        MenuAppend( contextMenu, ID_DEF_MENU_TOGGLE_FULL, _("Toggle Full Screen") );
+    }
     
     if ( g_pRouteMan->IsAnyRouteActive() && g_pRouteMan->GetCurrentXTEToActivePoint() > 0. ) MenuAppend( contextMenu, ID_DEF_ZERO_XTE, _("Zero XTE") );
 
@@ -7660,6 +7668,10 @@ void ChartCanvas::PopupMenuHandler( wxCommandEvent& event )
     case ID_DEF_MENU_NORTHUP:
         gFrame->ToggleCourseUp();
         break;
+        
+    case ID_DEF_MENU_TOGGLE_FULL:
+        gFrame->ToggleFullScreen();
+        break;
 
     case ID_DEF_MENU_GOTOPOSITION:
         if( NULL == pGoToPositionDialog ) // There is one global instance of the Go To Position Dialog
@@ -7872,10 +7884,11 @@ void ChartCanvas::PopupMenuHandler( wxCommandEvent& event )
         if( dlg_return == wxID_YES ) {
             if( g_pRouteMan->GetpActiveRoute() == m_pSelectedRoute ) g_pRouteMan->DeactivateRoute();
 
-            if( m_pSelectedRoute->m_bIsInLayer ) break;
+            if( m_pSelectedRoute->m_bIsInLayer )
+                break;
 
-            pConfig->DeleteConfigRoute( m_pSelectedRoute );
-            g_pRouteMan->DeleteRoute( m_pSelectedRoute );
+            if( !g_pRouteMan->DeleteRoute( m_pSelectedRoute ) )
+                break;
             if( pRoutePropDialog && ( pRoutePropDialog->IsShown()) && (m_pSelectedRoute == pRoutePropDialog->GetRoute()) ) {
                 pRoutePropDialog->Hide();
             }
@@ -9412,23 +9425,18 @@ void ChartCanvas::DrawEmboss( ocpnDC &dc, emboss_data *pemboss)
 
 emboss_data *ChartCanvas::EmbossOverzoomIndicator( ocpnDC &dc )
 {
+    double zoom_factor = GetVP().ref_scale / GetVP().chart_scale;
+    
     if( GetQuiltMode() ) {
-        double chart_native_ppm;
-        chart_native_ppm = m_canvas_scale_factor / m_pQuilt->GetRefNativeScale();
-
-        double zoom_factor = GetVP().view_scale_ppm / chart_native_ppm;
-
-        if( zoom_factor <= 3.9 ) return NULL;
+        if( zoom_factor <= 3.9 )
+            return NULL;
     } else {
-        double chart_native_ppm;
-        if( Current_Ch ) chart_native_ppm = m_canvas_scale_factor / Current_Ch->GetNativeScale();
-        else
-            chart_native_ppm = m_true_scale_ppm;
-
-        double zoom_factor = GetVP().view_scale_ppm / chart_native_ppm;
         if( Current_Ch ) {
-            if( zoom_factor <= 3.9 ) return NULL;
+            if( zoom_factor <= 3.9 )
+                return NULL;
         }
+        else
+            return NULL;
     }
 
     if(m_pEM_OverZoom){
@@ -10879,38 +10887,40 @@ void DimeControl( wxWindow* ctrl )
 {
     if( NULL == ctrl ) return;
 
-    wxColour col, col1, gridline, uitext, udkrd, back_color, text_color;
+    wxColour col, window_back_color, gridline, uitext, udkrd, ctrl_back_color, text_color;
     col = GetGlobalColor( _T("DILG0") );       // Dialog Background white
-    col1 = GetGlobalColor( _T("DILG1") );      // Dialog Background
-    back_color = GetGlobalColor( _T("DILG1") );      // Control Background
+    window_back_color = GetGlobalColor( _T("DILG1") );      // Dialog Background
+    ctrl_back_color = GetGlobalColor( _T("DILG1") );      // Control Background
     text_color = GetGlobalColor( _T("DILG3") );      // Text
     uitext = GetGlobalColor( _T("UITX1") );    // Menu Text, derived from UINFF
     udkrd = GetGlobalColor( _T("UDKRD") );
     gridline = GetGlobalColor( _T("GREY2") );
 
-    DimeControl( ctrl, col, col1, back_color, text_color, uitext, udkrd, gridline );
+    DimeControl( ctrl, col, window_back_color, ctrl_back_color, text_color, uitext, udkrd, gridline );
 }
 
-void DimeControl( wxWindow* ctrl, wxColour col, wxColour col1, wxColour back_color,
+void DimeControl( wxWindow* ctrl, wxColour col, wxColour window_back_color, wxColour ctrl_back_color,
                   wxColour text_color, wxColour uitext, wxColour udkrd, wxColour gridline )
 {
-    ColorScheme cs = cc1->GetColorScheme();
-    
-    //  If the color scheme is DAY or RGB, use the default platform native colour for backgrounds
-    wxColour window_back_color = wxNullColour;
-    if( cs != GLOBAL_COLOR_SCHEME_DAY && cs != GLOBAL_COLOR_SCHEME_RGB )
-        window_back_color = back_color;
 
-    ctrl->SetBackgroundColour( window_back_color );
-    
-#ifdef __WXMAC__
-#if wxCHECK_VERSION(2,9,0)
-    if( cs != GLOBAL_COLOR_SCHEME_DAY && cs != GLOBAL_COLOR_SCHEME_RGB )
-        ctrl->SetBackgroundColour( back_color );
-    else
-        ctrl->SetBackgroundColour( wxColour( 0xff, 0xff, 0xff ));
+    ColorScheme cs = cc1->GetColorScheme();
+
+    static int depth = 0; // recursion count
+    if ( depth == 0 ) {   // only for the window root, not for every child
+
+        // If the color scheme is DAY or RGB, use the default platform native colour for backgrounds
+        if( cs == GLOBAL_COLOR_SCHEME_DAY || cs == GLOBAL_COLOR_SCHEME_RGB ) {
+#ifdef __WXOSX__
+            window_back_color = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWFRAME);
+#else
+            window_back_color = wxNullColour;
 #endif
-#endif
+
+            col = wxSystemSettings::GetColour(wxSYS_COLOUR_LISTBOX);
+        }
+
+        ctrl->SetBackgroundColour( window_back_color );
+    }
 
     wxWindowList kids = ctrl->GetChildren();
     for( unsigned int i = 0; i < kids.GetCount(); i++ ) {
@@ -10920,23 +10930,20 @@ void DimeControl( wxWindow* ctrl, wxColour col, wxColour col1, wxColour back_col
         if( win->IsKindOf( CLASSINFO(wxListBox) ) )
             ( (wxListBox*) win )->SetBackgroundColour( col );
 
-        if( win->IsKindOf( CLASSINFO(wxListCtrl) ) )
-            ( (wxListCtrl*) win )->SetBackgroundColour( col1 );
+        else if( win->IsKindOf( CLASSINFO(wxListCtrl) ) )
+            ( (wxListCtrl*) win )->SetBackgroundColour( col );
 
-        if( win->IsKindOf( CLASSINFO(wxTextCtrl) ) )
+        else if( win->IsKindOf( CLASSINFO(wxTextCtrl) ) )
             ( (wxTextCtrl*) win )->SetBackgroundColour( col );
 
-        if( win->IsKindOf( CLASSINFO(wxStaticText) ) )
+        else if( win->IsKindOf( CLASSINFO(wxStaticText) ) )
             ( (wxStaticText*) win )->SetForegroundColour( uitext );
 
-        else if( win->IsKindOf( CLASSINFO(wxBitmapComboBox) ) ) {
-#if wxCHECK_VERSION(2,9,0) && !wxCHECK_VERSION(3,0,0) // maybe remove as it only works in wx2.9 ?
-            if( ( ( wxBitmapComboBox*) win )->GetTextCtrl() )
-                ( (wxBitmapComboBox*) win )->GetTextCtrl()->SetBackgroundColour(col);
-#else
+#ifndef __WXOSX__
+        // on OS X most controls can't be styled, and trying to do so only creates weird coloured boxes around them
+
+        else if( win->IsKindOf( CLASSINFO(wxBitmapComboBox) ) )
             ( (wxBitmapComboBox*) win )->SetBackgroundColour( col );
-#endif
-        }
 
         else if( win->IsKindOf( CLASSINFO(wxChoice) ) )
             ( (wxChoice*) win )->SetBackgroundColour( col );
@@ -10944,57 +10951,55 @@ void DimeControl( wxWindow* ctrl, wxColour col, wxColour col1, wxColour back_col
         else if( win->IsKindOf( CLASSINFO(wxComboBox) ) )
             ( (wxComboBox*) win )->SetBackgroundColour( col );
 
-        else if( win->IsKindOf( CLASSINFO(wxScrolledWindow) ) )
-            ( (wxScrolledWindow*) win )->SetBackgroundColour( window_back_color );
+        else if( win->IsKindOf( CLASSINFO(wxRadioButton) ) )
+            ( (wxRadioButton*) win )->SetBackgroundColour( window_back_color );
+
+        else if( win->IsKindOf( CLASSINFO(wxScrolledWindow) ) ) {
+            if( cs != GLOBAL_COLOR_SCHEME_DAY && cs != GLOBAL_COLOR_SCHEME_RGB )
+                ( (wxScrolledWindow*) win )->SetBackgroundColour( window_back_color );
+        }
+#endif
 
         else if( win->IsKindOf( CLASSINFO(wxGenericDirCtrl) ) )
-            ( (wxGenericDirCtrl*) win )->SetBackgroundColour( col1 );
+            ( (wxGenericDirCtrl*) win )->SetBackgroundColour( window_back_color );
 
         else if( win->IsKindOf( CLASSINFO(wxListbook) ) )
-            ( (wxListbook*) win )->SetBackgroundColour( col1 );
+            ( (wxListbook*) win )->SetBackgroundColour( window_back_color );
 
         else if( win->IsKindOf( CLASSINFO(wxTreeCtrl) ) )
             ( (wxTreeCtrl*) win )->SetBackgroundColour( col );
 
-        else if( win->IsKindOf( CLASSINFO(wxRadioButton) ) )
-            ( (wxRadioButton*) win )->SetBackgroundColour( window_back_color );
-
         else if( win->IsKindOf( CLASSINFO(wxNotebook) ) ) {
-            ( (wxNotebook*) win )->SetBackgroundColour( col1 );
+            ( (wxNotebook*) win )->SetBackgroundColour( window_back_color );
             ( (wxNotebook*) win )->SetForegroundColour( text_color );
         }
 
         else if( win->IsKindOf( CLASSINFO(wxButton) ) ) {
-            ( (wxButton*) win )->SetBackgroundColour( col1 );
+            ( (wxButton*) win )->SetBackgroundColour( window_back_color );
         }
 
         else if( win->IsKindOf( CLASSINFO(wxToggleButton) ) ) {
             ( (wxToggleButton*) win )->SetBackgroundColour( window_back_color );
         }
 
-        else if( win->IsKindOf( CLASSINFO(wxPanel) ) ) {
-//                  ((wxPanel*)win)->SetBackgroundColour(col1);
-            if( cs != GLOBAL_COLOR_SCHEME_DAY
-                    && cs != GLOBAL_COLOR_SCHEME_RGB ) ( (wxPanel*) win )->SetBackgroundColour(
-                            back_color );
-            else
-                ( (wxPanel*) win )->SetBackgroundColour(
-                    wxNullColour );
-        }
+//        else if( win->IsKindOf( CLASSINFO(wxPanel) ) ) {
+////                  ((wxPanel*)win)->SetBackgroundColour(col1);
+//            if( cs != GLOBAL_COLOR_SCHEME_DAY && cs != GLOBAL_COLOR_SCHEME_RGB )
+//                ( (wxPanel*) win )->SetBackgroundColour( ctrl_back_color );
+//            else
+//                ( (wxPanel*) win )->SetBackgroundColour( wxNullColour );
+//        }
 
         else if( win->IsKindOf( CLASSINFO(wxHtmlWindow) ) ) {
-            if( cs != GLOBAL_COLOR_SCHEME_DAY
-                    && cs != GLOBAL_COLOR_SCHEME_RGB ) ( (wxPanel*) win )->SetBackgroundColour(
-                            back_color );
+            if( cs != GLOBAL_COLOR_SCHEME_DAY && cs != GLOBAL_COLOR_SCHEME_RGB )
+                ( (wxPanel*) win )->SetBackgroundColour( ctrl_back_color );
             else
-                ( (wxPanel*) win )->SetBackgroundColour(
-                    wxNullColour );
-
+                ( (wxPanel*) win )->SetBackgroundColour( wxNullColour );
         }
 
         else if( win->IsKindOf( CLASSINFO(wxGrid) ) ) {
             ( (wxGrid*) win )->SetDefaultCellBackgroundColour(
-                col1 );
+                window_back_color );
             ( (wxGrid*) win )->SetDefaultCellTextColour(
                 uitext );
             ( (wxGrid*) win )->SetLabelBackgroundColour(
@@ -11012,8 +11017,10 @@ void DimeControl( wxWindow* ctrl, wxColour col, wxColour col1, wxColour back_col
         }
 
         if( win->GetChildren().GetCount() > 0 ) {
+            depth++;
             wxWindow * w = win;
-            DimeControl( w, col, col1, back_color, text_color, uitext, udkrd, gridline );
+            DimeControl( w, col, window_back_color, ctrl_back_color, text_color, uitext, udkrd, gridline );
+            depth--;
         }
     }
 }

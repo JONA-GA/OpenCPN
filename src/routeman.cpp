@@ -52,6 +52,7 @@
 #include "multiplexer.h"
 #include "MarkIcon.h"
 #include "cutil.h"
+#include "AIS_Decoder.h"
 
 #include <wx/dir.h>
 #include <wx/filename.h>
@@ -84,11 +85,13 @@ extern RoutePoint      *pAnchorWatchPoint1;
 extern RoutePoint      *pAnchorWatchPoint2;
 extern int              g_route_line_width;
 extern Multiplexer     *g_pMUX;
+extern AIS_Decoder     *g_pAIS;
 
 extern PlugInManager    *g_pi_manager;
 extern ocpnStyle::StyleManager* g_StyleManager;
 extern wxString         g_uploadConnection;
 extern bool             g_bSailing;
+extern Route            *pAISMOBRoute;
 
 //    List definitions for Waypoint Manager Icons
 WX_DECLARE_LIST(wxBitmap, markicon_bitmap_list_type);
@@ -770,14 +773,25 @@ bool Routeman::DoesRouteContainSharedPoints( Route *pRoute )
   
 
 
-void Routeman::DeleteRoute( Route *pRoute )
+bool Routeman::DeleteRoute( Route *pRoute )
 {
     if( pRoute ) {
+        if( pRoute == pAISMOBRoute )
+        {
+            int ret = wxMessageBox(_("You are trying to delete an active AIS MOB route, are you REALLY sure?"), _("Warning"), wxYES_NO | wxCENTRE );
+            if( ret == wxNO )
+                return false;
+            else
+                pAISMOBRoute = NULL;
+        }
         ::wxBeginBusyCursor();
 
         if( GetpActiveRoute() == pRoute ) DeactivateRoute();
 
-        if( pRoute->m_bIsInLayer ) return;
+        if( pRoute->m_bIsInLayer )
+            return false;
+            
+        pConfig->DeleteConfigRoute( pRoute );
 
         //    Remove the route from associated lists
         pSelect->DeleteAllSelectableRouteSegments( pRoute );
@@ -825,6 +839,7 @@ void Routeman::DeleteRoute( Route *pRoute )
         ::wxEndBusyCursor();
 
     }
+    return true;
 }
 
 void Routeman::DeleteAllRoutes( void )
@@ -835,6 +850,16 @@ void Routeman::DeleteAllRoutes( void )
     wxRouteListNode *node = pRouteList->GetFirst();
     while( node ) {
         Route *proute = node->GetData();
+        if( proute == pAISMOBRoute )
+        {
+            ::wxEndBusyCursor();
+            int ret = wxMessageBox(_("You are trying to delete an active AIS MOB route, are you REALLY sure?"), _("Warning"), wxYES_NO | wxCENTRE );
+            if( ret == wxNO )
+                return;
+            else
+                pAISMOBRoute = NULL;
+            ::wxBeginBusyCursor();
+        }
 
         if( proute->m_bIsInLayer ) {
             node = node->GetNext();
@@ -871,6 +896,7 @@ void Routeman::DeleteAllTracks( void )
 
         if( proute->m_bIsTrack ) {
             pConfig->m_bSkipChangeSetUpdate = true;
+            g_pAIS->DeletePersistentTrack( (Track *)proute );
             pConfig->DeleteConfigRoute( proute );
             DeleteTrack( proute );
             node = pRouteList->GetFirst();                   // Route
@@ -1437,20 +1463,22 @@ unsigned int WayPointman::GetIconTexture( const wxBitmap *pbm, int &glw, int &gl
         image.GetOrFindMaskColour( &mr, &mg, &mb );
     
         unsigned char *e = new unsigned char[4 * w * h];
-        for( int y = 0; y < h; y++ )
-            for( int x = 0; x < w; x++ ) {
-                unsigned char r, g, b;
-                int off = ( y * image.GetWidth() + x );
-                r = d[off * 3 + 0];
-                g = d[off * 3 + 1];
-                b = d[off * 3 + 2];
-                
-                e[off * 4 + 0] = r;
-                e[off * 4 + 1] = g;
-                e[off * 4 + 2] = b;
-                
-                e[off * 4 + 3] =  a ? a[off] : ( ( r == mr ) && ( g == mg ) && ( b == mb ) ? 0 : 255 );
-            }
+        if(d && e){
+            for( int y = 0; y < h; y++ )
+                for( int x = 0; x < w; x++ ) {
+                    unsigned char r, g, b;
+                    int off = ( y * image.GetWidth() + x );
+                    r = d[off * 3 + 0];
+                    g = d[off * 3 + 1];
+                    b = d[off * 3 + 2];
+                    
+                    e[off * 4 + 0] = r;
+                    e[off * 4 + 1] = g;
+                    e[off * 4 + 2] = b;
+                    
+                    e[off * 4 + 3] =  a ? a[off] : ( ( r == mr ) && ( g == mg ) && ( b == mb ) ? 0 : 255 );
+                }
+        }
     
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pmi->tex_w, pmi->tex_h,
                      0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);

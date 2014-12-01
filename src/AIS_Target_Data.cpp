@@ -128,6 +128,7 @@ AIS_Target_Data::AIS_Target_Data()
     b_blue_paddle = false;
 
     b_OwnShip = false;
+    b_PersistTrack = false;
     b_in_ack_timeout = false;
 
     m_ptrack = new AISTargetTrackList;
@@ -140,6 +141,7 @@ AIS_Target_Data::AIS_Target_Data()
     b_show_track = g_bAISShowTracks;
     b_SarAircraftPosnReport = false;
     altitude = 0;
+    b_nameFromCache = false;
 }
 
 void AIS_Target_Data::CloneFrom( AIS_Target_Data* q )

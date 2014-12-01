@@ -467,7 +467,7 @@ struct sigaction          sa_all_old;
 
 bool                      g_boptionsactive;
 options                   *g_options;
-int                       options_lastPage = -1;
+int                       options_lastPage = 0;
 wxPoint                   options_lastWindowPos( 0,0 );
 wxSize                    options_lastWindowSize( 0,0 );
 
@@ -2026,7 +2026,8 @@ bool MyApp::OnInit()
 
 //      Load and initialize any PlugIns
     g_pi_manager = new PlugInManager( gFrame );
-    g_pi_manager->LoadAllPlugIns( g_Plugin_Dir, true );
+    g_pi_manager->LoadAllPlugIns( g_Plugin_Dir, true, false );         // do not allow blicklist dialog, since
+                                                                        // frame and canvas are not yet rendered...
 
 // Show the frame
 
@@ -2086,6 +2087,10 @@ bool MyApp::OnInit()
     //   Notify all the AUI PlugIns so that they may syncronize with the Perspective
     g_pi_manager->NotifyAuiPlugIns();
 
+    //  Give the use dialog on any blacklisted PlugIns
+    g_pi_manager->ShowDeferredBlacklistMessages();
+    
+    
     bool b_SetInitialPoint = false;
 
     //   Build the initial chart dir array
@@ -2734,6 +2739,9 @@ void MyFrame::OnEraseBackground( wxEraseEvent& event )
 void MyFrame::OnMaximize( wxMaximizeEvent& event )
 {
     g_click_stop = 0;
+#ifdef __WXOSX__
+    event.Skip();
+#endif
 }
 
 void MyFrame::OnActivate( wxActivateEvent& event )
@@ -4164,8 +4172,6 @@ void MyFrame::ToggleFullScreen()
     bool to = !IsFullScreen();
     long style = wxFULLSCREEN_NOBORDER | wxFULLSCREEN_NOCAPTION;; // | wxFULLSCREEN_NOMENUBAR;
 
-    if( g_FloatingToolbarDialog ) g_FloatingToolbarDialog->Show( g_bFullscreenToolbar | !to );
-
     ShowFullScreen( to, style );
     UpdateToolbar( global_color_scheme );
     Layout();
@@ -4560,7 +4566,12 @@ void MyFrame::ToggleChartOutlines( void )
 
 void MyFrame::SetMenubarItemState( int item_id, bool state )
 {
-    if( m_pMenuBar ) m_pMenuBar->Check( item_id, state );
+    if( m_pMenuBar ) {
+        bool enabled = m_pMenuBar->IsEnabled( item_id );
+        m_pMenuBar->Enable( item_id, false );
+        m_pMenuBar->Check( item_id, state );
+        m_pMenuBar->Enable( item_id, enabled );
+     }
 }
 
 void MyFrame::SetToolbarItemState( int tool_id, bool state )
@@ -4720,14 +4731,15 @@ void MyFrame::RegisterGlobalMenuItems()
     tools_menu->AppendSeparator();
 #ifdef __WXOSX__
     tools_menu->Append( ID_MENU_MARK_MOB, _menuText(_("Drop MOB Marker"), _T("RawCtrl-Space")) ); // NOTE Cmd+Space is reserved for Spotlight
-#else
-    tools_menu->Append( ID_MENU_MARK_MOB, _menuText(_("Drop MOB Marker"), _T("Ctrl-Space")) );
-#endif
     tools_menu->AppendSeparator();
     tools_menu->Append( wxID_PREFERENCES, _menuText(_("Preferences..."), _T("Ctrl-,")) );
+#else
+    tools_menu->Append( ID_MENU_MARK_MOB, _menuText(_("Drop MOB Marker"), _T("Ctrl-Space")) );
+    tools_menu->AppendSeparator();
+    tools_menu->Append( wxID_PREFERENCES, _menuText(_("Options..."), _T("Ctrl-,")) );
+#endif
+
     m_pMenuBar->Append( tools_menu, _("&Tools") );
-
-
     wxMenu* help_menu = new wxMenu();
     help_menu->Append( wxID_ABOUT, _("About OpenCPN") );
     help_menu->Append( wxID_HELP, _("OpenCPN Help") );
@@ -4866,7 +4878,7 @@ int MyFrame::DoOptionsDialog()
 #endif
 
     if( options_lastPage >= 0 )
-        g_options->m_pListbook->SetSelection( options_lastPage );
+        g_options->SetInitialPage(options_lastPage );
 
     if(!g_bresponsive){
         g_options->lastWindowPos = options_lastWindowPos;
@@ -8663,8 +8675,8 @@ void MyFrame::ActivateAISMOBRoute( AIS_Target_Data *ptarget )
 
 void MyFrame::UpdateAISMOBRoute( AIS_Target_Data *ptarget )
 {
-    if(pAISMOBRoute && ptarget){
-
+    if(pAISMOBRoute && ptarget)
+    {
         //   Update Current Ownship point
         RoutePoint *OwnPoint = pAISMOBRoute->GetPoint( 1 );
         OwnPoint->m_lat = gLat;
@@ -8683,7 +8695,6 @@ void MyFrame::UpdateAISMOBRoute( AIS_Target_Data *ptarget )
 
         pSelect->UpdateSelectableRouteSegments( OwnPoint );
         pSelect->UpdateSelectableRouteSegments( MOB_Point );
-
     }
 
     cc1->Refresh( false );
@@ -9588,8 +9599,12 @@ static const char *usercolors[] = { "Table:DAY", "GREEN1;120;255;120;", "GREEN2;
         "GREEN3;200;220;200;", "GREEN4;  0;255;  0;", "BLUE1; 170;170;255;", "BLUE2;  45; 45;170;",
         "BLUE3;   0;  0;255;", "GREY1; 200;200;200;", "GREY2; 230;230;230;", "RED1;  220;200;200;",
         "UBLCK;   0;  0;  0;", "UWHIT; 255;255;255;", "URED;  255;  0;  0;", "UGREN;   0;255;  0;",
-        "YELO1; 243;229; 47;", "YELO2; 128; 80;  0;", "TEAL1;   0;128;128;",
+        "YELO1; 243;229; 47;", "YELO2; 128; 80;  0;", "TEAL1;   0;128;128;", "GREEN5;170;254;  0;",
+#ifdef __WXOSX__
+        "DILG0; 255;255;255;",              // Dialog Background white
+#else
         "DILG0; 238;239;242;",              // Dialog Background white
+#endif
         "DILG1; 212;208;200;",              // Dialog Background
         "DILG2; 255;255;255;",              // Control Background
         "DILG3;   0;  0;  0;",              // Text
@@ -9609,7 +9624,7 @@ static const char *usercolors[] = { "Table:DAY", "GREEN1;120;255;120;", "GREEN2;
         "GREEN4;  0;128;  0;", "BLUE1;  80; 80;160;", "BLUE2;  30; 30;120;", "BLUE3;   0;  0;128;",
         "GREY1; 100;100;100;", "GREY2; 128;128;128;", "RED1;  150;100;100;", "UBLCK;   0;  0;  0;",
         "UWHIT; 255;255;255;", "URED;  120; 54; 11;", "UGREN;  35;110; 20;", "YELO1; 120;115; 24;",
-        "YELO2;  64; 40;  0;", "TEAL1;   0; 64; 64;",
+        "YELO2;  64; 40;  0;", "TEAL1;   0; 64; 64;", "GREEN5; 85;128; 0;",
         "DILG0; 110;110;110;",              // Dialog Background
         "DILG1; 110;110;110;",              // Dialog Background
         "DILG2;   0;  0;  0;",              // Control Background
@@ -9630,7 +9645,7 @@ static const char *usercolors[] = { "Table:DAY", "GREEN1;120;255;120;", "GREEN2;
         "GREEN4;  0; 64;  0;", "BLUE1;  60; 60;100;", "BLUE2;  22; 22; 85;", "BLUE3;   0;  0; 40;",
         "GREY1;  48; 48; 48;", "GREY2;  64; 64; 64;", "RED1;  100; 50; 50;", "UWHIT; 255;255;255;",
         "UBLCK;   0;  0;  0;", "URED;   60; 27;  5;", "UGREN;  17; 55; 10;", "YELO1;  60; 65; 12;",
-        "YELO2;  32; 20;  0;", "TEAL1;   0; 32; 32;",
+        "YELO2;  32; 20;  0;", "TEAL1;   0; 32; 32;", "GREEN5; 44; 64; 0;",
         "DILG0;  80; 80; 80;",              // Dialog Background
         "DILG1;  80; 80; 80;",              // Dialog Background
         "DILG2;   0;  0;  0;",              // Control Background
@@ -10336,12 +10351,12 @@ wxFont *GetOCPNScaledFont( wxString item, int default_size )
     wxFont *dFont = FontMgr::Get().GetFont( item, default_size );
 
     if( g_bresponsive ){
-        //      Adjust font size to be reasonably readable, but no smaller than the default specified
-        double scaled_font_size = (double)default_size;
+        //      Adjust font size to be no smaller than xx mm actual size
+        double scaled_font_size = dFont->GetPointSize();
 
         if( cc1) {
-            scaled_font_size = 2.5 * cc1->GetPixPerMM();
-            int nscaled_font_size = wxMax( wxRound(scaled_font_size), default_size );
+            double min_scaled_font_size = 3 * cc1->GetPixPerMM();
+            int nscaled_font_size = wxMax( wxRound(scaled_font_size), min_scaled_font_size );
             wxFont *qFont = wxTheFontList->FindOrCreateFont( nscaled_font_size,
                                                              dFont->GetFamily(),
                                                              dFont->GetStyle(),
