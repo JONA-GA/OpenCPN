@@ -40,7 +40,7 @@
 #include <wx/listimpl.cpp>
 
 #include "chcanv.h"
-
+#include "TCWin.h"
 #include "geodesic.h"
 #include "styles.h"
 #include "routeman.h"
@@ -284,9 +284,8 @@ extern ocpnGLOptions g_GLOptions;
 wxProgressDialog *pprog;
 bool b_skipout;
 wxSize pprog_size;
-
+int pprog_count;
 wxArrayString compress_msg_array;
-extern wxSize pprog_size;
 
 //  TODO why are these static?
 static int mouse_x;
@@ -300,7 +299,8 @@ int gamma_state;
 bool g_brightness_init;
 int   last_brightness;
 
-int                      g_cog_predictor_width;
+int                     g_cog_predictor_width;
+extern double           g_display_size_mm;
 
 
 // "Curtain" mode parameters
@@ -719,8 +719,26 @@ OCPNRegion ViewPort::GetVPRegionIntersect( const OCPNRegion &Region, size_t nPoi
     OCPNRegionIterator screen_region_it1( Region );
     while( screen_region_it1.HaveRects() ) {
         wxRect rect = screen_region_it1.GetRect();
+
+        double lat, lon;
+        
+        //  The screen region corners
+        GetLLFromPix( wxPoint(rect.x, rect.y), &lat, &lon );
+        float_2Dpt p0; p0.y = lat; p0.x = lon;
+        
+        GetLLFromPix( wxPoint(rect.x + rect.width, rect.y), &lat, &lon );
+        float_2Dpt p1; p1.y = lat; p1.x = lon;
+        
+        GetLLFromPix( wxPoint(rect.x + rect.width, rect.y + rect.height), &lat, &lon );
+        float_2Dpt p2; p2.y = lat; p2.x = lon;
+        
+        GetLLFromPix( wxPoint(rect.x, rect.y + rect.height), &lat, &lon );
+        float_2Dpt p3; p3.y = lat; p3.x = lon;
+        
         
         for(size_t i=0 ; i < nPoints-1 ; i++){
+            
+            //  Quick check
             int x0 = pp[i].x;  int y0 = pp[i].y; int x1 = pp[i+1].x; int y1 = pp[i+1].y;
             if( ((x0 < rect.x) && (x1 < rect.x)) ||
                 ((x0 > rect.x+rect.width) && (x1 > rect.x+rect.width)) )
@@ -730,24 +748,28 @@ OCPNRegion ViewPort::GetVPRegionIntersect( const OCPNRegion &Region, size_t nPoi
                 ((y0 > rect.y+rect.height) && (y1 > rect.y+rect.height)) )
                 continue;
             
-            b_intersect = true;
-            break;
+            //  Look harder
+            float_2Dpt f0; f0.y = llpoints[i * 2];     f0.x = llpoints[(i * 2) + 1];
+            float_2Dpt f1; f1.y = llpoints[(i+1) * 2]; f1.x = llpoints[((i+1) * 2) + 1];
+            b_intersect |= Intersect_FL( p0, p1, f0, f1) != 0;
+            b_intersect |= Intersect_FL( p1, p2, f0, f1) != 0;
+            b_intersect |= Intersect_FL( p2, p3, f0, f1) != 0;
+            b_intersect |= Intersect_FL( p3, p0, f0, f1) != 0;
+            
+            if(b_intersect)
+                break;
         }
         
         // Check segment, last point back to first point
         if(!b_intersect){
-            int x0 = pp[nPoints-1].x;  int y0 = pp[nPoints-1].y; int x1 = pp[0].x; int y1 = pp[0].y;
-            if( ((x0 < rect.x) && (x1 < rect.x)) ||
-                ((x0 > rect.x+rect.width) && (x1 > rect.x+rect.width)) ){
-            }
-            else{
-                if( ((y0 < rect.y) && (y1 < rect.y)) ||
-                    ((y0 > rect.y+rect.height) && (y1 > rect.y+rect.height)) ){
-                }
-                else{
-                    b_intersect = true;
-                }
-            }
+            
+            float_2Dpt f0; f0.y = llpoints[(nPoints-1) * 2];     f0.x = llpoints[((nPoints-1) * 2) + 1];
+            float_2Dpt f1; f1.y = llpoints[0]; f1.x = llpoints[1];
+            b_intersect |= Intersect_FL( p0, p1, f0, f1) != 0;
+            b_intersect |= Intersect_FL( p1, p2, f0, f1) != 0;
+            b_intersect |= Intersect_FL( p2, p3, f0, f1) != 0;
+            b_intersect |= Intersect_FL( p3, p0, f0, f1) != 0;
+            
         }
                 
         screen_region_it1.NextRect();
@@ -785,7 +807,26 @@ OCPNRegion ViewPort::GetVPRegionIntersect( const OCPNRegion &Region, size_t nPoi
         if(rpoly.Contains(rRegion)){
         //  subject poygon may be large enough to fully encompass the target Region,
         //  but it might not, especially for irregular or concave charts.
-        //  So we cannot shortcut here
+        //  So we cannot directly shortcut here
+        //  Better check....
+        
+#if 1
+        //  If the subject polygon does not contain the screen region center point,
+        //  then there must be no intersction, so return empty region
+        
+            if(!G_PtInPolygon_FL((float_2Dpt *)llpoints, nPoints, clon, clat)){
+                if( NULL == ppoints ) delete[] pp;
+                wxRegion r;
+                return r;
+            }
+            
+            //  Other wise, it must be the full screen.
+            else{
+                if( NULL == ppoints ) delete[] pp;
+                return Region;
+            }
+#endif        
+            
         }
         else{
         //  Subject polygon is entirely outside of target Region
@@ -901,9 +942,12 @@ void ViewPort::SetBoxes( void )
         if( dy % 4 ) dy += 4 - ( dy % 4 );
         if( dx % 4 ) dx += 4 - ( dx % 4 );
 
+        int inflate_x = wxMax(( dx - pix_width ) / 2, 0);
+        int inflate_y = wxMax(( dy - pix_height ) / 2, 0);
+        
         //  Grow the source rectangle appropriately
-        if( fabs( rotator ) > .001 ) rv_rect.Inflate( ( dx - pix_width ) / 2,
-                    ( dy - pix_height ) / 2 );
+        if( fabs( rotator ) > .001 )
+            rv_rect.Inflate( inflate_x, inflate_y );
 
     }
 
@@ -999,7 +1043,8 @@ BEGIN_EVENT_TABLE ( ChartCanvas, wxWindow )
     EVT_KEY_UP(ChartCanvas::OnKeyUp )
     EVT_CHAR(ChartCanvas::OnKeyChar)
     EVT_MOUSE_CAPTURE_LOST(ChartCanvas::LostMouseCapture )
-
+    EVT_KILL_FOCUS(ChartCanvas::OnFocusKill )
+    
     EVT_MENU ( ID_DEF_MENU_MAX_DETAIL,         ChartCanvas::PopupMenuHandler )
     EVT_MENU ( ID_DEF_MENU_SCALE_IN,           ChartCanvas::PopupMenuHandler )
     EVT_MENU ( ID_DEF_MENU_SCALE_OUT,          ChartCanvas::PopupMenuHandler )
@@ -1108,6 +1153,8 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
     m_pRouteRolloverWin = NULL;
     m_pAISRolloverWin = NULL;
     m_bedge_pan = false;
+    m_disable_edge_pan = false;
+    m_brecapture = false;
     
     m_pCIWin = NULL;
 
@@ -1336,15 +1383,6 @@ ChartCanvas::ChartCanvas ( wxFrame *frame ) :
     m_rollover_popup_timer_msec = 20;
 
     m_b_rot_hidef = true;
-
-//    Set up current arrow drawing factors
-    int mmx, mmy;
-    wxDisplaySizeMM( &mmx, &mmy );
-
-    int sx, sy;
-    wxDisplaySize( &sx, &sy );
-
-    m_pix_per_mm = ( (double) sx ) / ( (double) mmx );
 
     int mm_per_knot = 10;
     current_draw_scaler = mm_per_knot * m_pix_per_mm * g_current_arrow_scale / 100.0;
@@ -1670,6 +1708,29 @@ ChartCanvas::~ChartCanvas()
 
 }
 
+void ChartCanvas::OnFocusKill(wxFocusEvent& event )
+{
+    m_brecapture = true;
+}
+
+void ChartCanvas::SetDisplaySizeMM( double size )
+{
+    m_display_size_mm = size;
+    
+    int sx, sy;
+    wxDisplaySize( &sx, &sy );
+    
+    m_pix_per_mm = ( (double) sx ) / ( (double) m_display_size_mm );
+    m_canvas_scale_factor = ( (double) sx ) / (m_display_size_mm /1000.);
+    
+#ifdef USE_S57
+    if( ps52plib )
+        ps52plib->SetPPMM( m_pix_per_mm );
+#endif
+    
+    
+}
+
 void ChartCanvas::OnEvtCompressProgress( OCPN_CompressProgressEvent & event )
 {
     wxString msg(event.m_string.c_str(), wxConvUTF8);
@@ -1689,7 +1750,7 @@ void ChartCanvas::OnEvtCompressProgress( OCPN_CompressProgressEvent & event )
     }
     
     bool skip = false;
-    pprog->Update(event.count-1, combined_msg, &skip );
+    pprog->Update(pprog_count, combined_msg, &skip );
     pprog->SetSize(pprog_size);
     if(skip)
         b_skipout = skip;
@@ -2096,12 +2157,6 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
         parent_frame->DoStackUp();
         break;
 
-    case WXK_F9: {
-        parent_frame->ToggleQuiltMode();
-        ReloadVP();
-        break;
-    }
-
     case WXK_F11:
         parent_frame->ToggleFullScreen();
         b_handled = true;
@@ -2247,17 +2302,7 @@ void ChartCanvas::OnKeyDown( wxKeyEvent &event )
             break;
 
         case 2:                      // Ctrl B
-            if( stats ) {
-                if( stats->IsShown() )
-                    stats->Hide();
-                else {
-                    stats->Move(0,0);
-                    stats->RePosition();
-                    stats->Show();
-                    gFrame->Raise();
-                }
-                Refresh();
-            }
+            parent_frame->ToggleStats();
             break;
 
         case 13:             // Ctrl M // Drop Marker at cursor
@@ -2506,6 +2551,11 @@ bool ChartCanvas::StartTimedMovement( bool stoptimer )
     if(stoptimer)
         pMovementStopTimer->Start( 1000, wxTIMER_ONE_SHOT ); 
 
+    if(!pMovementTimer->IsRunning()){
+//        printf("timer not running, starting\n");
+        pMovementTimer->Start( 1, wxTIMER_ONE_SHOT ); 
+    }
+    
     if(m_panx || m_pany || m_zoom_factor!=1 || m_rotation_speed) {
         // already moving, gets called again because of key-repeat event
         return false;
@@ -3020,7 +3070,7 @@ void ChartCanvas::GetCursorLatLon( double *lat, double *lon )
     *lon = clon;
 }
 
-void ChartCanvas::GetCanvasPointPix( double rlat, double rlon, wxPoint *r )
+void ChartCanvas::GetDoubleCanvasPointPix( double rlat, double rlon, wxPoint2DDouble *r )
 {
     // If the Current Chart is a raster chart, and the
     // requested lat/long is within the boundaries of the chart,
@@ -3032,8 +3082,6 @@ void ChartCanvas::GetCanvasPointPix( double rlat, double rlon, wxPoint *r )
 
     // If for some reason the chart rejects the request by returning an error,
     // then fall back to Viewport Projection estimate from canvas parameters
-    bool bUseVP = true;
-
     if( Current_Ch && ( Current_Ch->GetChartFamily() == CHART_FAMILY_RASTER )
         && ( ( ( fabs( GetVP().rotation ) < .0001 ) &&
                ( ( !g_bskew_comp || ( fabs( GetVP().skew ) < .0001 ) ) ) )
@@ -3051,24 +3099,29 @@ void ChartCanvas::GetCanvasPointPix( double rlat, double rlon, wxPoint *r )
             //    If the VP is changing, the raster chart parameters may not yet be setup
             //    So do that before accessing the chart's embedded georeferencing
             Cur_BSB_Ch->SetVPRasterParms( GetVP() );
-            int rpixxd, rpixyd;
+            double rpixxd, rpixyd;
             if( 0 == Cur_BSB_Ch->latlong_to_pix_vp( rlat, rlon, rpixxd, rpixyd, GetVP() ) ) {
-                r->x = rpixxd;
-                r->y = rpixyd;
-                bUseVP = false;
+                r->m_x = rpixxd;
+                r->m_y = rpixyd;
+                return;
             }
         }
     }
 
     //    if needed, use the VPoint scaling estimator,
-    if( bUseVP ) {
-        wxPoint p = GetVP().GetPixFromLL( rlat, rlon );
-        *r = p;
-    }
-
+    *r = GetVP().GetDoublePixFromLL( rlat, rlon );
 }
 
-void ChartCanvas::GetCanvasPixPoint( int x, int y, double &lat, double &lon )
+// This routine might be deleted and all of the rendering improved
+// to have floating point accuracy
+void ChartCanvas::GetCanvasPointPix( double rlat, double rlon, wxPoint *r )
+{
+    wxPoint2DDouble p;
+    GetDoubleCanvasPointPix(rlat, rlon, &p);
+    *r = wxPoint(wxRound(p.m_x), wxRound(p.m_y));
+}
+
+void ChartCanvas::GetCanvasPixPoint( double x, double y, double &lat, double &lon )
 {
     // If the Current Chart is a raster chart, and the
     // requested x,y is within the boundaries of the chart,
@@ -3254,9 +3307,9 @@ void ChartCanvas::DoZoomCanvas( double factor,  bool can_zoom_to_cursor )
         if( can_zoom_to_cursor && g_bEnableZoomToCursor) {
             //  Arrange to combine the zoom and pan into one operation for smoother appearance
             SetVPScale( GetCanvasScaleFactor() / proposed_scale_onscreen, false );   // adjust, but deferred refresh
-            wxPoint r;
-            GetCanvasPointPix( zlat, zlon, &r );
-            PanCanvas( r.x - mouse_x, r.y - mouse_y );  // this will give the Refresh()
+            wxPoint2DDouble r;
+            GetDoubleCanvasPointPix( zlat, zlon, &r );
+            PanCanvas( r.m_x - mouse_x, r.m_y - mouse_y );  // this will give the Refresh()
             ClearbFollow();      // update the follow flag
         }
         else
@@ -3292,8 +3345,7 @@ void ChartCanvas::DoRotateCanvas( double rotation )
     while(rotation > 2*PI) rotation -= 2*PI;
 
     SetVPRotation( rotation );
-    ReloadVP();
-    parent_frame->UpdateGPSCompassStatusBox( false );
+    parent_frame->UpdateRotationState( VPoint.rotation);
 }
 
 void ChartCanvas::ClearbFollow( void )
@@ -3302,16 +3354,16 @@ void ChartCanvas::ClearbFollow( void )
     parent_frame->SetToolbarItemState( ID_FOLLOW, false );
 }
 
-bool ChartCanvas::PanCanvas( int dx, int dy )
+bool ChartCanvas::PanCanvas( double dx, double dy )
 {
     double dlat, dlon;
-    wxPoint p;
+    wxPoint2DDouble p;
 //      CALLGRIND_START_INSTRUMENTATION
 
     extendedSectorLegs.clear();
 
-    GetCanvasPointPix( GetVP().clat, GetVP().clon, &p );
-    GetCanvasPixPoint( p.x + dx, p.y + dy, dlat, dlon );
+    GetDoubleCanvasPointPix( GetVP().clat, GetVP().clon, &p );
+    GetCanvasPixPoint( p.m_x + dx, p.m_y + dy, dlat, dlon );
 
     if( dlon > 360. ) dlon -= 360.;
     if( dlon < -360. ) dlon += 360.;
@@ -3478,6 +3530,7 @@ void ChartCanvas::UpdateCanvasOnGroupChange( void )
 
     if( m_pQuilt ) {
         m_pQuilt->Compose( VPoint );
+        cc1->SetFocus();
     }
 }
 
@@ -3697,28 +3750,26 @@ bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double
             VPoint.ref_scale = Current_Ch->GetNativeScale();
         else 
             VPoint.ref_scale = m_pQuilt->GetRefNativeScale();
-        
+
         //    Calculate the on-screen displayed actual scale
         //    by a simple traverse northward from the center point
-        //    of roughly 10 % of the Viewport extent
-        double tlat, tlon;
-        wxPoint r, r1;
-        double delta_y = ( VPoint.GetBBox().GetMaxY() - VPoint.GetBBox().GetMinY() ) * 60.0 * .10; // roughly 10 % of lat range, in NM
+        //    of roughly the canvas height
+        wxPoint2DDouble r, r1;
 
-        //  Make sure the two points are in phase longitudinally
-        double lon_norm = VPoint.clon;
-        if( lon_norm > 180. ) lon_norm -= 360;
-        else if( lon_norm < -180. ) lon_norm += 360.;
+        double delta_check = (VPoint.pix_height / VPoint.view_scale_ppm) / (1852. * 60);
 
-        ll_gc_ll( VPoint.clat, lon_norm, 0, delta_y, &tlat, &tlon );
-
-        GetCanvasPointPix( tlat, tlon, &r1 );
-        GetCanvasPointPix( VPoint.clat, lon_norm, &r );
-
-        m_true_scale_ppm = sqrt(
-                               pow( (double) ( r.y - r1.y ), 2 ) + pow( (double) ( r.x - r1.x ), 2 ) )
-                           / ( delta_y * 1852. );
-
+        double rhumbDist;
+        DistanceBearingMercator( VPoint.clat, VPoint.clon,
+                                     VPoint.clat + delta_check,
+                                     VPoint.clon,
+                                     0, &rhumbDist );
+                           
+        GetDoubleCanvasPointPix( VPoint.clat, VPoint.clon, &r1 );
+        GetDoubleCanvasPointPix( VPoint.clat + delta_check, VPoint.clon, &r );
+        double delta_p = sqrt( ((r1.m_y - r.m_y) * (r1.m_y - r.m_y)) + ((r1.m_x - r.m_x) * (r1.m_x - r.m_x)) );
+        
+        m_true_scale_ppm = delta_p / (rhumbDist * 1852);
+        
         //        A fall back in case of very high zoom-out, giving delta_y == 0
         //        which can probably only happen with vector charts
         if( 0.0 == m_true_scale_ppm )
@@ -3736,7 +3787,13 @@ bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double
             VPoint.chart_scale = 1.0;
 
         if( parent_frame->m_pStatusBar ) {
-            double true_scale_display = floor( VPoint.chart_scale / 100. ) * 100.;
+            double round_factor = 100.;
+            if(VPoint.chart_scale < 1000.)
+                round_factor = 10.;
+            else if (VPoint.chart_scale < 10000.)
+                round_factor = 50.;
+            
+            double true_scale_display =  wxRound(VPoint.chart_scale / round_factor ) * round_factor;
             wxString text;
 
             m_displayed_scale_factor = VPoint.ref_scale / VPoint.chart_scale;
@@ -3758,8 +3815,17 @@ bool ChartCanvas::SetViewPoint( double lat, double lon, double scale_ppm, double
     vLat = VPoint.clat;
     vLon = VPoint.clon;
 
+    //   If any PlugIn chart ran wxExecute(), then the canvas focus is likely lost.
+    //  Restore it here
+    if(m_brecapture  && !gFrame->IsPianoContextMenuActive()){
+      cc1->SetFocus();
+      m_brecapture = false;
+    }
+      
+    
     return b_ret;
 }
+
 
 //          Static Icon definitions for some symbols requiring scaling/rotation/translation
 //          Very specific wxDC draw commands are necessary to properly render these icons...See the code in ShipDraw()
@@ -3923,7 +3989,7 @@ void ChartCanvas::ComputeShipScaleFactor(float icon_hdt,
                                          wxPoint &GPSOffsetPixels, wxPoint lGPSPoint,
                                          float &scale_factor_x, float &scale_factor_y)
 {
-    float screenResolution = (float) ::wxGetDisplaySize().y / ::wxGetDisplaySizeMM().y;
+    float screenResolution = (float) ::wxGetDisplaySize().x / g_display_size_mm;
 
     //  Calculate the true ship length in exact pixels
     double ship_bow_lat, ship_bow_lon;
@@ -4745,15 +4811,7 @@ void ChartCanvas::OnSize( wxSizeEvent& event )
 //          for new canvas size
     SetVPScale( GetVPScale() );
 
-    double display_size_meters = wxGetDisplaySizeMM().GetWidth() / 1000.; // gives screen size(width) in meters
-//        m_canvas_scale_factor = m_canvas_width / display_size_meters;
-    m_canvas_scale_factor = wxGetDisplaySize().GetWidth() / display_size_meters;
-
     m_absolute_min_scale_ppm = m_canvas_width / ( 1.5 * WGS84_semimajor_axis_meters * PI ); // something like 180 degrees
-
-#ifdef USE_S57
-    if( ps52plib ) ps52plib->SetPPMM( m_canvas_scale_factor / 1000. );
-#endif
 
     //  Inform the parent Frame that I am being resized...
     gFrame->ProcessCanvasResize();
@@ -4869,6 +4927,9 @@ void ChartCanvas::MovementStopTimerEvent( wxTimerEvent& )
 
 bool ChartCanvas::CheckEdgePan( int x, int y, bool bdragging, int margin, int delta )
 {
+    if(m_disable_edge_pan)
+        return false;
+    
     bool bft = false;
     int pan_margin = m_canvas_width * margin / 100;
     int pan_timer_set = 200;
@@ -5378,13 +5439,13 @@ void ChartCanvas::MouseEvent( wxMouseEvent& event )
                             msg << _("For this leg the Great Circle route is ")
                                 << FormatDistanceAdaptive( rhumbDist - gcDistNM ) << _(" shorter than rhumbline.\n\n")
                                 << _("Would you like include the Great Circle routing points for this leg?");
+                                
+                            m_disable_edge_pan = true;  // This helps on OS X if MessageBox does not fully capture mouse
 
-        #ifndef __WXOSX__
                             int answer = OCPNMessageBox( this, msg, _("OpenCPN Route Create"), wxYES_NO | wxNO_DEFAULT );
-        #else
-                            int answer = wxID_NO;
-        #endif
 
+                            m_disable_edge_pan = false;
+                            
                             if( answer == wxID_YES ) {
                                 RoutePoint* gcPoint;
                                 RoutePoint* prevGcPoint = m_prev_pMousePoint;
@@ -6650,9 +6711,19 @@ void ChartCanvas::CanvasPopupMenu( int x, int y, int seltype )
             MenuAppend( contextMenu, ID_DEF_MENU_NORTHUP, _("North Up Mode") );
     }
 
+    bool full_toggle_added = false;
     if(g_btouch){
         MenuAppend( contextMenu, ID_DEF_MENU_TOGGLE_FULL, _("Toggle Full Screen") );
+        full_toggle_added = true;
     }
+        
+    
+    if(!full_toggle_added){
+        if(gFrame->IsFullScreen()){
+            MenuAppend( contextMenu, ID_DEF_MENU_TOGGLE_FULL, _("Toggle Full Screen") );
+        }
+    }
+        
     
     if ( g_pRouteMan->IsAnyRouteActive() && g_pRouteMan->GetCurrentXTEToActivePoint() > 0. ) MenuAppend( contextMenu, ID_DEF_ZERO_XTE, _("Zero XTE") );
 
@@ -7213,21 +7284,21 @@ void ChartCanvas::ShowMarkPropertiesDialog( RoutePoint* markPoint ) {
     if( NULL == pMarkPropDialog )    // There is one global instance of the MarkProp Dialog
         pMarkPropDialog = new MarkInfoImpl( this );
 
-    if( g_bresponsive ) {
+    if( 1/*g_bresponsive*/ ) {
 
-        wxSize canvas_size = cc1->GetSize();
-        wxPoint canvas_pos = cc1->GetPosition();
+        wxSize canvas_size = GetSize();
+        wxPoint canvas_pos = GetPosition();
         wxSize fitted_size = pMarkPropDialog->GetSize();;
 
         if(canvas_size.x < fitted_size.x){
-            fitted_size.x = canvas_size.x;
+            fitted_size.x = canvas_size.x - 40;
             if(canvas_size.y < fitted_size.y)
-                fitted_size.y -= 20;                // scrollbar added
+                fitted_size.y -= 40;                // scrollbar added
         }
         if(canvas_size.y < fitted_size.y){
-            fitted_size.y = canvas_size.y;
+            fitted_size.y = canvas_size.y - 40;
             if(canvas_size.x < fitted_size.x)
-                fitted_size.x -= 20;                // scrollbar added
+                fitted_size.x -= 40;                // scrollbar added
         }
 
         pMarkPropDialog->SetSize( fitted_size );
@@ -7755,16 +7826,6 @@ void ChartCanvas::PopupMenuHandler( wxCommandEvent& event )
                 m_pFoundRoutePoint->SetName( nn );
             }
         }
-        break;
-
-    case ID_WP_MENU_ADDITIONAL_INFO:
-        if( NULL == pMarkInfoDialog )    // There is one global instance of the MarkInfo Dialog
-            pMarkInfoDialog = new MarkInfoImpl( this );
-
-        pMarkInfoDialog->SetRoutePoint( m_pFoundRoutePoint );
-        pMarkInfoDialog->UpdateProperties();
-
-        pMarkInfoDialog->Show();
         break;
 
     case ID_DEF_MENU_ACTIVATE_MEASURE:
@@ -8924,53 +8985,54 @@ void ChartCanvas::OnPaint( wxPaintEvent& event )
             Current_Ch->RenderRegionViewOnDC( temp_dc, svp, chart_get_region );
         }            
     }
-    
-    if( !temp_dc.IsOk() ) return;
 
+    if(temp_dc.IsOk() ) {
+    
 //    Arrange to render the World Chart vector data behind the rendered current chart
 //    so that uncovered canvas areas show at least the world chart.
-    OCPNRegion chartValidRegion;
-    if( !VPoint.b_quilt )
-        Current_Ch->GetValidCanvasRegion( svp, &chartValidRegion ); // Make a region covering the current chart on the canvas
-    else
-        chartValidRegion = m_pQuilt->GetFullQuiltRenderedRegion();
+        OCPNRegion chartValidRegion;
+        if( !VPoint.b_quilt )
+            Current_Ch->GetValidCanvasRegion( svp, &chartValidRegion ); // Make a region covering the current chart on the canvas
+        else
+            chartValidRegion = m_pQuilt->GetFullQuiltRenderedRegion();
 
-    temp_dc.DestroyClippingRegion();
+        temp_dc.DestroyClippingRegion();
     
-    //    Copy current chart region
-    OCPNRegion backgroundRegion(  0, 0, svp.pix_width, svp.pix_height  );
+        //    Copy current chart region
+        OCPNRegion backgroundRegion(  0, 0, svp.pix_width, svp.pix_height  );
 
-    if( chartValidRegion.IsOk() )
-        backgroundRegion.Subtract( chartValidRegion );
+        if( chartValidRegion.IsOk() )
+            backgroundRegion.Subtract( chartValidRegion );
 
-    if( ( ( fabs( GetVP().skew ) < .01 ) || ! g_bskew_comp )
-        && ! backgroundRegion.IsEmpty() ) {
+        if( ( ( fabs( GetVP().skew ) < .01 ) || ! g_bskew_comp )
+            && ! backgroundRegion.IsEmpty() ) {
         
-        //    Associate with temp_dc
-        wxRegion *clip_region = backgroundRegion.GetNew_wxRegion();
-        temp_dc.SetClippingRegion( *clip_region );
-        delete clip_region;
+            //    Associate with temp_dc
+            wxRegion *clip_region = backgroundRegion.GetNew_wxRegion();
+            temp_dc.SetClippingRegion( *clip_region );
+            delete clip_region;
 
-    //    Draw the Background Chart only in the areas NOT covered by the current chart view
+            //    Draw the Background Chart only in the areas NOT covered by the current chart view
 
-        /* unfortunately wxDC::DrawRectangle and wxDC::Clear do not respect
-           clipping regions with more than 1 rectangle so... */
-        wxColour water = cc1->pWorldBackgroundChart->water;
-        temp_dc.SetPen( *wxTRANSPARENT_PEN );
-        temp_dc.SetBrush( wxBrush( water ) );
-        OCPNRegionIterator upd( backgroundRegion ); // get the update rect list
-        while( upd.HaveRects() ) {
-            wxRect rect = upd.GetRect();
-            temp_dc.DrawRectangle(rect);
-            upd.NextRect();
+            /* unfortunately wxDC::DrawRectangle and wxDC::Clear do not respect
+               clipping regions with more than 1 rectangle so... */
+            wxColour water = cc1->pWorldBackgroundChart->water;
+            temp_dc.SetPen( *wxTRANSPARENT_PEN );
+            temp_dc.SetBrush( wxBrush( water ) );
+            OCPNRegionIterator upd( backgroundRegion ); // get the update rect list
+            while( upd.HaveRects() ) {
+                wxRect rect = upd.GetRect();
+                temp_dc.DrawRectangle(rect);
+                upd.NextRect();
+            }
+
+            ocpnDC bgdc( temp_dc );
+            double r =         VPoint.rotation;
+            SetVPRotation( 0.0 );
+            pWorldBackgroundChart->RenderViewOnDC( bgdc, VPoint );
+            SetVPRotation( r );
         }
-
-        ocpnDC bgdc( temp_dc );
-        double r =         VPoint.rotation;
-        SetVPRotation( 0.0 );
-        pWorldBackgroundChart->RenderViewOnDC( bgdc, VPoint );
-        SetVPRotation( r );
-    }
+    } // temp_dc.IsOk();
 
     wxMemoryDC *pChartDC = &temp_dc;
     wxMemoryDC rotd_dc;

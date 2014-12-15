@@ -123,6 +123,8 @@ float            g_GLMinSymbolLineWidth;
 float            g_GLMinCartographicLineWidth;
 
 extern bool             g_fog_overzoom;
+extern double           g_overzoom_emphasis_base;
+extern bool             g_oz_vector_scale;
 
 ocpnGLOptions g_GLOptions;
 
@@ -168,6 +170,7 @@ int g_uncompressed_tile_size;
 extern wxProgressDialog *pprog;
 extern bool b_skipout;
 extern wxSize pprog_size;
+extern int pprog_count;
 
 //#if defined(__MSVC__) && !defined(ocpnUSE_GLES) /* this compiler doesn't support vla */
 //const
@@ -205,7 +208,7 @@ wxEvent* OCPN_CompressProgressEvent::Clone() const
     
         
 bool CompressChart(wxThread *pThread, ChartBase *pchart, wxString CompressedCacheFilePath, wxString filename,
-                   wxEvtHandler *pMessageTarget, const wxString &msg, int count, int thread)
+                   wxEvtHandler *pMessageTarget, const wxString &msg, int thread)
 {
     bool ret = true;
     ChartBaseBSB *pBSBChart = dynamic_cast<ChartBaseBSB*>( pchart );
@@ -275,7 +278,6 @@ bool CompressChart(wxThread *pThread, ChartBase *pchart, wxString CompressedCach
                 std::string stlstring = std::string(m1.mb_str());
                 OCPN_CompressProgressEvent Nevent(wxEVT_OCPN_COMPRESSPROGRESS, 0);
                 Nevent.m_string = stlstring;
-                Nevent.count = count;
                 Nevent.thread = thread;
                 
                 pMessageTarget->AddPendingEvent(Nevent);
@@ -295,13 +297,13 @@ skipout:
 class CompressedCacheWorkerThread : public wxThread
 {
 public:
-    CompressedCacheWorkerThread(ChartBase *pc, wxString CCFP, wxString fn, wxString msg, int count, int thread)
+    CompressedCacheWorkerThread(ChartBase *pc, wxString CCFP, wxString fn, wxString msg, int thread)
         : wxThread(wxTHREAD_JOINABLE), pchart(pc), CompressedCacheFilePath(CCFP), filename(fn),
-        m_msg(msg), m_count(count), m_thread(thread)
+        m_msg(msg), m_thread(thread)
         { Create(); }
         
     void *Entry() {
-        CompressChart(this, pchart, CompressedCacheFilePath, filename, cc1, m_msg, m_count, m_thread);
+        CompressChart(this, pchart, CompressedCacheFilePath, filename, cc1, m_msg, m_thread);
         return 0;
     }
 
@@ -309,7 +311,6 @@ public:
     wxString CompressedCacheFilePath;
     wxString filename;
     wxString m_msg;
-    int m_count;
     int m_thread;
 };
 
@@ -347,7 +348,6 @@ WX_DEFINE_OBJARRAY(ArrayOfCompressTargets);
 
 void BuildCompressedCache()
 {
-    b_inCompressAllCharts = true;
 
     idx_sorted_by_distance.Clear();
     
@@ -373,11 +373,14 @@ void BuildCompressedCache()
         count++;
     }  
 
-    if( g_bDebugOGL ) wxLogMessage(wxString::Format(_T("BuildCompressedCache() count = %d"), count ));
                                    
     if(count == 0)
         return;
 
+    wxLogMessage(wxString::Format(_T("BuildCompressedCache() count = %d"), count ));
+    
+    b_inCompressAllCharts = true;
+    
     //  Build another array of sorted compression targets.
     //  We need to do this, as the chart table will not be invariant
     //  after the compression threads start, so our index array will be invalid.
@@ -432,7 +435,7 @@ void BuildCompressedCache()
     long style = wxPD_SMOOTH | wxPD_ELAPSED_TIME | wxPD_ESTIMATED_TIME | wxPD_REMAINING_TIME | wxPD_CAN_SKIP;
 //    style |= wxSTAY_ON_TOP;
     
-    pprog = new wxProgressDialog(_("OpenCPN Compressed Cache Update"), _T(""), count, GetOCPNCanvasWindow(), style );
+    pprog = new wxProgressDialog(_("OpenCPN Compressed Cache Update"), _T(""), count+1, GetOCPNCanvasWindow(), style );
     
     
     //    Make sure the dialog is big enough to be readable
@@ -443,7 +446,7 @@ void BuildCompressedCache()
     sz.y += thread_count * 40;          // allow for multiline messages
     pprog->SetSize( sz );
     pprog_size = sz;
-    
+
     pprog->Centre();
     wxString msg0;
     for(int i=0 ; i < thread_count ; i++){msg0 += _T("\n\n");}
@@ -458,12 +461,10 @@ void BuildCompressedCache()
              (wxObjectEventFunction) (wxEventFunction) &ChartCanvas::OnEvtCompressProgress );
     
     // build cached compressed charts
-    count = 0;
+    pprog_count = 0;
     for(unsigned int j = 0; j<ct_array.GetCount(); j++) {
         if(b_skipout)
             break;
-
-        count++;
         
         wxString filename = ct_array.Item(j).chart_path;
         wxString CompressedCacheFilePath = CompressedCachePath(filename);
@@ -479,7 +480,7 @@ void BuildCompressedCache()
         msg += pchart->GetFullPath();
         
         if(!ramonly)
-            pprog->Update(count-1, _T("0000/0000 \n") + msg, &skip );
+            pprog->Update(pprog_count, _T("0000/0000 \n") + msg, &skip );
         
         if(skip)
             break;
@@ -490,9 +491,9 @@ void BuildCompressedCache()
             for(;;) {
                 if(!workers[t]) {
                     workers[t] = new CompressedCacheWorkerThread
-                        (pchart, CompressedCacheFilePath, filename, msg, count, t);
+                        (pchart, CompressedCacheFilePath, filename, msg, t);
 
-                    msgt.Printf( _T("Starting chart compression on thread %d, count %d  "), t, count);
+                    msgt.Printf( _T("Starting chart compression on thread %d, count %d  "), t, pprog_count);
                     msgt += filename;
                     wxLogMessage(msgt);
                     workers[t]->Run();
@@ -503,6 +504,7 @@ void BuildCompressedCache()
                     ChartData->DeleteCacheChart(workers[t]->pchart);
                     delete workers[t];
                     workers[t] = NULL;
+                    pprog_count++;
                 }
                 if(++t == thread_count) {
                     ::wxYield();                // allow ChartCanvas main message loop to run 
@@ -511,7 +513,7 @@ void BuildCompressedCache()
                 }
             }
         } else {
-            bool bcontinue = CompressChart(NULL, pchart, CompressedCacheFilePath, filename, cc1, msg, count, 0);
+            bool bcontinue = CompressChart(NULL, pchart, CompressedCacheFilePath, filename, cc1, msg, 0);
             ChartData->DeleteCacheChart(pchart);
             if(!bcontinue)
                 break;
@@ -2579,14 +2581,13 @@ void glChartCanvas::RenderCharts(ocpnDC &dc, OCPNRegion &region)
             m_gl_rendered_region.Offset(VPoint.rv_rect.x, VPoint.rv_rect.y);
         
         if(fog_it){
-            float fog = ((scale_factor - 10.) * 255.) / 20.;
-            fog = wxMin(fog, 200.);         // Don't fog out completely
-            wxColour color = cc1->GetFogColor(); 
+            float fog = ((scale_factor - g_overzoom_emphasis_base) * 255.) / 20.;
+            fog = wxMin(fog, 200.);         // Don't blur completely
             
             if( !m_gl_rendered_region.IsEmpty() ) {
      
-                int wi = VPoint.rv_rect.width;
-                int hi = VPoint.rv_rect.height;
+                int wi = VPoint.pix_width; //VPoint.rv_rect.width;
+                int hi = VPoint.pix_height; //rv_rect.height;
                 
                 // Use MipMap LOD tweaking to produce a blurred, downsampling effect at high speed.
                 
@@ -2605,9 +2606,11 @@ void glChartCanvas::RenderCharts(ocpnDC &dc, OCPNRegion &region)
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
                     
-                    glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, wi, hi, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0 );
-                    glCopyTexSubImage2D(GL_TEXTURE_2D,  0,  0,  0,  0,  0,  wi, hi);
-
+                    glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA, VPoint.rv_rect.width, VPoint.rv_rect.height,
+                                  0, GL_RGBA, GL_UNSIGNED_BYTE, 0 );
+                    glCopyTexSubImage2D(GL_TEXTURE_2D,  0,  0,  0,
+                                        VPoint.rv_rect.x,  VPoint.rv_rect.y,  VPoint.rv_rect.width, VPoint.rv_rect.height);
+                    
                     
                     glClear(GL_DEPTH_BUFFER_BIT);
                     glDisable(GL_DEPTH_TEST);
@@ -2629,14 +2632,16 @@ void glChartCanvas::RenderCharts(ocpnDC &dc, OCPNRegion &region)
                     // Render at reduced LOD (i.e. higher mipmap number)
                     double bias = fog/70;
                     glTexEnvf(GL_TEXTURE_FILTER_CONTROL_EXT, GL_TEXTURE_LOD_BIAS_EXT, bias);
+                    glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
                     
                     glColor4f (1.0f,1.0f,1.0f,1.0f);
 
                     glBegin(GL_QUADS);
-                    glTexCoord2f(0 , 1 ); glVertex2f(0,  0);
-                    glTexCoord2f(0 , 0 ); glVertex2f(0,  hi);
-                    glTexCoord2f(1 , 0 ); glVertex2f(wi, hi);
-                    glTexCoord2f(1 , 1 ); glVertex2f(wi, 0);
+                    
+                    glTexCoord2f(0 , 1 ); glVertex2i(VPoint.rv_rect.x,                        VPoint.rv_rect.y);
+                    glTexCoord2f(0 , 0 ); glVertex2i(VPoint.rv_rect.x,                        VPoint.rv_rect.y + VPoint.rv_rect.height);
+                    glTexCoord2f(1 , 0 ); glVertex2i(VPoint.rv_rect.x + VPoint.rv_rect.width, VPoint.rv_rect.y + VPoint.rv_rect.height);
+                    glTexCoord2f(1 , 1 ); glVertex2i(VPoint.rv_rect.x + VPoint.rv_rect.width, VPoint.rv_rect.y);
                     glEnd ();
                     
                     glDeleteTextures(1, &screen_capture);
@@ -2652,13 +2657,15 @@ void glChartCanvas::RenderCharts(ocpnDC &dc, OCPNRegion &region)
                     glEnable( GL_BLEND );
                     glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
                     
-                    glColor4ub( color.Red(), color.Green(), color.Blue(), (int)fog );
+                    fog = wxMin(fog, 150.);         // Don't fog out completely
                     
+                    wxColour color = cc1->GetFogColor(); 
+                    glColor4ub( color.Red(), color.Green(), color.Blue(), (int)fog );
+
                     OCPNRegionIterator upd ( m_gl_rendered_region );
                     while ( upd.HaveRects() )
                     {
                         wxRect rect = upd.GetRect();
-                        
                         glBegin( GL_QUADS );
                         glVertex2i( rect.x, rect.y );
                         glVertex2i( rect.x + rect.width, rect.y );
@@ -2669,7 +2676,6 @@ void glChartCanvas::RenderCharts(ocpnDC &dc, OCPNRegion &region)
                         upd.NextRect();
                         
                     }
-                    
                     glDisable( GL_BLEND );
                     glPopAttrib();
                 }
@@ -3017,7 +3023,8 @@ void glChartCanvas::Render()
 
     //  If we plan to post process the display, don't use accelerated panning
     double scale_factor = VPoint.ref_scale/VPoint.chart_scale;
-    bool fog_it = (g_fog_overzoom && (scale_factor > 10) && VPoint.b_quilt);
+    bool fog_it = (g_fog_overzoom && (scale_factor > g_overzoom_emphasis_base) && VPoint.b_quilt);
+    fog_it |= g_oz_vector_scale;
     bool bpost_hilite = !cc1->m_pQuilt->GetHiliteRegion( VPoint ).IsEmpty();
     
     // Try to use the framebuffer object's cache of the last frame
