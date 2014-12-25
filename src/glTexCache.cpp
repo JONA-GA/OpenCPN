@@ -326,6 +326,7 @@ bool DoCompress(JobTicket *pticket, glTextureDescriptor *ptd, int level)
         GLuint raster_format = pticket->pFact->GetRasterFormat();
     
         unsigned char *tex_data = (unsigned char*)malloc(size);
+        
         if(raster_format == GL_COMPRESSED_RGB_S3TC_DXT1_EXT) {
             // color range fit is worse quality but twice as fast
             int flags = squish::kDxt1 | squish::kColourRangeFit;
@@ -348,9 +349,14 @@ bool DoCompress(JobTicket *pticket, glTextureDescriptor *ptd, int level)
         else if(raster_format == GL_ETC1_RGB8_OES) 
             CompressDataETC(ptd->map_array[level], dim, size, tex_data);
         
-        
-        ptd->CompressedArrayAccess( CA_WRITE, tex_data, level);
+        else if(raster_format == GL_COMPRESSED_RGB_FXT1_3DFX) {
+            CompressUsingGPU( ptd, raster_format, level, false);    // no post compression
+            
+        }
 
+        //  Store the pointer to compressed data in the ptd
+        ptd->CompressedArrayAccess( CA_WRITE, tex_data, level);
+        
         if(pticket->bpost_zip_compress) {
             int max_compressed_size = LZ4_COMPRESSBOUND(g_tile_size);
             if(max_compressed_size){
@@ -374,7 +380,30 @@ bool DoCompress(JobTicket *pticket, glTextureDescriptor *ptd, int level)
 
 
 
+//  On Windows, we will use a translator to convert SEH exceptions (e.g. access violations),
+//    into c++ standard exception handling method.
+//  This class and helper function facilitate the conversion.
 
+//  We only do this in the compression worker threads, as they are vulnerable due to possibly errant code in 
+//  the chart database management class, especially on low memory systems where chart cahing is stressed heavily.
+
+#ifdef __WXMSW__
+class SE_Exception
+{
+private:
+    unsigned int nSE;
+public:
+    SE_Exception() {}
+    SE_Exception( unsigned int n ) : nSE( n ) {}
+    ~SE_Exception() {}
+    unsigned int getSeNumber() { return nSE; }
+};
+
+void my_translate(unsigned int code, _EXCEPTION_POINTERS *ep)
+{
+    throw SE_Exception();
+}
+#endif
 
 
 
@@ -422,10 +451,23 @@ CompressionPoolThread::CompressionPoolThread(JobTicket *ticket, wxEvtHandler *me
     Create();
 }
 
+
+
+
 void * CompressionPoolThread::Entry()
 {
+
+#ifdef __WXMSW__
+    _set_se_translator(my_translate);
+
+    //  On Windows, if anything in this thread produces a SEH exception (like access violation)
+    //  we handle the exception locally, and simply alow the thread to exit smoothly with no results.
+    //  Upstream will notice that nothing got done, and maybe try again later.
+    
     try
+#endif    
     {
+
         
     for(int i=0 ; i < 10 ; i++)
         m_bit_array[i] = 0;
@@ -447,26 +489,26 @@ void * CompressionPoolThread::Entry()
         
         pchart = ChartData->OpenChartFromDBAndLock(index, FULL_INIT );
         
-             if(pchart){
+        if(pchart && ChartData->IsChartLocked( index )){
                 ChartBaseBSB *pBSBChart = dynamic_cast<ChartBaseBSB*>( pchart );
                 ChartPlugInWrapper *pPlugInWrapper = dynamic_cast<ChartPlugInWrapper*>( pchart );
                 
                 if( pBSBChart ) {
                     unsigned char *t_buf = (unsigned char *) malloc( ncrect.width * ncrect.height * 4 );
-                    pBSBChart->GetChartBits( ncrect, t_buf, 1 );
-                    
-                    //    and cache them here
                     m_bit_array[0] = t_buf;
+
+                    pBSBChart->GetChartBits( ncrect, t_buf, 1 );
                 }
                 else if( pPlugInWrapper ){
                     unsigned char *t_buf = (unsigned char *) malloc( ncrect.width * ncrect.height * 4 );
-                    pPlugInWrapper->GetChartBits( ncrect, t_buf, 1 );
-                    
-                    //    and cache them here
                     m_bit_array[0] = t_buf;
+                    
+                    pPlugInWrapper->GetChartBits( ncrect, t_buf, 1 );
                 }
                 ChartData->UnLockCacheChart(index);
-            }
+       }
+       else
+           m_bit_array[0] = NULL;
     }
     
     //OK, got the bits?
@@ -578,7 +620,9 @@ SendEvtAndReturn:
 
     }           // try
     
-    catch (...)
+#ifdef __WXMSW__    
+    catch (SE_Exception e)
+#endif    
     {
         if( m_pMessageTarget ) {
             OCPN_CompressionThreadEvent Nevent(wxEVT_OCPN_COMPRESSIONTHREAD, 0);
@@ -1414,7 +1458,12 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
                     
                     //  This level has not been compressed yet, and is not in the cache
                     //  So, need to start a compression job 
-                        b_need_compress = true;
+                        
+                        if( GL_COMPRESSED_RGB_FXT1_3DFX == g_raster_format ){
+                            CompressUsingGPU( ptd, g_raster_format, level, true);
+                        }
+                        else                            
+                            b_need_compress = true;
                     }
                 }
                     
@@ -1477,8 +1526,11 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
     ptd->level_min = base_level;
     
     if(b_need_compress){
-        if(g_CompressorPool)
-            g_CompressorPool->ScheduleJob( this, rect, 0, b_throttle_thread, false, true);   // with postZip
+         if( (GL_COMPRESSED_RGBA_S3TC_DXT1_EXT == g_raster_format) ||
+            (GL_COMPRESSED_RGB_S3TC_DXT1_EXT == g_raster_format) ){
+            if(g_CompressorPool)
+                g_CompressorPool->ScheduleJob( this, rect, 0, b_throttle_thread, false, true);   // with postZip
+        }
     }
     
     //   If global memory is getting short, we can crunch here.
@@ -1986,6 +2038,79 @@ bool glTexFactory::UpdateCachePrecomp(unsigned char *data, int data_size, glText
 }
 
 
+bool CompressUsingGPU( glTextureDescriptor *ptd, GLuint raster_format, int level, bool b_post_comp)
+{
+    if(!ptd)
+        return false;
+    
+    if( !s_glGetCompressedTexImage )
+        return false;
+    
+    int dim = g_GLOptions.m_iTextureDimension;
+    int size = g_tile_size;
+    
+    for(int i=0 ; i < level ; i++){
+        dim /= 2;
+        size /= 4;
+        if(size < 8)
+            size = 8;
+    }
+    
+    bool ret = false;
+    GLuint comp_tex;
+    glGenTextures(1, &comp_tex);
+    glBindTexture(GL_TEXTURE_2D, comp_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGB_FXT1_3DFX,
+                 dim, dim, 0, GL_RGB, GL_UNSIGNED_BYTE, ptd->map_array[level]);
+    
+    GLint compressed;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_COMPRESSED_ARB, &compressed);
+    
+    /* if the compression has been successful */
+    if (compressed == GL_TRUE){
+        
+        // If our compressed size is reasonable, save it.
+        GLint compressedSize;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0,
+                                 GL_TEXTURE_COMPRESSED_IMAGE_SIZE,
+                                 &compressedSize);
+        
+        
+        if ((compressedSize > 0) && (compressedSize < 100000000)) {
+            
+            // Allocate a buffer to read back the compressed texture.
+            unsigned char *compressedBytes = (unsigned char *)malloc(sizeof(GLubyte) * compressedSize);
+            
+            // Read back the compressed texture.
+            s_glGetCompressedTexImage(GL_TEXTURE_2D, 0, compressedBytes);
+            
+            // Save the compressed texture pointer in the ptd
+            ptd->CompressedArrayAccess( CA_WRITE, compressedBytes, level);
+            
+            
+            // ZIP compress the data for disk storage
+            if(b_post_comp){int max_compressed_size = LZ4_COMPRESSBOUND(g_tile_size);
+                if(max_compressed_size){
+                    unsigned char *compressed_data = (unsigned char *)malloc(max_compressed_size);
+                    int compressed_size = LZ4_compressHC2( (char *)ptd->CompressedArrayAccess( CA_READ, NULL, level),
+                                                        (char *)compressed_data, size, 4);
+                    ptd->CompCompArrayAccess( CA_WRITE, compressed_data, level);
+                    ptd->compcomp_size[level] = compressed_size;
+                }
+            }
+        }
+        
+        ret = true;
+    }
+    
+    // Restore the old texture pointer
+    glBindTexture( GL_TEXTURE_2D, ptd->tex_name );
+    
+    return ret;
+}
         
 
 
