@@ -274,22 +274,63 @@ IF(UNIX)
 ENDIF(UNIX)
 
 IF((_wx_selected_config MATCHES "qt-armv7"))
-SET(CMAKE_BUILD_TYPE Debug)
+#SET(CMAKE_BUILD_TYPE Debug)
 ENDIF()
 
 IF((_wx_selected_config MATCHES "qt-armv7"))
-SET(CMAKE_BUILD_TYPE Debug)
-
 SET(wxWidgets_USE_LIBS base core     xml html adv aui)
 ELSE()
 SET(wxWidgets_USE_LIBS base core net xml html adv aui)
 ENDIF()
 
 
-IF(NOT QT_ANDROID)
+# Search for opengles, short of running a program to test the speed
+# of acceleration, I simply use gles on "native linux" arm systems
+IF (ARCH MATCHES "arm*" AND (NOT QT_ANDROID) )
+  find_path(OPENGLESv1_INCLUDE_DIR GLES/gl.h )
+  IF (OPENGLESv1_INCLUDE_DIR)
+    MESSAGE (STATUS "Found OpenGLESv1")
+    ADD_DEFINITIONS(-DocpnUSE_GLES)
+    ADD_DEFINITIONS(-DocpnUSE_GL)
+    ADD_DEFINITIONS(-DUSE_GLU_TESS)
+
+    SET(OPENGLES_FOUND "YES")
+    SET(OPENGL_FOUND "YES")
+
+    SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
+    add_subdirectory(src/glshim)
+
+    add_subdirectory(src/glu)
+
+    SET(OPENGL_LIBRARIES "GL_static" "GLU_static" "EGL" "X11" "drm" "dri2")
+  ENDIF()
+ENDIF()
+
+#  Building for QT_ANDROID involves a cross-building environment,
+#  So the include directories, flags, etc must be stated explicitly
+#  without trying to locate them on the host build system.
+IF(QT_ANDROID)
+    MESSAGE (STATUS "Using GLESv1 for Android")
+    ADD_DEFINITIONS(-DocpnUSE_GLES)
+    ADD_DEFINITIONS(-DocpnUSE_GL)
+    ADD_DEFINITIONS(-DUSE_GLU_TESS)
+    ADD_DEFINITIONS(-DARMHF)
+   
+    SET(OPENGLES_FOUND "YES")
+    SET(OPENGL_FOUND "YES")
+
+    SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
+    add_subdirectory(src/glshim)
+
+    add_subdirectory(src/glu)
+
+ENDIF(QT_ANDROID)
+
+
+IF ((NOT OPENGLES_FOUND) AND (NOT QT_ANDROID))
 
 FIND_PACKAGE(OpenGL)
-IF(OPENGL_GLU_FOUND)
+IF(OPENGL_FOUND)
 
     SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
     INCLUDE_DIRECTORIES(${OPENGL_INCLUDE_DIR})
@@ -300,26 +341,13 @@ IF(OPENGL_GLU_FOUND)
     ADD_DEFINITIONS(-DocpnUSE_GL)
     ADD_DEFINITIONS(-DUSE_GLU_TESS)
 
-ELSE(OPENGL_GLU_FOUND)
+ELSE(OPENGL_FOUND)
     MESSAGE (STATUS "OpenGL not found..." )
-ENDIF(OPENGL_GLU_FOUND)
+ENDIF(OPENGL_FOUND)
 
-# Search for opengles, short of running a program to test the speed
-# of acceleration, I simply use gles on arm systems
-IF (ARCH MATCHES "arm*")
-find_path(OPENGLESv2_INCLUDE_DIR GLES2/gl2.h )
-IF (OPENGLESv2_INCLUDE_DIR)
-  MESSAGE (STATUS "Found OpenGLESv2")
-  ADD_DEFINITIONS(-DocpnUSE_GLES)
-ELSE()
-find_path(OPENGLESv1_INCLUDE_DIR GLES/gl.h )
-IF (OPENGLESv1_INCLUDE_DIR)
-  MESSAGE (STATUS "Found OpenGLESv1")
-  ADD_DEFINITIONS(-DocpnUSE_GLES)
-ENDIF()
-ENDIF()
 ENDIF()
 
+IF(NOT QT_ANDROID)
 # Find wxWidgets here, and the setting get inherited by all plugins.
 # These options can be used to set the linux widgets build type
 SET( wxWidgets_USE_DEBUG OFF)
@@ -368,7 +396,7 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
 IF(NOT WIN32 AND NOT APPLE )
   ADD_DEFINITIONS( "-Wall -Wno-unused -fexceptions -rdynamic" )
-  ADD_DEFINITIONS( " -g -O0 -fno-strict-aliasing")
+  ADD_DEFINITIONS( " -g -fno-strict-aliasing")
 
   ADD_DEFINITIONS( " -DPREFIX=\\\"${CMAKE_INSTALL_PREFIX}\\\"")
   # profiling with gprof
@@ -453,12 +481,6 @@ IF(QT_ANDROID)
 
   INCLUDE_DIRECTORIES("${wxQt_Base}/include")
   INCLUDE_DIRECTORIES( "${wxQt_Base}/${wxQt_Build}/lib/wx/include/arm-linux-androideabi-qt-unicode-static-3.1")
-
-  add_subdirectory(src/glshim)
-
-  add_subdirectory(src/glues)
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/glues/source )
-
 ENDIF()
 
 
@@ -675,6 +697,8 @@ SET(HDRS
                 include/LinkPropDlg.h
                 include/viewport.h
                 include/canvasMenu.h
+                include/OCPNPlatform.h
+                include/S57Sector.h
 )
 
 SET(SRCS
@@ -765,6 +789,7 @@ SET(SRCS
                 src/ssl/sha1.c
                 src/viewport.cpp
                 src/canvasMenu.cpp
+                src/OCPNPlatform.cpp
     )
 
 IF(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
@@ -773,21 +798,8 @@ IF(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
 ENDIF(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
 
 IF(QT_ANDROID)
-    ADD_DEFINITIONS(-DocpnUSE_GL)
-    ADD_DEFINITIONS(-DUSE_GLU_TESS)
-
-    SET(HDRS ${HDRS} include/glChartCanvas.h
-                   include/glTextureDescriptor.h
-                   include/glTexCache.h
-                   include/TexFont.h
-                   include/androidUTIL.h
-    )
-    SET(SRCS ${SRCS} src/glChartCanvas.cpp
-                   src/glTextureDescriptor.cpp
-                   src/glTexCache.cpp
-                   src/TexFont.cpp
-                   src/androidUTIL.cpp
-    )
+    SET(HDRS ${HDRS} include/androidUTIL.h)
+    SET(SRCS ${SRCS} src/androidUTIL.cpp)
 ENDIF(QT_ANDROID)
 
 #  Search for wxWidgets 2.9 or newer
@@ -807,7 +819,7 @@ SET(SRC_TINYXML
             include/tinyxml.h
       )
 
-IF(OPENGL_GLU_FOUND)
+IF(OPENGL_FOUND)
   SET(HDRS ${HDRS} include/glChartCanvas.h
                    include/glTextureDescriptor.h
                    include/glTexCache.h
@@ -818,7 +830,7 @@ IF(OPENGL_GLU_FOUND)
                    src/glTexCache.cpp
                    src/TexFont.cpp
         )
-ENDIF(OPENGL_GLU_FOUND)
+ENDIF(OPENGL_FOUND)
 
 
 IF(TINYXML_FOUND)
@@ -1001,7 +1013,7 @@ SET(EXTRA_LIBS ${EXTRA_LIBS} SYMBOLS)
 
 
 # Compile texcompression support library
-IF (OPENGL_GLU_FOUND OR QT_ANDROID)
+IF (OPENGL_FOUND)
 
   SET(SRC_TEXCMP
     src/texcmp/lz4/lz4.c
@@ -1024,7 +1036,6 @@ IF (OPENGL_GLU_FOUND OR QT_ANDROID)
   SET(EXTRA_LIBS ${EXTRA_LIBS} TEXCMP)
 
   # always use optimizations for the texture compression which is much faster
-  # not sure what to use for visual studio, but optimizations should be enabled here
   IF ( NOT MSVC )
       # try to use sse on x86 based systems
       IF (( ARCH MATCHES "i386" OR ARCH MATCHES "amd64" OR ARCH MATCHES "x86_64") AND NOT QT_ANDROID)
@@ -1044,7 +1055,7 @@ IF (OPENGL_GLU_FOUND OR QT_ANDROID)
       ENDIF ()
   ENDIF (NOT MSVC)
 
-ENDIF (OPENGL_GLU_FOUND OR QT_ANDROID)
+ENDIF (OPENGL_FOUND)
 
 #TODO
 #dnl
@@ -1558,7 +1569,6 @@ INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/PrivacyPolicy.txt DESTINATIO
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/ocpn_gltest1.exe DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 
 ENDIF(WIN32 AND NOT UNIX)
-
 
 MESSAGE (STATUS "")
 

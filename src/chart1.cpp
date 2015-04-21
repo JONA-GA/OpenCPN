@@ -32,15 +32,6 @@
 #endif
 
 
-// Include CrashRpt Header
-#ifdef OCPN_USE_CRASHRPT
-#include "CrashRpt.h"
-#include <new.h>
-#endif
-
-#ifdef LINUX_CRASHRPT
-#include "crashprint.h"
-#endif
 
 #include "wx/print.h"
 #include "wx/printdlg.h"
@@ -106,6 +97,7 @@
 #include "routemanagerdialog.h"
 #include "pluginmanager.h"
 #include "AIS_Target_Data.h"
+#include "OCPNPlatform.h"
 
 #ifdef ocpnUSE_GL
 #include "glChartCanvas.h"
@@ -142,6 +134,10 @@
 #include "androidUTIL.h"
 #endif
 
+#ifdef LINUX_CRASHRPT
+#include "crashprint.h"
+#endif
+
 WX_DECLARE_OBJARRAY(wxDialog *, MyDialogPtrArray);
 
 #include <wx/arrimpl.cpp>
@@ -157,13 +153,11 @@ void RedirectIOToConsole();
 //      Static variable definition
 //------------------------------------------------------------------------------
 
-FILE                      *flog;
-wxLog                     *logger;
-wxLog                     *Oldlogger;
+OCPNPlatform              *g_Platform;
+
 bool                      g_bFirstRun;
 wxString                  glog_file;
-wxString                  gConfig_File;
-wxString                  gExe_path;
+//wxString                  gConfig_File;
 
 int                       g_unit_test_1;
 bool                      g_start_fullscreen;
@@ -220,17 +214,13 @@ TCMgr                     *ptcmgr;
 bool                      bDrawCurrentValues;
 bool                      b_novicemode = false;
 
-wxString                  g_PrivateDataDir;
-wxString                  g_SData_Locn;
-wxString                  *pChartListFileName;
-wxString                  *pAISTargetNameFileName;
-wxString                  *pHome_Locn;
+wxString                  ChartListFileName;
+wxString                  AISTargetNameFileName;
 wxString                  *pWorldMapLocation;
 wxString                  *pInit_Chart_Dir;
 wxString                  g_csv_locn;
 wxString                  g_SENCPrefix;
 wxString                  g_UserPresLibData;
-wxString                  g_Plugin_Dir;
 wxString                  g_VisibleLayers;
 wxString                  g_InvisibleLayers;
 
@@ -260,7 +250,6 @@ wxString                  *phost_name;
 static unsigned int       malloc_max;
 
 wxArrayOfConnPrm          *g_pConnectionParams;
-//OCP_GARMIN_Thread         *pGARMIN_Thread;
 
 wxDateTime                g_start_time;
 wxDateTime                g_loglast_time;
@@ -473,10 +462,6 @@ S57QueryDialog            *g_pObjectQueryDialog;
 wxArrayString             TideCurrentDataSet;
 wxString                  g_TCData_Dir;
 
-#ifndef __WXMSW__
-struct sigaction          sa_all;
-struct sigaction          sa_all_old;
-#endif
 
 bool                      g_boptionsactive;
 options                   *g_options;
@@ -608,6 +593,7 @@ int                       g_MemFootMB;
 ArrayOfInts               g_quilt_noshow_index_array;
 
 wxStaticBitmap            *g_pStatBoxTool;
+bool                      g_bShowStatusBar;
 
 bool                      g_bquiting;
 int                       g_BSBImgDebug;
@@ -680,7 +666,6 @@ int              g_NMEAAPBPrecision;
 
 wxString         g_TalkerIdText;
 
-bool             g_bEmailCrashReport;
 bool             g_bAdvanceRouteWaypointOnArrivalOnly;
 
 wxArrayString    g_locale_catalog_array;
@@ -741,53 +726,7 @@ enum {
 //------------------------------------------------------------------------------
 
 
-#ifdef __WXMSW__
-int MyNewHandler( size_t size )
-{
-    //  Pass to wxWidgets Main Loop handler
-    throw std::bad_alloc();
- 
-    return 0;
-}
-#endif
 
-//-----------------------------------------------------------------------
-//      Signal Handlers
-//-----------------------------------------------------------------------
-#ifndef __WXMSW__
-
-//These are the signals possibly expected
-//      SIGUSR1
-//      Raised externally to cause orderly termination of application
-//      Intended to act just like pushing the "EXIT" button
-
-//      SIGSEGV
-//      Some undefined segfault......
-
-void
-catch_signals(int signo)
-{
-    switch(signo)
-    {
-        case SIGUSR1:
-        quitflag++;                             // signal to the timer loop
-        break;
-
-        case SIGSEGV:
-        siglongjmp(env, 1);// jump back to the setjmp() point
-        break;
-
-        case SIGTERM:
-        LogMessageOnce(_T("Sigterm received"));
-        gFrame->Close();
-        break;
-
-        default:
-        break;
-    }
-
-}
-#endif
 
 int ShowNavWarning()
 {
@@ -811,80 +750,34 @@ Please click \"OK\" to agree and proceed, \"Cancel\" to quit.\n") );
     return ( odlg.ShowModal() );
 }
 
-#ifdef OCPN_USE_CRASHRPT
 
-// Define the crash callback
-int CALLBACK CrashCallback(CR_CRASH_CALLBACK_INFO* pInfo)
-{
-  //  Flush log file
-    if( logger)
-        logger->Flush();
-
-    return CR_CB_DODEFAULT;
-}
-
-#endif
-
-wxString *newPrivateFileName(wxStandardPaths &std_path, wxString *home_locn, const char *name, const char *windowsName)
+wxString newPrivateFileName(wxString home_locn, const char *name, const char *windowsName)
 {
     wxString fname = wxString::FromUTF8(name);
     wxString fwname = wxString::FromUTF8(windowsName);
-    wxString *filePathAndName;
+    wxString filePathAndName;
 
 #ifdef __WXMSW__
-    filePathAndName = new wxString( fwname );
-    filePathAndName->Prepend( *pHome_Locn );
+    filePathAndName = fwname;
+    filePathAndName.Prepend( home_locn );
 
 #else
-    filePathAndName = new wxString(_T(""));
-    filePathAndName->Append(std_path.GetUserDataDir());
-    appendOSDirSlash(filePathAndName);
-    filePathAndName->Append( fname );
+    filePathAndName = g_Platform->GetPrivateDataDir();
+    appendOSDirSlash(&filePathAndName);
+    filePathAndName.Append( fname );
 #endif
 
     if( g_bportable ) {
-        filePathAndName->Clear();
+        filePathAndName.Clear();
 #ifdef __WXMSW__
-        filePathAndName->Append( fwname );
+        filePathAndName.Append( fwname );
 #else
-        filePathAndName->Append( fname );
+        filePathAndName.Append( fname );
 #endif
-        filePathAndName->Prepend( *home_locn );
+        filePathAndName.Prepend( home_locn );
     }
     return filePathAndName;
 }
-
-#ifdef __WXMSW__
-bool GetWindowsMonitorSize( int *w, int *h );
-#endif
-
-    
-double  GetDisplaySizeMM()
-{
-    double ret = wxGetDisplaySizeMM().GetWidth();
-    
-#ifdef __WXMSW__    
-    int w,h;
-    if( GetWindowsMonitorSize( &w, &h) ){
-        if(w > 100)             // sanity check
-            ret = w;
-    }
-#endif
-#ifdef __WXOSX__
-    ret = GetMacMonitorSize();
-#endif
-
-#ifdef __OCPN__ANDROID__
-    ret = GetAndroidDisplaySize();
-#endif    
-        
-    wxString msg;
-    msg.Printf(_T("Detected display size (horizontal): %d mm"), (int) ret);
-    wxLogMessage(msg);
-    
-    return ret;
-}
- 
 
 
 // `Main program' equivalent, creating windows and returning main app frame
@@ -1069,7 +962,7 @@ void LoadS57()
     CPLSetErrorHandler( MyCPLErrorHandler );
 
 //      Init the s57 chart object, specifying the location of the required csv files
-    g_csv_locn = g_SData_Locn;
+    g_csv_locn = g_Platform->GetSharedDataDir();
     g_csv_locn.Append( _T("s57data") );
 
     if( g_bportable ) {
@@ -1081,14 +974,15 @@ void LoadS57()
 //      If the config file contains an entry for SENC file prefix, use it.
 //      Otherwise, default to PrivateDataDir
     if( g_SENCPrefix.IsEmpty() ) {
-        g_SENCPrefix = g_PrivateDataDir;
-        appendOSDirSlash( &g_SENCPrefix );
+        g_SENCPrefix = g_Platform->GetPrivateDataDir();
+        appendOSDirSlash(&g_SENCPrefix);
         g_SENCPrefix.Append( _T("SENC") );
     }
 
     if( g_bportable ) {
         wxFileName f( g_SENCPrefix );
-        if( f.MakeRelativeTo( g_PrivateDataDir ) ) g_SENCPrefix = f.GetFullPath();
+        if( f.MakeRelativeTo( g_Platform->GetPrivateDataDir() ) ) 
+            g_SENCPrefix = f.GetFullPath();
         else
             g_SENCPrefix = _T("SENC");
     }
@@ -1142,7 +1036,7 @@ void LoadS57()
 
         if( ps52plib->m_bOK ) {
             g_csv_locn = look_data_dir;
-            g_SData_Locn = tentative_SData_Locn;
+///???            g_SData_Locn = tentative_SData_Locn;
         }
     }
 
@@ -1153,7 +1047,7 @@ void LoadS57()
         delete ps52plib;
 
         wxString look_data_dir;
-        look_data_dir = g_SData_Locn;
+        look_data_dir = g_Platform->GetSharedDataDir();
         look_data_dir.Append( _T("s57data") );
 
         plib_data = look_data_dir;
@@ -1168,7 +1062,7 @@ void LoadS57()
 
     if( ps52plib->m_bOK ) {
         wxLogMessage( _T("Using s57data in ") + g_csv_locn );
-        m_pRegistrarMan = new s57RegistrarMgr( g_csv_locn, flog );
+        m_pRegistrarMan = new s57RegistrarMgr( g_csv_locn, g_Platform->GetLogFilePtr() );
 
         if(b_novicemode) {
             ps52plib->m_bShowSoundg = true;
@@ -1199,7 +1093,8 @@ void LoadS57()
 bool MyApp::OnInit()
 {
     wxStopWatch sw;
-
+//    qDebug() << "OnInit";
+    
     if( !wxApp::OnInit() ) return false;
 
     //  On Windows
@@ -1212,134 +1107,20 @@ bool MyApp::OnInit()
     }
 #endif
 
+    // Instantiate the global OCPNPlatform class
+    g_Platform = new OCPNPlatform;
+    
+    //  Perform first stage initialization
+    OCPNPlatform::Initialize_1( );
+    
 #if wxCHECK_VERSION(3,0,0)
     // Set the name of the app as displayed to the user.
     // This is necessary at least on OS X, for the capitalisation to be correct in the system menus.
     MyApp::SetAppDisplayName("OpenCPN");
 #endif
 
-#ifdef OCPN_USE_CRASHRPT
-#ifndef _DEBUG
-    // Install Windows crash reporting
 
-    CR_INSTALL_INFO info;
-    memset(&info, 0, sizeof(CR_INSTALL_INFO));
-    info.cb = sizeof(CR_INSTALL_INFO);
-    info.pszAppName = _T("OpenCPN");
 
-    wxString version_crash = str_version_major + _T(".") + str_version_minor + _T(".") + str_version_patch;
-    info.pszAppVersion = version_crash.c_str();
-
-    int type = MiniDumpWithDataSegs;  // Include the data sections from all loaded modules.
-                                                // This results in the inclusion of global variables
-
-    type |=  MiniDumpNormal;// | MiniDumpWithPrivateReadWriteMemory | MiniDumpWithIndirectlyReferencedMemory;
-    info.uMiniDumpType = (MINIDUMP_TYPE)type;
-
-    // Install all available exception handlers....
-    info.dwFlags = CR_INST_ALL_POSSIBLE_HANDLERS;
-    
-    //  Except memory allocation failures
-    info.dwFlags &= ~CR_INST_NEW_OPERATOR_ERROR_HANDLER;
-    
-    //  Allow user to attach files
-    info.dwFlags |= CR_INST_ALLOW_ATTACH_MORE_FILES;
-    
-    //  Allow user to add more info
-    info.dwFlags |= CR_INST_SHOW_ADDITIONAL_INFO_FIELDS;
-    
-    
-    // URL for sending error reports over HTTP.
-    if(g_bEmailCrashReport){
-        info.pszEmailTo = _T("opencpn@bigdumboat.com");
-        info.pszSmtpProxy = _T("mail.bigdumboat.com:587");
-        info.pszUrl = _T("http://bigdumboat.com/crashrpt/ocpn_crashrpt.php");
-        info.uPriorities[CR_HTTP] = 1;  // First try send report over HTTP
-    }
-    else{
-        info.dwFlags |= CR_INST_DONT_SEND_REPORT;
-        info.uPriorities[CR_HTTP] = CR_NEGATIVE_PRIORITY;       // don't send at all
-    }
-        
-    info.uPriorities[CR_SMTP] = CR_NEGATIVE_PRIORITY;  // Second try send report over SMTP
-    info.uPriorities[CR_SMAPI] = CR_NEGATIVE_PRIORITY; //1; // Third try send report over Simple MAPI
-
-    wxStandardPaths& crash_std_path = *dynamic_cast<wxStandardPaths*>(&wxApp::GetTraits()->GetStandardPaths());
-    wxString crash_rpt_save_locn = crash_std_path.GetConfigDir();
-    if( g_bportable ) {
-        wxFileName exec_path_crash( crash_std_path.GetExecutablePath() );
-        crash_rpt_save_locn = exec_path_crash.GetPath( wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR );
-    }
-    
-    wxString locn = crash_rpt_save_locn + _T("\\CrashReports");
-    
-    if(!wxDirExists( locn ) )
-        wxMkdir( locn );
-        
-    if(wxDirExists( locn ) ){
-        wxCharBuffer buf = locn.ToUTF8();
-        wchar_t wlocn[256];
-        if(buf && (locn.Length() < sizeof(wlocn)) ){
-            MultiByteToWideChar( 0, 0, buf.data(), -1, wlocn, sizeof(wlocn)-1);
-            info.pszErrorReportSaveDir = (LPCWSTR)wlocn;
-        }
-    }
-
-    // Provide privacy policy URL
-    wxStandardPathsBase& std_path_crash = wxApp::GetTraits()->GetStandardPaths();
-    std_path_crash.Get();
-    wxFileName exec_path_crash( std_path_crash.GetExecutablePath() );
-    wxString policy_file =  exec_path_crash.GetPath( wxPATH_GET_VOLUME | wxPATH_GET_SEPARATOR );
-    policy_file += _T("PrivacyPolicy.txt");
-    policy_file.Prepend(_T("file:"));
-
-    info.pszPrivacyPolicyURL = policy_file.c_str();;
-
-    int nResult = crInstall(&info);
-    if(nResult!=0) {
-         TCHAR buff[256];
-         crGetLastErrorMsg(buff, 256);
-         MessageBox(NULL, buff, _T("crInstall error, Crash Reporting disabled."), MB_OK);
-     }
-
-    // Establish the crash callback function
-    crSetCrashCallback( CrashCallback, NULL );
-
-    // Take screenshot of the app window at the moment of crash
-    crAddScreenshot2(CR_AS_PROCESS_WINDOWS|CR_AS_USE_JPEG_FORMAT, 95);
-
-    //  Mark some files to add to the crash report
-    wxString home_data_crash = std_path_crash.GetConfigDir();
-    if( g_bportable ) {
-        wxFileName f( std_path_crash.GetExecutablePath() );
-        home_data_crash = f.GetPath();
-    }
-    appendOSDirSlash( &home_data_crash );
-
-    wxString config_crash = _T("opencpn.ini");
-    config_crash.Prepend( home_data_crash );
-    crAddFile2( config_crash.c_str(), NULL, NULL, CR_AF_MISSING_FILE_OK | CR_AF_ALLOW_DELETE );
-
-    wxString log_crash = _T("opencpn.log");
-    log_crash.Prepend( home_data_crash );
-    crAddFile2( log_crash.c_str(), NULL, NULL, CR_AF_MISSING_FILE_OK | CR_AF_ALLOW_DELETE );
-
-#endif
-#endif
-
-#ifdef LINUX_CRASHRPT
-#if wxUSE_ON_FATAL_EXCEPTION
-    // fatal exceptions handling
-    wxHandleFatalExceptions (true);
-#endif
-#endif
-
-#ifdef __WXMSW__
-    //  Invoke my own handler for failers of malloc/new
-    _set_new_handler( MyNewHandler );
-    //  configure malloc to call the New failure handler on failure
-    _set_new_mode(1);
-#endif    
     
     //  Seed the random number generator
     wxDateTime x = wxDateTime::UNow();
@@ -1347,111 +1128,21 @@ bool MyApp::OnInit()
     seed *= x.GetTicks();
     srand(seed);
 
-    //    On MSW, force the entire process to run on one CPU core only
-    //    This resolves some difficulty with wxThread syncronization
-#if 0
-#ifdef __WXMSW__
-    //Gets the current process handle
-    HANDLE hProc = GetCurrentProcess();
-    DWORD procMask;
-    DWORD sysMask;
-    HANDLE hDup;
-    DuplicateHandle( hProc, hProc, hProc, &hDup, 0, FALSE, DUPLICATE_SAME_ACCESS );
-
-//Gets the current process affinity mask
-    GetProcessAffinityMask( hDup, &procMask, &sysMask );
-
-// Take a simple approach, and assume up to 4 processors
-    DWORD newMask;
-    if( ( procMask & 1 ) == 1 ) newMask = 1;
-    else
-        if( ( procMask & 2 ) == 2 ) newMask = 2;
-        else
-            if( ( procMask & 4 ) == 4 ) newMask = 4;
-            else
-                if( ( procMask & 8 ) == 8 ) newMask = 8;
-
-//Set te affinity mask for the process
-    BOOL res = SetProcessAffinityMask( hDup, (DWORD_PTR) newMask );
-
-    if( res == 0 ) {
-        //Error setting affinity mask!!
-    }
-#endif
-#endif
 
 //Fulup: force floating point to use dot as separation.
 // This needs to be set early to catch numerics in config file.
-//#ifdef __POSIX__
     setlocale( LC_NUMERIC, "C" );
-//#endif
-
-//      CALLGRIND_STOP_INSTRUMENTATION
 
 
 
     g_start_time = wxDateTime::Now();
 
-    g_loglast_time = g_start_time;   // pjotrc 2010.02.09
-    g_loglast_time.MakeGMT();        // pjotrc 2010.02.09
-    g_loglast_time.Subtract( wxTimeSpan( 0, 29, 0, 0 ) ); // give 1 minute for GPS to get a fix   // pjotrc 2010.02.09
+    g_loglast_time = g_start_time; 
+    g_loglast_time.MakeGMT();      
+    g_loglast_time.Subtract( wxTimeSpan( 0, 29, 0, 0 ) ); // give 1 minute for GPS to get a fix 
 
     AnchorPointMinDist = 5.0;
 
-#ifdef __WXMSW__
-
-    //    Handle any Floating Point Exceptions which may leak thru from other
-    //    processes.  The exception filter is in cutil.c
-    //    Seems to only happen for W98
-
-    wxPlatformInfo Platform;
-    if( Platform.GetOperatingSystemId() == wxOS_WINDOWS_9X ) SetUnhandledExceptionFilter (&MyUnhandledExceptionFilter);
-#endif
-
-#ifdef __WXMSW__
-//     _CrtSetBreakAlloc(25503);
-#endif
-
-#ifndef __WXMSW__
-//      Setup Linux SIGNAL handling, for external program control
-
-//      Build the sigaction structure
-    sa_all.sa_handler = catch_signals;// point to my handler
-    sigemptyset(&sa_all.sa_mask);// make the blocking set
-                                 // empty, so that all
-                                 // other signals will be
-                                 // unblocked during my handler
-    sa_all.sa_flags = 0;
-
-    sigaction(SIGUSR1, NULL, &sa_all_old);// save existing action for this signal
-
-//      Register my request for some signals
-    sigaction(SIGUSR1, &sa_all, NULL);
-
-    sigaction(SIGUSR1, NULL, &sa_all_old);// inspect existing action for this signal
-
-    sigaction(SIGTERM, &sa_all, NULL);
-    sigaction(SIGTERM, NULL, &sa_all_old);
-#endif
-
-//      Initialize memory tracer
-#ifndef __WXMSW__
-//        mtrace();
-#endif
-
-//      Here is some experimental code for wxTheme support
-//      Not also these lines included above....
-//      They are necessary to ensure that the themes are statically loaded
-
-//      #ifdef __WXUNIVERSAL__
-//      WX_USE_THEME(gtk);
-//      WX_USE_THEME(Metal);
-//      #endif
-
-#ifdef __WXUNIVERSAL__
-//        wxTheme* theme = wxTheme::Create("gtk");
-//        wxTheme::Set(theme);
-#endif
 
 //      Init the private memory manager
     malloc_max = 0;
@@ -1459,129 +1150,25 @@ bool MyApp::OnInit()
     //      Record initial memory status
     GetMemoryStatus( &g_mem_total, &g_mem_initial );
 
-//      wxHandleFatalExceptions(true);
 
 // Set up default FONT encoding, which should have been done by wxWidgets some time before this......
     wxFont temp_font( 10, wxDEFAULT, wxNORMAL, wxNORMAL, FALSE, wxString( _T("") ),
             wxFONTENCODING_SYSTEM );
     temp_font.SetDefaultEncoding( wxFONTENCODING_SYSTEM );
 
-//      Establish a "home" location
-    wxStandardPaths& std_path = *dynamic_cast<wxStandardPaths*>(&wxApp::GetTraits()->GetStandardPaths());
-
-    //TODO  Why is the following preferred?  Will not compile with gcc...
-//    wxStandardPaths& std_path = wxApp::GetTraits()->GetStandardPaths();
-
-#ifdef __unix__
-    std_path.SetInstallPrefix(wxString(PREFIX, wxConvUTF8));
-#endif
-
-    gExe_path = std_path.GetExecutablePath();
-
-    pHome_Locn = new wxString;
-#ifdef __WXMSW__
-    pHome_Locn->Append( std_path.GetConfigDir() );   // on w98, produces "/windows/Application Data"
-#else
-    pHome_Locn->Append(std_path.GetUserConfigDir());
-#endif
-
-    //  On android, make the private data dir on the sdcard, if it exists.
-    //  This make debugging easier, as it is not deleted whenever the APK is re-deployed.
-    //  This behaviour should go away at Release.
-#ifdef __OCPN__ANDROID__
-    if( wxDirExists(_T("/mnt/sdcard")) ){
-        pHome_Locn->Clear();
-        pHome_Locn->Append( _T("/mnt/sdcard/.opencpn") );
-    }
-#endif
-
-    if( g_bportable ) {
-        pHome_Locn->Clear();
-        wxFileName f( std_path.GetExecutablePath() );
-        pHome_Locn->Append( f.GetPath() );
-    }
-
-    appendOSDirSlash( pHome_Locn );
 
     //      Establish Log File location
-    glog_file = *pHome_Locn;
-
-#ifdef  __WXOSX__
-    pHome_Locn->Append(_T("opencpn"));
-    appendOSDirSlash(pHome_Locn);
-
-    wxFileName LibPref(glog_file);          // starts like "~/Library/Preferences"
-    LibPref.RemoveLastDir();// takes off "Preferences"
-
-    glog_file = LibPref.GetFullPath();
-    appendOSDirSlash(&glog_file);
-
-    glog_file.Append(_T("Logs/"));// so, on OS X, opencpn.log ends up in ~/Library/Logs
-                                  // which makes it accessible to Applications/Utilities/Console....
-#endif
-
-    // create the opencpn "home" directory if we need to
-    wxFileName wxHomeFiledir( *pHome_Locn );
-    if( true != wxHomeFiledir.DirExists( wxHomeFiledir.GetPath() ) ) if( !wxHomeFiledir.Mkdir(
-            wxHomeFiledir.GetPath() ) ) {
-        wxASSERT_MSG(false,_T("Cannot create opencpn home directory"));
+    if(!g_Platform->InitializeLogFile())
         return false;
-    }
-
-    // create the opencpn "log" directory if we need to
-    wxFileName wxLogFiledir( glog_file );
-    if( true != wxLogFiledir.DirExists( wxLogFiledir.GetPath() ) ) {
-        if( !wxLogFiledir.Mkdir( wxLogFiledir.GetPath() ) ) {
-            wxASSERT_MSG(false,_T("Cannot create opencpn log directory"));
-            return false;
-        }
-    }
-    glog_file.Append( _T("opencpn.log") );
-    wxString logit = glog_file;
     
-    //  Constrain the size of the log file
-    wxString large_log_message;
-    if( ::wxFileExists( glog_file ) ) {
-        if( wxFileName::GetSize( glog_file ) > 1000000 ) {
-            wxString oldlog = glog_file;
-            oldlog.Append( _T(".log") );
-            //  Defer the showing of this messagebox until the system locale is established.
-            large_log_message = ( _("Old log will be moved to opencpn.log.log") );
-            ::wxRenameFile( glog_file, oldlog );
-        }
-    }
-
-#ifdef __OCPN__ANDROID__
-    //  Force new logfile for each instance
-    // TODO Remove this behaviour on Release
-    if( ::wxFileExists( glog_file ) ){
-        ::wxRemoveFile( glog_file );
-    }
-#endif
-    
-    flog = fopen( glog_file.mb_str(), "a" );
-    logger = new wxLogStderr( flog );
-
-#ifdef __OCPN__ANDROID__
-    //  Trouble printing timestamp
-    logger->SetTimestamp((const char *)NULL);
-#endif
-    
-    Oldlogger = wxLog::SetActiveTarget( logger );
 
 #ifdef __WXMSW__
-
-//  Un-comment the following to establish a separate console window as a target for printf() in Windows
-//     RedirectIOToConsole();
-
+    
+    //  Un-comment the following to establish a separate console window as a target for printf() in Windows
+    //     RedirectIOToConsole();
+    
 #endif
-
-//        wxLog::AddTraceMask("timer");               // verbose message traces to log output
-
-#if defined(__WXGTK__) || defined(__WXOSX__)
-    logger->SetTimestamp(_T("%H:%M:%S %Z"));
-#endif
-
+    
 //      Send init message
     wxLogMessage( _T("\n\n________\n") );
 
@@ -1622,39 +1209,14 @@ bool MyApp::OnInit()
     //    Initialize embedded PNG icon graphics
     ::wxInitAllImageHandlers();
 
-//      Establish a "shared data" location
-    /*  From the wxWidgets documentation...
-
-     wxStandardPaths::GetDataDir
-     wxString GetDataDir() const
-     Return the location of the applications global, i.e. not user-specific, data files.
-     * Unix: prefix/share/appname
-     * Windows: the directory where the executable file is located
-     * Mac: appname.app/Contents/SharedSupport bundle subdirectory
-     */
-    g_SData_Locn = std_path.GetDataDir();
-    appendOSDirSlash( &g_SData_Locn );
-
-#ifdef __OCPN__ANDROID__
-    wxFileName fdir = wxFileName::DirName(std_path.GetUserConfigDir());
-    
-    fdir.RemoveLastDir();
-    g_SData_Locn = fdir.GetPath();
-    g_SData_Locn += _T("/cache/");
-#endif
-    
-    if( g_bportable )
-        g_SData_Locn = *pHome_Locn;
 
     imsg = _T("SData_Locn is ");
-    imsg += g_SData_Locn;
+    imsg += g_Platform->GetSharedDataDir();
     wxLogMessage( imsg );
 
 #ifdef __OCPN__ANDROID__
-#if 0    
     //  Now we can load a Qt StyleSheet, if present
-    wxString style_file = g_SData_Locn;
-    appendOSDirSlash( &style_file );
+    wxString style_file = g_Platform->GetSharedDataDir();
     style_file += _T("styles");
     appendOSDirSlash( &style_file );
     style_file += _T("qtstylesheet.qss");
@@ -1663,9 +1225,10 @@ bool MyApp::OnInit()
         wxString smsg = _T("Loaded Qt Stylesheet: ") + style_file;
         wxLogMessage( smsg );
     }
-    else
-        wxLogMessage(_T("Qt Stylesheet not found"));
-#endif    
+    else{
+        wxString smsg = _T("Qt Stylesheet not found: ") + style_file;
+        wxLogMessage( smsg );
+    }
 #endif
         
     //      Create some static strings
@@ -1674,38 +1237,11 @@ bool MyApp::OnInit()
     //  Establish an empty ChartCroupArray
     g_pGroupArray = new ChartGroupArray;
 
-    //      Establish the prefix of the location of user specific data files
-#ifdef __WXMSW__
-    g_PrivateDataDir = *pHome_Locn;                     // should be {Documents and Settings}\......
-#elif defined __WXOSX__
-            g_PrivateDataDir = std_path.GetUserConfigDir();     // should be ~/Library/Preferences
-#else
-            g_PrivateDataDir = std_path.GetUserDataDir();       // should be ~/.opencpn
-#endif
-
-    if( g_bportable )
-        g_PrivateDataDir = *pHome_Locn;
-
-#ifdef __OCPN__ANDROID__
-    g_PrivateDataDir = *pHome_Locn;
-#endif
-
+ 
     imsg = _T("PrivateDataDir is ");
-    imsg += g_PrivateDataDir;
+    imsg += g_Platform->GetPrivateDataDir();
     wxLogMessage( imsg );
 
-
-    //  Get the PlugIns directory location
-    g_Plugin_Dir = std_path.GetPluginsDir();   // linux:   {prefix}/lib/opencpn
-                                               // Mac:     appname.app/Contents/PlugIns
-#ifdef __WXMSW__
-    g_Plugin_Dir += _T("\\plugins");             // Windows: {exe dir}/plugins
-#endif
-
-    if( g_bportable ) {
-        g_Plugin_Dir = *pHome_Locn;
-        g_Plugin_Dir += _T("plugins");
-    }
 
 //      Create an array string to hold repeating messages, so they don't
 //      overwhelm the log
@@ -1745,53 +1281,22 @@ bool MyApp::OnInit()
 #endif
 #endif
 
-//      Establish the location of the config file
-#ifdef __WXMSW__
-    gConfig_File = _T("opencpn.ini");
-    gConfig_File.Prepend( *pHome_Locn );
-
-#elif defined __WXOSX__
-    gConfig_File = std_path.GetUserConfigDir(); // should be ~/Library/Preferences
-    appendOSDirSlash(&gConfig_File);
-    gConfig_File.Append(_T("opencpn.ini"));
-#else
-    gConfig_File = std_path.GetUserDataDir(); // should be ~/.opencpn
-    appendOSDirSlash(&gConfig_File);
-    gConfig_File.Append(_T("opencpn.conf"));
-#endif
-
-    if( g_bportable ) {
-        gConfig_File = *pHome_Locn;
-#ifdef __WXMSW__
-        gConfig_File += _T("opencpn.ini");
-#elif defined __WXOSX__
-        gConfig_File +=_T("opencpn.ini");
-#else
-        gConfig_File += _T("opencpn.conf");
-#endif
-
-    }
-
-#ifdef __OCPN__ANDROID__
-    gConfig_File = *pHome_Locn;
-    gConfig_File += _T("opencpn.conf");
-#endif
 
     b_novicemode = false;
     
-    wxFileName config_test_file_name( gConfig_File );
+    wxFileName config_test_file_name( g_Platform->GetConfigFileName() );
     if( config_test_file_name.FileExists() ) wxLogMessage(
-            _T("Using existing Config_File: ") + gConfig_File );
+        _T("Using existing Config_File: ") + g_Platform->GetConfigFileName() );
     else {
         {
-            wxLogMessage( _T("Creating new Config_File: ") + gConfig_File );
+            wxLogMessage( _T("Creating new Config_File: ") + g_Platform->GetConfigFileName() );
 
             //    Flag to preset some options for initial config file creation
             b_novicemode = true;
 
             if( true != config_test_file_name.DirExists( config_test_file_name.GetPath() ) )
                 if( !config_test_file_name.Mkdir(config_test_file_name.GetPath() ) )
-                    wxLogMessage( _T("Cannot create config file directory for ") + gConfig_File );
+                    wxLogMessage( _T("Cannot create config file directory for ") + g_Platform->GetConfigFileName() );
         }
     }
 
@@ -1809,15 +1314,22 @@ bool MyApp::OnInit()
         exit( EXIT_FAILURE );
     }
 
-    g_display_size_mm = wxMax(100, GetDisplaySizeMM());
-
+    g_display_size_mm = wxMax(100, g_Platform->GetDisplaySizeMM());
+    double dsmm = g_display_size_mm;
+    
     //      Init the WayPoint Manager (Must be after UI Style init).
     pWayPointMan = NULL;
 
     //      Open/Create the Config Object (Must be after UI Style init).
-    MyConfig *pCF = new MyConfig( wxString( _T("") ), wxString( _T("") ), gConfig_File );
+    MyConfig *pCF = new MyConfig( wxString( _T("") ), wxString( _T("") ), g_Platform->GetConfigFileName() );
     pConfig = (MyConfig *) pCF;
     pConfig->LoadMyConfig();
+
+    if(fabs(dsmm - g_display_size_mm) > 1){
+        wxString msg;
+        msg.Printf(_T("Display size (horizontal) config override: %d mm"), (int) g_display_size_mm);
+        wxLogMessage(msg);
+    }
 
     if(g_btouch){
         int SelectPixelRadius = 50;
@@ -1844,7 +1356,7 @@ bool MyApp::OnInit()
 
     // Add a new prefix for search order.
 #ifdef __WXMSW__
-    wxString locale_location = g_SData_Locn;
+    wxString locale_location = g_Platform->GetSharedDataDir();
     locale_location += _T("share/locale");
     wxLocale::AddCatalogLookupPathPrefix( locale_location );
 #endif
@@ -1933,15 +1445,15 @@ bool MyApp::OnInit()
     g_config_version_string = vs;
 
     //  Show deferred log restart message, if it exists.
-    if( !large_log_message.IsEmpty() )
-        OCPNMessageBox ( NULL, large_log_message, wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK, 5 );
+    if( !g_Platform->GetLargeLogMessage().IsEmpty() )
+        OCPNMessageBox ( NULL, g_Platform->GetLargeLogMessage(), wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK, 5 );
 
     //  Validate OpenGL functionality, if selected
 #ifdef ocpnUSE_GL
 
 #ifdef __WXMSW__
     if( /*g_bopengl &&*/ !g_bdisable_opengl ) {
-        wxFileName fn(std_path.GetExecutablePath());
+        wxFileName fn(g_Platform->GetExePath());
         bool b_test_result = TestGLCanvas(fn.GetPathWithSep() );
 
         if( !b_test_result )
@@ -1979,19 +1491,21 @@ bool MyApp::OnInit()
 #endif
 
 //      Establish location and name of chart database
-    pChartListFileName = newPrivateFileName(std_path, pHome_Locn, "chartlist.dat", "CHRTLIST.DAT");
+    ChartListFileName = newPrivateFileName(g_Platform->GetHomeDir(), "chartlist.dat", "CHRTLIST.DAT");
 
 //      Establish location and name of AIS MMSI -> Target Name mapping
-    pAISTargetNameFileName = newPrivateFileName(std_path, pHome_Locn, "mmsitoname.csv", "MMSINAME.CSV");
+    AISTargetNameFileName = newPrivateFileName(g_Platform->GetHomeDir(), "mmsitoname.csv", "MMSINAME.CSV");
 
 #ifdef __OCPN__ANDROID__
-    pChartListFileName->Clear();
-    pChartListFileName->Append(_T("chartlist.dat"));
-    pChartListFileName->Prepend( *pHome_Locn );
+    ChartListFileName.Clear();
+    ChartListFileName.Append(_T("chartlist.dat"));
+    ChartListFileName.Prepend( g_Platform->GetHomeDir() );
 #endif
 
 //      Establish guessed location of chart tree
     if( pInit_Chart_Dir->IsEmpty() ) {
+        wxStandardPaths& std_path = g_Platform->GetStdPaths();
+        
         if( !g_bportable )
 #ifndef __OCPN__ANDROID__
         pInit_Chart_Dir->Append( std_path.GetDocumentsDir() );
@@ -2002,44 +1516,21 @@ bool MyApp::OnInit()
 
 //      Establish the GSHHS Dataset location
     pWorldMapLocation = new wxString( _T("gshhs") );
-    pWorldMapLocation->Prepend( g_SData_Locn );
+    pWorldMapLocation->Prepend( g_Platform->GetSharedDataDir() );
     pWorldMapLocation->Append( wxFileName::GetPathSeparator() );
 
-    //  Override some config options for initial user startup with empty config file
-    if( b_novicemode ) {
-        g_bShowOutlines = true;
-
-        g_CPAMax_NM = 20.;
-        g_CPAWarn_NM = 2.;
-        g_TCPA_Max = 30.;
-        g_bMarkLost = true;
-        ;
-        g_MarkLost_Mins = 8;
-        g_bRemoveLost = true;
-        g_RemoveLost_Mins = 10;
-        g_bShowCOG = true;
-        g_ShowCOG_Mins = 6;
-        g_bShowMoored = true;
-        g_ShowMoored_Kts = 0.2;
-        g_bTrackDaily = false;
-        g_PlanSpeed = 6.;
-        g_bFullScreenQuilt = true;
-        g_bQuiltEnable = true;
-        g_bskew_comp = false;
-        g_bShowAreaNotices = false;
-        g_bDrawAISSize = false;
-        g_bShowAISName = false;
-    }
+    if( b_novicemode )
+        g_Platform->SetDefaultOptions();
 
     //  Check the global Tide/Current data source array
     //  If empty, preset one default (US) Ascii data source
-    wxString default_tcdata =  ( g_SData_Locn + _T("tcdata") +
+    wxString default_tcdata =  ( g_Platform->GetSharedDataDir() + _T("tcdata") +
              wxFileName::GetPathSeparator() + _T("HARMONIC.IDX"));
     wxFileName fdefault( default_tcdata );
 
     if(!TideCurrentDataSet.GetCount()) {
         if( g_bportable ) {
-            fdefault.MakeRelativeTo( g_PrivateDataDir );
+            fdefault.MakeRelativeTo( g_Platform->GetPrivateDataDir() );
             TideCurrentDataSet.Add( fdefault.GetFullPath() );
         }
         else
@@ -2058,13 +1549,13 @@ bool MyApp::OnInit()
     //  Check the global AIS alarm sound file
     //  If empty, preset default
     if(g_sAIS_Alert_Sound_File.IsEmpty()) {
-        wxString default_sound =  ( g_SData_Locn + _T("sounds") +
+        wxString default_sound =  ( g_Platform->GetSharedDataDir() + _T("sounds") +
         wxFileName::GetPathSeparator() +
         _T("2bells.wav"));
 
         if( g_bportable ) {
             wxFileName f( default_sound );
-            f.MakeRelativeTo( g_PrivateDataDir );
+            f.MakeRelativeTo( g_Platform->GetPrivateDataDir() );
             g_sAIS_Alert_Sound_File = f.GetFullPath();
         }
         else
@@ -2131,13 +1622,15 @@ bool MyApp::OnInit()
 #endif
 
 #ifdef __OCPN__ANDROID__
-    ::wxDisplaySize( &cw, &ch);
-    ch -= 24;                           // This accounts for an error in the wxQT-Android interface...
-    
+    wxSize asz = getAndroidDisplayDimensions();
+    ch = asz.y;
+    cw = asz.x;
+    qDebug() << cw << ch;
+
     if((cw > 200) && (ch > 200) )
         new_frame_size.Set( cw, ch );
     else
-        new_frame_size.Set( 800, 500 );
+        new_frame_size.Set( 800, 400 );
 #endif
         
     //  For Windows and GTK, provide the expected application Minimize/Close bar
@@ -2150,10 +1643,12 @@ bool MyApp::OnInit()
 
     if( g_bportable ) {
         myframe_window_title += _(" -- [Portable(-p) executing from ");
-        myframe_window_title += *pHome_Locn;
+        myframe_window_title += g_Platform->GetHomeDir();
         myframe_window_title += _T("]");
     }
 
+//    qDebug() << "OpenCPN Initialized before new frame:" <<  sw.Time();
+    
     gFrame = new MyFrame( NULL, myframe_window_title, position, new_frame_size, app_style ); //Gunther
 
 //  Initialize the Plugin Manager
@@ -2171,6 +1666,8 @@ bool MyApp::OnInit()
 //                        to the parent client area automatically, (as a favor?)
 //                        Here, we'll do explicit sizing on SIZE events
 
+//    qDebug() << "OpenCPN Initialized before canvas:" <<  sw.Time();
+    
     cc1 = new ChartCanvas( gFrame );                         // the chart display canvas
     gFrame->SetCanvasWindow( cc1 );
 
@@ -2211,8 +1708,14 @@ bool MyApp::OnInit()
 // Show the frame
 
 //    gFrame->ClearBackground();
+ //   qDebug() << "OpenCPN Initialized before show:" <<  sw.Time();
     gFrame->Show( TRUE );
-
+ //   qDebug() << "OpenCPN Initialized after show:" <<  sw.Time();
+    
+#ifdef __OCPN__ANDROID__
+    androidShowBusyIcon();
+#endif    
+    
     gFrame->SetAndApplyColorScheme( global_color_scheme );
 
     if( g_bframemax ) gFrame->Maximize( true );
@@ -2308,11 +1811,11 @@ bool MyApp::OnInit()
 //    So it is best to simply delete it if present.
 //    TODO  There is a possibility of recreating the dir list from the database itself......
 
-    if( !ChartDirArray.GetCount() ) ::wxRemoveFile( *pChartListFileName );
+    if( !ChartDirArray.GetCount() ) ::wxRemoveFile( ChartListFileName );
 
 //      Try to load the current chart list Data file
     ChartData = new ChartDB( gFrame );
-    if (!ChartData->LoadBinary(*pChartListFileName, ChartDirArray)) {
+    if (!ChartData->LoadBinary(ChartListFileName, ChartDirArray)) {
         bDBUpdateInProgress = true;
 
         if( ChartDirArray.GetCount() ) {
@@ -2339,7 +1842,7 @@ bool MyApp::OnInit()
                     wxPD_SMOOTH | wxPD_ELAPSED_TIME | wxPD_ESTIMATED_TIME | wxPD_REMAINING_TIME );
 
             ChartData->Create( ChartDirArray, pprog );
-            ChartData->SaveBinary(*pChartListFileName);
+            ChartData->SaveBinary(ChartListFileName);
 
             delete pprog;
         }
@@ -2348,14 +1851,15 @@ bool MyApp::OnInit()
         {
             wxLogMessage(
                     _T("Chartlist file not found, config chart dir array is empty.  Chartlist target file is:")
-                            + *pChartListFileName );
+                            + ChartListFileName );
 
             wxString msg1(
                     _("No Charts Installed.\nPlease select chart folders in Options > Charts.") );
 
-            OCPNMessageBox(gFrame, msg1, wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK );
+ ///           OCPNMessageBox(gFrame, msg1, wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK );
 
-            gFrame->DoOptionsDialog();
+            
+///            gFrame->DoOptionsDialog();
 
             b_SetInitialPoint = true;
 
@@ -2455,21 +1959,14 @@ extern ocpnGLOptions g_GLOptions;
     if( g_bTrackCarryOver )
         g_bDeferredStartTrack = true;
 
-//    Re-enable anchor watches if set in config file
-    if( !g_AW1GUID.IsEmpty() ) {
-        pAnchorWatchPoint1 = pWayPointMan->FindRoutePointByGUID( g_AW1GUID );
-    }
-    if( !g_AW2GUID.IsEmpty() ) {
-        pAnchorWatchPoint2 = pWayPointMan->FindRoutePointByGUID( g_AW2GUID );
-    }
+    pAnchorWatchPoint1 = NULL;
+    pAnchorWatchPoint2 = NULL;
 
     Yield();
 
     gFrame->DoChartUpdate();
 
     FontMgr::Get().ScrubList(); // is this needed?
-
-//    g_FloatingToolbarDialog->LockPosition(false);
 
 //      Start up the ticker....
     gFrame->FrameTimer1.Start( TIMER_GFRAME_1, wxTIMER_CONTINUOUS );
@@ -2478,67 +1975,21 @@ extern ocpnGLOptions g_GLOptions;
     if(g_bCourseUp)
         gFrame->FrameCOGTimer.Start( 10, wxTIMER_CONTINUOUS );
 
-//        gFrame->MemFootTimer.Start(wxMax(g_MemFootSec * 1000, 60 * 1000), wxTIMER_CONTINUOUS);
-//        gFrame->MemFootTimer.Start(1000, wxTIMER_CONTINUOUS);
-
-    // Import Layer-wise any .gpx files from /Layers directory
-    wxString layerdir = g_PrivateDataDir;
-    appendOSDirSlash( &layerdir );
-    layerdir.Append( _T("layers") );
-
-#if 0
-    wxArrayString file_array;
-    g_LayerIdx = 0;
-
-    if( wxDir::Exists( layerdir ) ) {
-        wxString laymsg;
-        laymsg.Printf( wxT("Getting .gpx layer files from: %s"), layerdir.c_str() );
-        wxLogMessage( laymsg );
-
-        wxDir dir;
-        dir.Open( layerdir );
-        if( dir.IsOpened() ) {
-            wxString filename;
-            layerdir.Append( wxFileName::GetPathSeparator() );
-            bool cont = dir.GetFirst( &filename );
-            while( cont ) {
-                filename.Prepend( layerdir );
-                wxFileName f( filename );
-                if( f.GetExt().IsSameAs( wxT("gpx") ) ) pConfig->ImportGPX( gFrame, true, filename,
-                        false ); // preload a single-gpx-file layer
-                else
-                    pConfig->ImportGPX( gFrame, true, filename, true ); // preload a layer from subdirectory
-                cont = dir.GetNext( &filename );
-            }
-        }
-    }
-#endif
-
-    if( wxDir::Exists( layerdir ) ) {
-        wxString laymsg;
-        laymsg.Printf( wxT("Getting .gpx layer files from: %s"), layerdir.c_str() );
-        wxLogMessage( laymsg );
-
-        pConfig->LoadLayers(layerdir);
-    }
-
     cc1->ReloadVP();                  // once more, and good to go
 
     //  Some window managers get confused about z-order of Compass Window, and other windows not children of gFrame.
     //  We need to defer their creation until here.
     if( pConfig->m_bShowCompassWin ) {
         g_FloatingCompassDialog = new ocpnFloatingCompassWindow( cc1 );
-        if( g_FloatingCompassDialog ) g_FloatingCompassDialog->UpdateStatus( true );
+        if( g_FloatingCompassDialog )
+            g_FloatingCompassDialog->UpdateStatus( true );
     }
 
     gFrame->Refresh( false );
     gFrame->Raise();
 
     gFrame->RequestNewToolbar();
-#ifdef __WXQT__
-    g_FloatingToolbarDialog->Raise();
-#endif
-//    g_FloatingToolbarDialog->Show();
+  
 
     cc1->Enable();
     cc1->SetFocus();
@@ -2570,10 +2021,19 @@ extern ocpnGLOptions g_GLOptions;
     cc1->Enable();
     cc1->SetFocus();
 
-    // Perform delayed initialization after 50 milliseconds
-    gFrame->InitTimer.Start( 50, wxTIMER_CONTINUOUS );
+#ifdef __WXQT__
+    g_FloatingToolbarDialog->Raise();
+    g_FloatingCompassDialog->Raise();
+#endif
+    
+    // Start delayed initialization chain after 100 milliseconds
+    gFrame->InitTimer.Start( 100, wxTIMER_CONTINUOUS );
 
     wxLogMessage( wxString::Format(_("OpenCPN Initialized in %ld ms."), sw.Time() ) );
+
+#ifdef __OCPN__ANDROID__
+    androidHideBusyIcon();
+#endif    
     
     return TRUE;
 }
@@ -2645,19 +2105,12 @@ int MyApp::OnExit()
     wxLogMessage( _T("opencpn::MyApp exiting cleanly...\n") );
     wxLog::FlushActive();
     
-    if( logger ) {
-        wxLog::SetActiveTarget( Oldlogger );
-        delete logger;
-    }
-
-    delete pChartListFileName;
-    delete pHome_Locn;
+    g_Platform->CloseLogFile();
+    
     delete phost_name;
     delete pInit_Chart_Dir;
     delete pWorldMapLocation;
 
-    delete pAISTargetNameFileName;
-    
     delete g_pRouteMan;
     delete pWayPointMan;
 
@@ -2710,13 +2163,9 @@ int MyApp::OnExit()
     delete m_checker;
 #endif
 
-#ifdef OCPN_USE_CRASHRPT
-#ifndef _DEBUG
-    // Uninstall Windows crash reporting
-    crUninstall();
-#endif
-#endif
 
+    g_Platform->OnExit_2();
+    
     return TRUE;
 }
 
@@ -2767,6 +2216,7 @@ EVT_ACTIVATE(MyFrame::OnActivate)
 EVT_MAXIMIZE(MyFrame::OnMaximize)
 EVT_COMMAND(wxID_ANY, wxEVT_COMMAND_TOOL_RCLICKED, MyFrame::RequestNewToolbarArgEvent)
 EVT_ERASE_BACKGROUND(MyFrame::OnEraseBackground)
+EVT_TIMER(RESIZE_TIMER, MyFrame::OnResizeTimer)
 #ifdef wxHAS_POWER_EVENTS
 EVT_POWER_SUSPENDING(MyFrame::OnSuspending)
 EVT_POWER_SUSPENDED(MyFrame::OnSuspended)
@@ -2921,6 +2371,8 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
 
     g_sticky_chart = -1;
     m_BellsToPlay = 0;
+    
+    m_resizeTimer.SetOwner(this, RESIZE_TIMER);
 }
 
 MyFrame::~MyFrame()
@@ -3540,7 +2992,6 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
 
     g_bquiting = true;
 
-#ifndef __OCPN__ANDROID__    
 #ifdef ocpnUSE_GL
     // cancel compression jobs
     if(g_bopengl && g_CompressorPool){
@@ -3558,7 +3009,6 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
         cc1->Update();
         wxYield();
     }
-#endif
 
     //   Save the saved Screen Brightness
     RestoreScreenBrightness();
@@ -3687,13 +3137,6 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     if( g_FloatingCompassDialog ) g_FloatingCompassDialog->Destroy();
     g_FloatingCompassDialog = NULL;
 
-    //      Delete all open charts in the cache
-    cc1->EnablePaint(false);
-    if( ChartData )
-        ChartData->PurgeCache();
-
-
-
 
 #ifndef __OCPN__ANDROID__
     SetStatusBar( NULL );
@@ -3760,11 +3203,7 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     g_FloatingToolbarDialog = NULL;
     g_bTempShowMenuBar = false;
     
-    this->Destroy();
-    
-    gFrame = NULL;
 
-#ifndef __OCPN__ANDROID__    
     #define THREAD_WAIT_SECONDS  5
 #ifdef ocpnUSE_GL
     // The last thing we do is finish the compression threads.
@@ -3787,8 +3226,9 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
         }
     }
 #endif
-#endif
 
+    this->Destroy();
+    gFrame = NULL;
 
 #ifdef __OCPN__ANDROID__
     wxTheApp->OnExit();
@@ -3834,6 +3274,21 @@ void MyFrame::ProcessCanvasResize( void )
     if( console && console->IsShown() ) PositionConsole();
 }
 
+
+void MyFrame::TriggerResize(wxSize sz)
+{
+    m_newsize = sz;
+    m_resizeTimer.Start(10, wxTIMER_ONE_SHOT);
+}
+    
+
+void MyFrame::OnResizeTimer(wxTimerEvent &event)
+{
+    SetSize(m_newsize);
+}
+
+
+
 void MyFrame::OnSize( wxSizeEvent& event )
 {
     ODoSetSize();
@@ -3843,7 +3298,7 @@ void MyFrame::ODoSetSize( void )
 {
     int x, y;
     GetClientSize( &x, &y );
-
+    
 //      Resize the children
 
     if( m_pStatusBar ) {
@@ -3872,6 +3327,15 @@ void MyFrame::ODoSetSize( void )
         font_size = wxMin( font_size, max_font_size );  // maximum to fit in the statusbar boxes
         font_size = wxMax( font_size, min_font_size );  // minimum to stop it being unreadable
 
+#ifdef __OCPN__ANDROID__
+        //TODO
+        // This is a hack.  on WXQT, setting the status bar font size causes the
+        //  frame to be resized to accomodate, leading to a looping adjustment situation.
+        //  Solution is to be found in wx sources....
+        font_size = 3;
+#endif
+        
+        
         wxFont *pstat_font = wxTheFontList->FindOrCreateFont( font_size,
               wxFONTFAMILY_SWISS, templateFont->GetStyle(), templateFont->GetWeight(), false,
               templateFont->GetFaceName() );
@@ -4286,7 +3750,8 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
 
         case wxID_ABOUT:
         case ID_ABOUT: {
-            if( !g_pAboutDlg ) g_pAboutDlg = new about( this, &g_SData_Locn );
+            if( !g_pAboutDlg )
+                g_pAboutDlg = new about( this, g_Platform->GetSharedDataDir() );
 
             g_pAboutDlg->Update();
             g_pAboutDlg->Show();
@@ -4468,6 +3933,8 @@ void MyFrame::ActivateMOB( void )
     RoutePoint *pWP_MOB = new RoutePoint( gLat, gLon, _T ( "mob" ), mob_label, GPX_EMPTY_STRING );
     pWP_MOB->m_bKeepXRoute = true;
     pWP_MOB->m_bIsolatedMark = true;
+    pWP_MOB->SetWaypointArrivalRadius( -1.0 ); // Negative distance is code to signal "Never Arrive"
+    
     pSelect->AddSelectableRoutePoint( gLat, gLon, pWP_MOB );
     pConfig->AddNewWayPoint( pWP_MOB, -1 );       // use auto next num
 
@@ -4911,7 +4378,7 @@ void MyFrame::ApplyGlobalSettings( bool bFlyingUpdate, bool bnewtoolbar )
     UseNativeStatusBar( false );              // better for MSW, undocumented in frame.cpp
 #endif
 
-    if( pConfig->m_bShowStatusBar ) {
+    if( g_bShowStatusBar ) {
         if( !m_pStatusBar ) {
             m_pStatusBar = CreateStatusBar( m_StatusBarFieldCount, 0 );   // No wxST_SIZEGRIP needed
             ApplyGlobalColorSchemetoStatusBar();
@@ -4975,13 +4442,16 @@ void MyFrame::ApplyGlobalSettings( bool bFlyingUpdate, bool bnewtoolbar )
 
 wxString _menuText( wxString name, wxString shortcut ) {
     wxString menutext;
-    menutext << name << _T("\t") << shortcut;
+    menutext << name;
+    if(!g_bresponsive)
+        menutext << _T("\t") << shortcut;
     return menutext;
 }
 
 void MyFrame::RegisterGlobalMenuItems()
 {
     if ( !m_pMenuBar ) return;  // if there isn't a menu bar
+
 
     wxMenu *nav_menu = new wxMenu();
     nav_menu->AppendCheckItem( ID_MENU_NAV_FOLLOW, _menuText(_("Auto Follow"), _T("Ctrl-A")) );
@@ -4990,8 +4460,13 @@ void MyFrame::RegisterGlobalMenuItems()
     nav_menu->AppendRadioItem( ID_MENU_CHART_NORTHUP, _("North Up Mode") );
     nav_menu->AppendRadioItem( ID_MENU_CHART_COGUP, _("Course Up Mode") );
     nav_menu->AppendSeparator();
+#ifndef __WXOSX__
     nav_menu->Append( ID_MENU_ZOOM_IN, _menuText(_("Zoom In"), _T("+")) );
     nav_menu->Append( ID_MENU_ZOOM_OUT, _menuText(_("Zoom Out"), _T("-")) );
+#else
+    nav_menu->Append( ID_MENU_ZOOM_IN, _menuText(_("Zoom In"), _T("Alt-+")) );
+    nav_menu->Append( ID_MENU_ZOOM_OUT, _menuText(_("Zoom Out"), _T("Alt--")) );
+#endif    
     nav_menu->AppendSeparator();
     nav_menu->Append( ID_MENU_SCALE_IN, _menuText(_("Larger Scale Chart"), _T("Ctrl-Left")) );
     nav_menu->Append( ID_MENU_SCALE_OUT, _menuText(_("Smaller Scale Chart"), _T("Ctrl-Right")) );
@@ -5003,21 +4478,39 @@ void MyFrame::RegisterGlobalMenuItems()
 
 
     wxMenu* view_menu = new wxMenu();
+#ifndef __WXOSX__
     view_menu->AppendCheckItem( ID_MENU_CHART_QUILTING, _menuText(_("Enable Chart Quilting"), _T("Q")) );
     view_menu->AppendCheckItem( ID_MENU_CHART_OUTLINES, _menuText(_("Show Chart Outlines"), _T("O")) );
+#else
+    view_menu->AppendCheckItem( ID_MENU_CHART_QUILTING, _menuText(_("Enable Chart Quilting"), _T("Alt-Q")) );
+    view_menu->AppendCheckItem( ID_MENU_CHART_OUTLINES, _menuText(_("Show Chart Outlines"), _T("Alt-O")) );
+#endif    
     view_menu->AppendCheckItem( ID_MENU_UI_CHARTBAR, _menuText(_("Show Chart Bar"), _T("Ctrl-B")) );
+    
 #ifdef USE_S57
     view_menu->AppendSeparator();
+#ifndef __WXOSX__
     view_menu->AppendCheckItem( ID_MENU_ENC_TEXT, _menuText(_("Show ENC Text"), _T("T")) );
     view_menu->AppendCheckItem( ID_MENU_ENC_LIGHTS, _menuText(_("Show ENC Lights"), _T("L")) );
     view_menu->AppendCheckItem( ID_MENU_ENC_SOUNDINGS, _menuText(_("Show ENC Soundings"), _T("S")) );
     view_menu->AppendCheckItem( ID_MENU_ENC_ANCHOR, _menuText(_("Show ENC Anchoring Info"), _T("A")) );
+#else
+    view_menu->AppendCheckItem( ID_MENU_ENC_TEXT, _menuText(_("Show ENC Text"), _T("Alt-T")) );
+    view_menu->AppendCheckItem( ID_MENU_ENC_LIGHTS, _menuText(_("Show ENC Lights"), _T("Alt-L")) );
+    view_menu->AppendCheckItem( ID_MENU_ENC_SOUNDINGS, _menuText(_("Show ENC Soundings"), _T("Alt-S")) );
+    view_menu->AppendCheckItem( ID_MENU_ENC_ANCHOR, _menuText(_("Show ENC Anchoring Info"), _T("Alt-A")) );
+    #endif
 #endif
     view_menu->AppendSeparator();
     view_menu->AppendCheckItem( ID_MENU_SHOW_TIDES, _("Show Tides") );
     view_menu->AppendCheckItem( ID_MENU_SHOW_CURRENTS, _("Show Currents") );
     view_menu->AppendSeparator();
+#ifndef __WXOSX__
     view_menu->Append( ID_MENU_UI_COLSCHEME, _menuText(_("Change Color Scheme"), _T("C")) );
+#else
+    view_menu->Append( ID_MENU_UI_COLSCHEME, _menuText(_("Change Color Scheme"), _T("Alt-C")) );
+#endif    
+    
     view_menu->AppendSeparator();
 #ifdef __WXOSX__
     view_menu->Append(ID_MENU_UI_FULLSCREEN, _menuText(_("Enter Full Screen"), _T("RawCtrl-Ctrl-F")) );
@@ -5036,9 +4529,13 @@ void MyFrame::RegisterGlobalMenuItems()
     ais_menu->Append( ID_MENU_AIS_TARGETLIST, _("AIS Target List...") );
     m_pMenuBar->Append( ais_menu, _("&AIS") );
 
-
     wxMenu* tools_menu = new wxMenu();
+#ifndef __WXOSX__    
     tools_menu->Append( ID_MENU_TOOL_MEASURE, _menuText(_("Measure Distance"), _T("M")) );
+#else
+    tools_menu->Append( ID_MENU_TOOL_MEASURE, _menuText(_("Measure Distance"), _T("Alt-M")) );
+#endif
+    
     tools_menu->AppendSeparator();
     tools_menu->Append( ID_MENU_ROUTE_MANAGER, _("Route && Mark Manager...") );
     tools_menu->Append( ID_MENU_ROUTE_NEW, _menuText(_("Create Route"), _T("Ctrl-R")) );
@@ -5130,6 +4627,20 @@ void MyFrame::SurfaceToolbar( void )
     }
     gFrame->Raise();
 }
+
+void MyFrame::ToggleToolbar( bool b_smooth )
+{
+    if( g_FloatingToolbarDialog ) {
+        if( g_FloatingToolbarDialog->IsShown() ){
+            SubmergeToolbar();
+        }
+        else{
+            SurfaceToolbar();
+            g_FloatingToolbarDialog->Raise();
+        }
+    }
+}
+        
 
 void MyFrame::JumpToPosition( double lat, double lon, double scale )
 {
@@ -5265,6 +4776,18 @@ int MyFrame::DoOptionsDialog()
 
     delete pWorkDirArray;
 
+    if(stats){
+        stats->Show(g_bShowChartBar);
+        if(g_bShowChartBar){
+            stats->Move(0,0);
+            stats->RePosition();
+            gFrame->Raise();
+            DoChartUpdate();
+            UpdateControlBar();
+            Refresh();
+        }
+    }
+    
     SetToolbarScale();
     RequestNewToolbar();
 
@@ -5275,9 +4798,10 @@ int MyFrame::DoOptionsDialog()
     }
 
 #if defined(__WXOSX__) || defined(__WXQT__)
-    if(stats)
-        stats->Show();
+    if( g_FloatingCompassDialog )
+        g_FloatingCompassDialog->Raise();
 #endif
+
 
     Refresh( false );
 
@@ -5286,6 +4810,9 @@ int MyFrame::DoOptionsDialog()
     delete g_options;
     g_options = NULL;
 
+    if (NMEALogWindow::Get().Active())
+        NMEALogWindow::Get().GetTTYWindow()->Raise();
+    
     return ret_val;
 }
 
@@ -5306,7 +4833,7 @@ int MyFrame::ProcessOptionsDialog( int rr, options* dialog )
             && ( ( rr & CHANGE_CHARTS ) || ( rr & FORCE_UPDATE ) || ( rr & SCAN_UPDATE ) ) ) {
 
        UpdateChartDatabaseInplace( *pWorkDirArray, ( ( rr & FORCE_UPDATE ) == FORCE_UPDATE ),
-                true, *pChartListFileName );
+                true, ChartListFileName );
 
         //    Re-open the last open chart
         int dbii = ChartData->FinddbIndex( chart_file_name );
@@ -5390,32 +4917,24 @@ int MyFrame::ProcessOptionsDialog( int rr, options* dialog )
         g_display_size_mm = g_config_display_size_mm;
     }
     else{
-        g_display_size_mm = wxMax(100, GetDisplaySizeMM());
+        g_display_size_mm = wxMax(100, g_Platform->GetDisplaySizeMM());
     }
         
     cc1->SetDisplaySizeMM( g_display_size_mm );
-    
-    if(stats){
-        stats->Show(g_bShowChartBar);
-        if(g_bShowChartBar){
-            stats->Move(0,0);
-            stats->RePosition();
-            gFrame->Raise();
-            DoChartUpdate();
-            UpdateControlBar();
-            Refresh();
-        }
-    }
-        
+
     return 0;
 }
 
 void MyFrame::LaunchLocalHelp( void ) {
-#if wxUSE_XLOCALE || !wxCHECK_VERSION(3,0,0)
     
-    wxString def_lang_canonical = wxLocale::GetLanguageInfo( wxLANGUAGE_DEFAULT )->CanonicalName;
-
-    wxString help_locn = g_SData_Locn + _T("doc/help_");
+    wxString def_lang_canonical = _T("en_US");
+    
+#if wxUSE_XLOCALE 
+    if(plocale_def_lang)
+        def_lang_canonical = plocale_def_lang->GetCanonicalName();
+#endif
+    
+    wxString help_locn = g_Platform->GetSharedDataDir() + _T("doc/help_");
 
     wxString help_try = help_locn + def_lang_canonical + _T(".html");
 
@@ -5430,7 +4949,6 @@ void MyFrame::LaunchLocalHelp( void ) {
     }
 
     wxLaunchDefaultBrowser(wxString( _T("file:///") ) + help_try );
-#endif    
 }
 
 
@@ -5655,6 +5173,7 @@ void MyFrame::ToggleQuiltMode( void )
         if( cur_mode != cc1->GetQuiltMode() ){
             SetupQuiltMode();
             DoChartUpdate();
+            cc1->InvalidateGL();
             Refresh();
         }
     }
@@ -5919,14 +5438,39 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
 {
     switch(m_iInitCount++) {
     case 0:
+    {
         // Load the waypoints.. both of these routines are very slow to execute which is why
         // they have been to defered until here
         pWayPointMan = new WayPointman();
         pConfig->LoadNavObjects();
+        
+        //    Re-enable anchor watches if set in config file
+        if( !g_AW1GUID.IsEmpty() ) {
+            pAnchorWatchPoint1 = pWayPointMan->FindRoutePointByGUID( g_AW1GUID );
+        }
+        if( !g_AW2GUID.IsEmpty() ) {
+            pAnchorWatchPoint2 = pWayPointMan->FindRoutePointByGUID( g_AW2GUID );
+        }
+        
+        // Import Layer-wise any .gpx files from /Layers directory
+        wxString layerdir = g_Platform->GetPrivateDataDir();
+        appendOSDirSlash( &layerdir );
+        layerdir.Append( _T("layers") );
+        
+        if( wxDir::Exists( layerdir ) ) {
+            wxString laymsg;
+            laymsg.Printf( wxT("Getting .gpx layer files from: %s"), layerdir.c_str() );
+            wxLogMessage( laymsg );
+            
+            pConfig->LoadLayers(layerdir);
+        }
+        
         break;
-
+    }
     case 1:
         // Connect Datastreams
+        
+   
         for ( size_t i = 0; i < g_pConnectionParams->Count(); i++ )
         {
             ConnectionParams *cp = g_pConnectionParams->Item(i);
@@ -5944,6 +5488,7 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
 
                 dsPortType port_type = cp->IOSelect;
                 DataStream *dstr = new DataStream( g_pMUX,
+                                                   cp->Type,
                                                    cp->GetDSPort(),
                                                    wxString::Format(wxT("%i"),cp->Baudrate),
                                                    port_type,
@@ -5967,7 +5512,7 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
         break;
 
     default:
-        g_pi_manager->LoadAllPlugIns( g_Plugin_Dir, true, false );
+        g_pi_manager->LoadAllPlugIns( g_Platform->GetPluginDir(), true, false );
 
         RequestNewToolbar();
 
@@ -5979,8 +5524,8 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
         InitTimer.Stop(); // Initialization complete
     }
 
-    cc1->InvalidateGL();
-    Refresh();
+//    cc1->InvalidateGL();
+    cc1->Refresh( true );
 }
 
 //    Manage the application memory footprint on a periodic schedule
@@ -6064,7 +5609,7 @@ void MyFrame::OnBellsTimer(wxTimerEvent& event)
         wxString soundfile = _T("sounds");
         appendOSDirSlash( &soundfile );
         soundfile += wxString( bells_sound_file_name[bells - 1], wxConvUTF8 );
-        soundfile.Prepend( g_SData_Locn );
+        soundfile.Prepend( g_Platform->GetSharedDataDir() );
         bells_sound[bells - 1].Create( soundfile );
         if( !bells_sound[bells - 1].IsOk() ) {
             wxLogMessage( _T("Failed to load bells sound file: ") + soundfile );
@@ -6084,6 +5629,7 @@ int ut_index;
 
 void MyFrame::OnFrameTimer1( wxTimerEvent& event )
 {
+    
 
     if( s_ProgDialog ) {
         return;
@@ -6276,7 +5822,8 @@ void MyFrame::OnFrameTimer1( wxTimerEvent& event )
         if( d >= 0.0 ) toofar = ( dist * 1852. > d );
         if( d < 0.0 ) tooclose = ( dist * 1852 < -d );
 
-        if( tooclose || toofar ) AnchorAlertOn1 = true;
+        if( tooclose || toofar )
+            AnchorAlertOn1 = true;
         else
             AnchorAlertOn1 = false;
     } else
@@ -7499,8 +7046,7 @@ bool MyFrame::DoChartUpdate( void )
     if( NULL == pCurrentStack ) pCurrentStack = new ChartStack;
 
     // Build a chart stack based on tLat, tLon
-    if( 0 == ChartData->BuildChartStack( &WorkStack, tLat, tLon, g_sticky_chart ) )       // Bogus Lat, Lon?
-            {
+    if( 0 == ChartData->BuildChartStack( &WorkStack, tLat, tLon, g_sticky_chart ) ) {      // Bogus Lat, Lon?
         if( NULL == pDummyChart ) {
             pDummyChart = new ChartDummy;
             bNewChart = true;
@@ -7517,9 +7063,11 @@ bool MyFrame::DoChartUpdate( void )
         bNewView |= cc1->SetViewPoint( tLat, tLon, set_scale, 0, cc1->GetVPRotation() );
 
         //      If the chart stack has just changed, there is new status
-        if( !ChartData->EqualStacks( &WorkStack, pCurrentStack ) ) {
-            bNewPiano = true;
-            bNewChart = true;
+        if(WorkStack.nEntry && pCurrentStack->nEntry){
+            if( !ChartData->EqualStacks( &WorkStack, pCurrentStack ) ) {
+                bNewPiano = true;
+                bNewChart = true;
+            }
         }
 
         //      Copy the new (by definition empty) stack into the target stack
@@ -9435,7 +8983,7 @@ void MyPrintout::GenerateGLbmp( )
  *     Very system specific, unavoidably.
  */
 
-#if defined(__UNIX__) && !defined(__OCPN__ANDROID__)
+#if defined(__UNIX__) && !defined(__OCPN__ANDROID__) && !defined(__WXOSX__)
 extern "C" int wait(int *);                     // POSIX wait() for process
 
 #include <termios.h>
@@ -9472,7 +9020,7 @@ int paternAdd (const char* patern) {
 }
 
 
-#if defined(__UNIX__) && !defined(__OCPN__ANDROID__)
+#if defined(__UNIX__) && !defined(__OCPN__ANDROID__) && !defined(__WXOSX__)
 // This filter verify is device is withing searched patern and verify it is openable
 // -----------------------------------------------------------------------------------
 int paternFilter (const struct dirent * dir) {
@@ -9531,7 +9079,7 @@ wxArrayString *EnumerateSerialPorts( void )
 {
     wxArrayString *preturn = new wxArrayString;
 
-#if defined(__UNIX__) && !defined(__OCPN__ANDROID__)
+#if defined(__UNIX__) && !defined(__OCPN__ANDROID__) && !defined(__WXOSX__)
 
     //Initialize the pattern table
     if( devPatern[0] == NULL ) {
@@ -10650,9 +10198,9 @@ TimedMessageBox::TimedMessageBox(wxWindow* parent, const wxString& message,
     int ret = dlg->ShowModal();
 
     //  Not sure why we need this, maybe on wx3?
-    if((style == wxYES_NO) && (ret == wxID_OK))
+    if( ((style & wxYES_NO) == wxYES_NO) && (ret == wxID_OK))
         ret = wxID_YES;
-
+    
     delete dlg;
     dlg = NULL;
 
@@ -10906,8 +10454,11 @@ wxFont *GetOCPNScaledFont( wxString item, int default_size )
         double scaled_font_size = dFont->GetPointSize();
 
         if( cc1) {
-            double min_scaled_font_size = 3 * cc1->GetPixPerMM();
+            
+            double points_per_mm  = g_Platform->getFontPointsperPixel() * cc1->GetPixPerMM();
+            double min_scaled_font_size = 3 * points_per_mm;    // smaller than 3 mm is unreadable
             int nscaled_font_size = wxMax( wxRound(scaled_font_size), min_scaled_font_size );
+
             if(req_size >= nscaled_font_size)
                 return dFont;
             else{
@@ -11359,135 +10910,6 @@ void SearchPnpKeyW9x(HKEY hkPnp, BOOL bUsbDevice,
 
 #endif
 
-#ifdef __WXMSW__
-
-#define NAME_SIZE 128
-
-const GUID GUID_CLASS_MONITOR = {0x4d36e96e, 0xe325, 0x11ce, 0xbf, 0xc1, 0x08, 0x00, 0x2b, 0xe1, 0x03, 0x18};
-
-// Assumes hDevRegKey is valid
-bool GetMonitorSizeFromEDID(const HKEY hDevRegKey, int *WidthMm, int *HeightMm)
-{
-    DWORD dwType, AcutalValueNameLength = NAME_SIZE;
-    TCHAR valueName[NAME_SIZE];
-    
-    BYTE EDIDdata[1024];
-    DWORD edidsize=sizeof(EDIDdata);
-    
-    for (LONG i = 0, retValue = ERROR_SUCCESS; retValue != ERROR_NO_MORE_ITEMS; ++i)
-    {
-        retValue = RegEnumValue ( hDevRegKey, i, &valueName[0],
-        &AcutalValueNameLength, NULL, &dwType,
-        EDIDdata, // buffer
-        &edidsize); // buffer size
-        
-        if (retValue != ERROR_SUCCESS || 0 != _tcscmp(valueName,_T("EDID")))
-            continue;
-        
-        *WidthMm  = ((EDIDdata[68] & 0xF0) << 4) + EDIDdata[66];
-        *HeightMm = ((EDIDdata[68] & 0x0F) << 8) + EDIDdata[67];
-        
-        return true; // valid EDID found
-    }
-        
-    return false; // EDID not found
-}
-        
-bool GetSizeForDevID(wxString &TargetDevID, int *WidthMm, int *HeightMm)
-        {
-            HDEVINFO devInfo = SetupDiGetClassDevsEx(
-                &GUID_CLASS_MONITOR, //class GUID
-                NULL, //enumerator
-                NULL, //HWND
-                DIGCF_PRESENT, // Flags //DIGCF_ALLCLASSES|
-                NULL, // device info, create a new one.
-                NULL, // machine name, local machine
-                NULL);// reserved
-            
-            if (NULL == devInfo)
-            return false;
-            
-            bool bRes = false;
-            
-            for (ULONG i=0; ERROR_NO_MORE_ITEMS != GetLastError(); ++i)
-            {
-                SP_DEVINFO_DATA devInfoData;
-                memset(&devInfoData,0,sizeof(devInfoData));
-                devInfoData.cbSize = sizeof(devInfoData);
-                
-                if (SetupDiEnumDeviceInfo(devInfo,i,&devInfoData))
-                {
-                    wchar_t    Instance[80];
-                    SetupDiGetDeviceInstanceId(devInfo, &devInfoData, Instance, MAX_PATH, NULL);
-                    wxString instance(Instance);
-                    if(instance.Upper().Find( TargetDevID.Upper() ) == wxNOT_FOUND )
-                        continue;
-                    
-                    HKEY hDevRegKey = SetupDiOpenDevRegKey(devInfo,&devInfoData,
-                    DICS_FLAG_GLOBAL, 0, DIREG_DEV, KEY_READ);
-                    
-                    if(!hDevRegKey || (hDevRegKey == INVALID_HANDLE_VALUE))
-                        continue;
-                    
-                    bRes = GetMonitorSizeFromEDID(hDevRegKey, WidthMm, HeightMm);
-                    
-                    RegCloseKey(hDevRegKey);
-                }
-            }
-            SetupDiDestroyDeviceInfoList(devInfo);
-            return bRes;
-        }
-        
-bool GetWindowsMonitorSize( int *width, int *height)
-{
-            int WidthMm, HeightMm;
-            
-            DISPLAY_DEVICE dd;
-            dd.cb = sizeof(dd);
-            DWORD dev = 0; // device index
-            int id = 1; // monitor number, as used by Display Properties > Settings
-            
-            wxString DeviceID;
-            bool bFoundDevice = false;
-            while (EnumDisplayDevices(0, dev, &dd, 0) && !bFoundDevice)
-            {
-                DISPLAY_DEVICE ddMon;
-                ZeroMemory(&ddMon, sizeof(ddMon));
-                ddMon.cb = sizeof(ddMon);
-                DWORD devMon = 0;
-                
-                while (EnumDisplayDevices(dd.DeviceName, devMon, &ddMon, 0) && !bFoundDevice)
-                {
-                    if (ddMon.StateFlags & DISPLAY_DEVICE_ACTIVE &&
-                        !(ddMon.StateFlags & DISPLAY_DEVICE_MIRRORING_DRIVER))
-                        {
-                            DeviceID = wxString(ddMon.DeviceID, wxConvUTF8);
-                            DeviceID = DeviceID.Mid (8);
-                            DeviceID = DeviceID.Mid (0, DeviceID.Find ( '\\' ));
-                            
-                            bFoundDevice = GetSizeForDevID(DeviceID, &WidthMm, &HeightMm);
-                        }
-                        devMon++;
-                    
-                    ZeroMemory(&ddMon, sizeof(ddMon));
-                    ddMon.cb = sizeof(ddMon);
-                }
-                
-                ZeroMemory(&dd, sizeof(dd));
-                dd.cb = sizeof(dd);
-                dev++;
-            }
-            
-            if(width)
-                *width = WidthMm;
-            if(height)
-                *height = HeightMm;
-            
-            return bFoundDevice;
-}
-        
-
-#endif
 
 bool ReloadLocale()
 {

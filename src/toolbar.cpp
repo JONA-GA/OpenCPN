@@ -382,7 +382,7 @@ void ocpnFloatingToolbarDialog::SetGeometry()
         int max_rows = 10;
         int max_cols = 100;
         if(cc1){
-            max_rows = (cc1->GetSize().y / ( tool_size.y + m_style->GetToolSeparation()));
+            max_rows = (cc1->GetSize().y / ( tool_size.y + m_style->GetToolSeparation())) - 1;
             max_cols = (cc1->GetSize().x / ( tool_size.x + m_style->GetToolSeparation())) - 3;
         }
 
@@ -811,7 +811,9 @@ public:
     void SetBitmap( void );
 
     void SetHiviz( bool hiviz){ m_hiviz = hiviz; }
-
+    
+    wxSize GetRenderedSize( void );
+    
 private:
 
     wxString m_string;
@@ -862,6 +864,23 @@ void ToolTipWin::SetColorScheme( ColorScheme cs )
     m_text_color = FontMgr::Get().GetFontColor( _("ToolTips") );
 
     m_cs = cs;
+}
+
+wxSize ToolTipWin::GetRenderedSize( void )
+{
+    int h, w;
+    wxSize sz;
+
+    wxClientDC cdc( GetParent() );
+
+    wxFont *plabelFont = FontMgr::Get().GetFont( _("ToolTips") );
+    cdc.GetTextExtent( m_string, &w, &h, NULL, NULL, plabelFont );
+
+    sz.x = w + 8;
+    sz.y = h + 4;
+    
+    return sz;
+
 }
 
 void ToolTipWin::SetBitmap()
@@ -1210,6 +1229,8 @@ bool ocpnToolBarSimple::Realize()
         tool->lastInLine = false;
         firstNode = false;
 
+        tool->last_rect.width = 0;              // mark it invalid
+        
         if( tool->IsSeparator() ) {
             if( GetWindowStyleFlag() & wxTB_HORIZONTAL ) {
                 if( m_currentRowsOrColumns >= m_maxCols ) m_lastY += separatorSize;
@@ -1362,14 +1383,16 @@ void ocpnToolBarSimple::OnToolTipTimerEvent( wxTimerEvent& event )
                 wxPoint pos_in_toolbar( m_last_ro_tool->m_x, m_last_ro_tool->m_y );
                 pos_in_toolbar.x += m_last_ro_tool->m_width + 2;
 
-                //    Quick hack for right docked toolbar, to avoid tooltip interference
-                if( ( g_FloatingToolbarDialog->GetDockX() == 1 )
-                        && ( g_FloatingToolbarDialog->GetOrient() == wxTB_VERTICAL ) ) pos_in_toolbar.y =
-                        m_last_ro_tool->m_y - 30;
-
                 m_pToolTipWin->Move(0,0);       // workaround for gtk autocentre dialog behavior
 
-                m_pToolTipWin->SetPosition( ClientToScreen( pos_in_toolbar ) );
+                wxPoint screenPosition = ClientToScreen( pos_in_toolbar );
+                wxPoint framePosition = gFrame->ScreenToClient(screenPosition);
+                wxSize tipSize = m_pToolTipWin->GetRenderedSize();
+                
+                if( (framePosition.x + tipSize.x) > gFrame->GetSize().x)
+                    screenPosition.x -= (tipSize.x + m_last_ro_tool->m_width + 4);
+                
+                m_pToolTipWin->SetPosition( screenPosition );
                 m_pToolTipWin->SetBitmap();
                 m_pToolTipWin->Show();
                 gFrame->Raise();
@@ -1428,20 +1451,22 @@ void ocpnToolBarSimple::OnMouseEvent( wxMouseEvent & event )
 #endif
 
         //    Tool Rollover highlighting
-        if( tool != m_last_ro_tool ) {
-            if( tool->IsEnabled() ) {
-                tool->rollover = true;
-                tool->bitmapOK = false;
-            }
-            if( m_last_ro_tool ) {
-                if( m_last_ro_tool->IsEnabled() ) {
-                    m_last_ro_tool->rollover = false;
-                    m_last_ro_tool->bitmapOK = false;
+        if(!g_btouch){
+            if( tool != m_last_ro_tool ) {
+                if( tool->IsEnabled() ) {
+                    tool->rollover = true;
+                    tool->bitmapOK = false;
                 }
+                if( m_last_ro_tool ) {
+                    if( m_last_ro_tool->IsEnabled() ) {
+                        m_last_ro_tool->rollover = false;
+                        m_last_ro_tool->bitmapOK = false;
+                    }
+                }
+                m_last_ro_tool = tool;
+                if(g_toolbar)
+                    g_toolbar->Refresh( false );
             }
-            m_last_ro_tool = tool;
-            if(g_toolbar)
-                g_toolbar->Refresh( false );
         }
     } else {
         //    Tooltips
@@ -1518,6 +1543,8 @@ void ocpnToolBarSimple::OnMouseEvent( wxMouseEvent & event )
     if( event.LeftDown() && tool->IsEnabled() ) {
         if( tool->CanBeToggled() ) {
             tool->Toggle();
+            tool->bitmapOK = false;
+            
         }
 
         DrawTool( tool );
@@ -1536,6 +1563,7 @@ void ocpnToolBarSimple::OnMouseEvent( wxMouseEvent & event )
             // If it was a toggle, and OnLeftClick says No Toggle allowed,
             // then change it back
             tool->Toggle();
+            tool->bitmapOK = false;
         }
     }
 
@@ -1659,7 +1687,7 @@ void ocpnToolBarSimple::DrawTool( wxDC& dc, wxToolBarToolBase *toolBase )
     }
 
     //      Clear the last drawn tool if necessary
-    if((tool->last_rect.x != drawAt.x) || (tool->last_rect.y != drawAt.y)){
+    if( tool->last_rect.width && ((tool->last_rect.x != drawAt.x) || (tool->last_rect.y != drawAt.y)) ){
         wxBrush bb(GetGlobalColor( _T("GREY2") ));
         dc.SetBrush(bb);
         dc.SetPen( *wxTRANSPARENT_PEN );

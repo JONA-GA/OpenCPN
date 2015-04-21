@@ -72,6 +72,7 @@
 #include "NavObjectCollection.h"
 #include "NMEALogWindow.h"
 #include "AIS_Decoder.h"
+#include "OCPNPlatform.h"
 
 #ifdef USE_S57
 #include "s52plib.h"
@@ -84,6 +85,7 @@
 
 //    Statics
 
+extern OCPNPlatform     *g_Platform;
 extern ChartCanvas      *cc1;
 extern MyFrame          *gFrame;
 
@@ -103,6 +105,7 @@ extern ColorScheme      global_color_scheme;
 extern int              g_nbrightness;
 extern bool             g_bShowMag;
 extern double           g_UserVar;
+extern bool             g_bShowStatusBar;
 
 extern wxToolBarBase    *toolBar;
 
@@ -113,7 +116,6 @@ extern wxString         g_SENCPrefix;
 extern wxString         g_UserPresLibData;
 
 extern AIS_Decoder      *g_pAIS;
-extern wxString         g_SData_Locn;
 extern wxString         *pInit_Chart_Dir;
 extern WayPointman      *pWayPointMan;
 extern Routeman         *g_pRouteMan;
@@ -355,6 +357,8 @@ extern double           g_display_size_mm;
 extern double           g_config_display_size_mm;
 extern bool             g_benable_rotate;
 extern bool             g_bEmailCrashReport;
+
+extern int              g_default_font_size;
 
 #ifdef ocpnUSE_GL
 extern ocpnGLOptions g_GLOptions;
@@ -1187,6 +1191,8 @@ int MyConfig::LoadMyConfig()
     Read( _T ( "DebugBSBImg" ), &g_BSBImgDebug, 0 );
     Read( _T ( "DebugGPSD" ), &g_bDebugGPSD, 0 );
 
+    Read( _T ( "DefaultFontSize"), &g_default_font_size, 0 );
+    
     Read( _T ( "UseGreenShipIcon" ), &g_bUseGreenShip, 0 );
     g_b_overzoom_x = true;
     Read( _T ( "AutosaveIntervalSeconds" ), &g_nautosave_interval_seconds, 300 );
@@ -1314,7 +1320,7 @@ int MyConfig::LoadMyConfig()
     Read( _T ( "SkewCompUpdatePeriod" ), &g_SkewCompUpdatePeriod, 10 );
 
     Read( _T ( "SetSystemTime" ), &s_bSetSystemTime, 0 );
-    Read( _T ( "ShowStatusBar" ), &m_bShowStatusBar, 1 );
+    Read( _T ( "ShowStatusBar" ), &g_bShowStatusBar, 1 );
 #ifndef __WXOSX__
     Read( _T ( "ShowMenuBar" ), &m_bShowMenuBar, 0 );
 #endif
@@ -2216,7 +2222,7 @@ bool MyConfig::LoadChartDirArray( ArrayOfCDI &ChartDirArray )
 
                     pConfig->DeleteEntry( str );
                     wxString new_dir = dirname.Mid( dirname.Find( _T ( "SampleCharts" ) ) );
-                    new_dir.Prepend( g_SData_Locn );
+                    new_dir.Prepend( g_Platform->GetSharedDataDir() );
                     dirname = new_dir;
                 }
 
@@ -2468,10 +2474,12 @@ void MyConfig::UpdateSettings()
     Write( _T ( "UIStyle" ), g_StyleManager->GetStyleNextInvocation() );
     Write( _T ( "ChartNotRenderScaleFactor" ), g_ChartNotRenderScaleFactor );
 
-    Write( _T ( "ShowStatusBar" ), m_bShowStatusBar );
+    Write( _T ( "ShowStatusBar" ), g_bShowStatusBar );
 #ifndef __WXOSX__
     Write( _T ( "ShowMenuBar" ), m_bShowMenuBar );
 #endif
+    Write( _T ( "DefaultFontSize" ), g_default_font_size );
+    
     Write( _T ( "ShowCompassWindow" ), m_bShowCompassWin );
     Write( _T ( "SetSystemTime" ), s_bSetSystemTime );
     Write( _T ( "ShowGrid" ), g_bDisplayGrid );
@@ -2781,7 +2789,7 @@ void MyConfig::UpdateSettings()
 #endif
 
 #ifdef __WXQT__
-    SetPath ( _T ( "/Settings/QTFonts" ) );
+    font_path = ( _T ( "/Settings/QTFonts" ) );
 #endif
     
     DeleteGroup(font_path);
@@ -3105,7 +3113,7 @@ void MyConfig::UI_ImportGPX( wxWindow* parent, bool islayer, wxString dirpath, b
                     l->m_NoOfItems = pSet->LoadAllGPXObjectsAsLayer(l->m_LayerID, l->m_bIsVisibleOnChart);
                 }
                 else
-                    pSet->LoadAllGPXObjects( true );    // Import with full vizibility of names and objects
+                    pSet->LoadAllGPXObjects( !pSet->IsOpenCPN() ); // Import with full vizibility of names and objects
 
                 delete pSet;
             }

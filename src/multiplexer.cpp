@@ -119,6 +119,7 @@ void Multiplexer::StartAllStreams( void )
 
             dsPortType port_type = cp->IOSelect;
             DataStream *dstr = new DataStream( this,
+                                               cp->Type,
                                                cp->GetDSPort(),
                                                wxString::Format(wxT("%i"),cp->Baudrate),
                                                port_type,
@@ -145,7 +146,10 @@ void Multiplexer::LogOutputMessageColor(const wxString &msg, const wxString & st
 {
     if (NMEALogWindow::Get().Active()) {
         wxDateTime now = wxDateTime::Now();
-        wxString ss = now.FormatISOTime();
+        wxString ss;
+#ifndef __WXQT__        //  Date/Time on Qt are broken, at least for android
+        ss = now.FormatISOTime();
+#endif        
         ss.Prepend(_T("--> "));
         ss.Append( _T(" (") );
         ss.Append( stream_name );
@@ -171,7 +175,10 @@ void Multiplexer::LogInputMessage(const wxString &msg, const wxString & stream_n
 {
     if (NMEALogWindow::Get().Active()) {
         wxDateTime now = wxDateTime::Now();
-        wxString ss = now.FormatISOTime();
+        wxString ss;
+#ifndef __WXQT__        //  Date/Time on Qt are broken, at least for android
+        ss = now.FormatISOTime();
+#endif        
         ss.Append( _T(" (") );
         ss.Append( stream_name );
         ss.Append( _T(") ") );
@@ -335,6 +342,7 @@ void Multiplexer::OnEvtStream(OCPN_DataStreamEvent& event)
 void Multiplexer::SaveStreamProperties( DataStream *stream )
 {
     if( stream ) {
+        type_save = stream->GetConnectionType();
         port_save = stream->GetPort();
         baud_rate_save = stream->GetBaudRate();
         port_type_save = stream->GetPortType();
@@ -352,6 +360,7 @@ void Multiplexer::SaveStreamProperties( DataStream *stream )
 bool Multiplexer::CreateAndRestoreSavedStreamProperties()
 {
     DataStream *dstr = new DataStream( this,
+                                       type_save,
                                        port_save,
                                        baud_rate_save,
                                        port_type_save,
@@ -532,6 +541,7 @@ ret_point:
             }
 
             DataStream *dstr = new DataStream( this,
+                                               SERIAL,
                                                com_name,
                                                baud,
                                                DS_TYPE_INPUT_OUTPUT,
@@ -1056,6 +1066,7 @@ int Multiplexer::SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wx
     }
 
     DataStream *dstr = new DataStream( this,
+                                       SERIAL,
                                        com_name,
                                        baud,
                                        DS_TYPE_INPUT_OUTPUT,

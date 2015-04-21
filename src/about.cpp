@@ -45,7 +45,7 @@
 #include "chcanv.h"
 #include "styles.h"
 #include "version.h"
-
+#include "OCPNPlatform.h"
 
 wxString str_version_start = wxT("\n      Version ");
 wxString str_version_major = wxString::Format(wxT("%i"),VERSION_MAJOR);
@@ -54,10 +54,13 @@ wxString str_version_patch = wxString::Format(wxT("%i"),VERSION_PATCH);
 wxString str_version_date(VERSION_DATE, wxConvUTF8);
 wxString OpenCPNVersion = str_version_start + str_version_major + wxT(".") + str_version_minor + wxT(".") + str_version_patch + wxT(" Build ") + str_version_date;
 
+extern OCPNPlatform     *g_Platform;
 extern MyFrame          *gFrame;
 extern wxString         glog_file;
 extern wxString         gConfig_File;
 extern ocpnStyle::StyleManager* g_StyleManager;
+extern about            *g_pAboutDlg;
+extern bool             g_bresponsive;
 
 char AboutText[] =
 {
@@ -164,16 +167,17 @@ BEGIN_EVENT_TABLE( about, wxDialog )
     EVT_BUTTON( ID_DONATE, about::OnDonateClick)
     EVT_BUTTON( ID_COPYINI, about::OnCopyClick)
     EVT_BUTTON( ID_COPYLOG, about::OnCopyClick)
+    EVT_CLOSE( about::OnClose )
 END_EVENT_TABLE()
 
 about::about( )
 {
 }
 
-about::about( wxWindow* parent,wxString *pData_Locn, wxWindowID id, const wxString& caption,
+about::about( wxWindow* parent,wxString Data_Locn, wxWindowID id, const wxString& caption,
                   const wxPoint& pos, const wxSize& size, long style)
 {
-  m_pDataLocn = pData_Locn;
+  m_DataLocn = Data_Locn;
 #ifdef __WXOSX__
   style |= wxSTAY_ON_TOP;
 #endif
@@ -192,11 +196,22 @@ bool about::Create( wxWindow* parent, wxWindowID id, const wxString& caption, co
 
     m_btips_loaded = false;
 
+    wxFont *qFont = GetOCPNScaledFont(_("Dialog"));
+    SetFont( *qFont );
+    
     CreateControls();
     Update();
 
+    wxSize sz = g_Platform->getDisplaySize();
+    
     GetSizer()->Fit( this );
-    GetSizer()->SetSizeHints( this );
+    
+    //Set the maximum size of the entire settings dialog
+    SetSizeHints( -1, -1, sz.x-100, sz.y-100 );
+
+    if( g_bresponsive )
+        SetSize( wxSize( sz.x-100, sz.y-100 ) );
+        
     Centre();
 
     return TRUE;
@@ -220,16 +235,19 @@ void about::Update()
 
     // Show the user where the config file is going to be
     wxString conf = _T("\n    Config file location: ");
-    conf.Append( gConfig_File );
+    conf.Append( g_Platform->GetConfigFileName() );
     pAboutTextCtl->WriteText( conf );
-
+    pAboutTextCtl->SetInsertionPoint( 0 );
+    
     pAuthorTextCtl->Clear();
     wxString *pAuthorsString = new wxString( AuthorText, wxConvUTF8 );
     pAuthorTextCtl->WriteText( *pAuthorsString );
+    pAuthorTextCtl->SetInsertionPoint( 0 );
+    
     delete pAuthorsString;
 
     pLicenseTextCtl->Clear();
-    wxString license_loc( *m_pDataLocn );
+    wxString license_loc(m_DataLocn );
     license_loc.Append( _T("license.txt") );
 
     wxTextFile license_file( license_loc );
@@ -257,6 +275,11 @@ void about::Update()
 
 void about::CreateControls()
 {
+    //  Set the nominal vertical size of the embedded controls
+    int v_size = 300;
+    if(g_bresponsive)
+        v_size = -1;
+    
     about* itemDialog1 = this;
 
     wxBoxSizer* aboutSizer = new wxBoxSizer( wxVERTICAL );
@@ -306,7 +329,7 @@ void about::CreateControls()
     itemPanelAbout->SetSizer( itemBoxSizer6 );
 
     pAboutTextCtl = new wxTextCtrl( itemPanelAbout, -1, _T(""), wxDefaultPosition,
-            wxSize( -1, 300 ), wxTE_MULTILINE | wxTE_READONLY );
+                                    wxSize( -1, v_size ), wxTE_MULTILINE | wxTE_READONLY );
     pAboutTextCtl->InheritAttributes();
     itemBoxSizer6->Add( pAboutTextCtl, 0, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
 
@@ -320,7 +343,7 @@ void about::CreateControls()
     itemPanelAuthors->SetSizer( itemBoxSizer7 );
 
     pAuthorTextCtl = new wxTextCtrl( itemPanelAuthors, -1, _T(""), wxDefaultPosition,
-            wxSize( -1, 300 ), wxTE_MULTILINE | wxTE_READONLY );
+                                     wxSize( -1, v_size ), wxTE_MULTILINE | wxTE_READONLY );
     pAuthorTextCtl->InheritAttributes();
     itemBoxSizer7->Add( pAuthorTextCtl, 0, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
 
@@ -342,7 +365,7 @@ void about::CreateControls()
     tcflags |= wxTE_DONTWRAP;
 #endif
     pLicenseTextCtl = new wxTextCtrl( itemPanelLicense, -1, _T(""), wxDefaultPosition,
-            wxSize( -1, 300 ), tcflags );
+                                      wxSize( -1, v_size ), tcflags );
 
     pLicenseTextCtl->InheritAttributes();
     itemBoxSizer8->Add( pLicenseTextCtl, 0, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
@@ -374,6 +397,12 @@ void about::OnXidOkClick( wxCommandEvent& event )
   Close();
 }
 
+void about::OnClose( wxCloseEvent& event )
+{
+    Destroy();
+    g_pAboutDlg = NULL;
+}
+
 void about::OnDonateClick( wxCommandEvent& event )
 {
       wxLaunchDefaultBrowser(_T("https://sourceforge.net/donate/index.php?group_id=180842"));
@@ -381,7 +410,7 @@ void about::OnDonateClick( wxCommandEvent& event )
 
 void about::OnCopyClick( wxCommandEvent& event )
 {
-    wxString filename = gConfig_File;
+    wxString filename = g_Platform->GetConfigFileName();
     if( event.GetId() == ID_COPYLOG ) filename = glog_file;
 
     wxFFile file( filename );

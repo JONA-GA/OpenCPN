@@ -195,9 +195,9 @@ public:
     
     bool IsQuiltVector( void );
     OCPNRegion GetHiliteRegion( ViewPort &vp );
-
+    static OCPNRegion GetChartQuiltRegion( const ChartTableEntry &cte, ViewPort &vp );
+    
 private:
-    OCPNRegion GetChartQuiltRegion( const ChartTableEntry &cte, ViewPort &vp );
     wxRect GetChartQuiltBoundingRect( const ChartTableEntry &cte, ViewPort &vp );
     
     void EmptyCandidateArray( void );
@@ -248,6 +248,8 @@ private:
     
     int m_lost_refchart_dbIndex;
     bool m_b_hidef;
+    
+    bool m_bquiltskew;
 };
 
 #endif
