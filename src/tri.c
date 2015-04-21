@@ -686,7 +686,7 @@ polyout  *do_triangulate_polygon(int ncontours, int cntr[], double (*vertices)[2
       
       
       // FNV1a, 32 bits, byte inputs, manually unrolled
-      pp->index_hash = 2166136261;
+      pp->index_hash = 2166136261LL;
       
       pp->index_hash = pp->index_hash ^ (a & 255);
       pp->index_hash = pp->index_hash * 16777619;
