@@ -221,7 +221,8 @@ switch (GetDataProtocol())
 
             m_bok = true;
         }
-    }
+	}
+	}
 
     
     else if(m_connection_type == NETWORK){

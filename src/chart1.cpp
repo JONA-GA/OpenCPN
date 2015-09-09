@@ -2308,12 +2308,14 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
 
             dsPortType port_type = cp->IOSelect;
             DataStream *dstr = new DataStream( g_pMUX,
+												cp->Type,
                                            cp->GetDSPort(),
                                            wxString::Format(wxT("%i"),cp->Baudrate),
                                            port_type,
                                            cp->Priority,
-					   cp->Garmin,
-                                           cp->Protocol
+												cp->Garmin,
+                                           cp->Protocol,
+											0,0,NULL
                                          );
             dstr->SetInputFilter(cp->InputSentenceList);
             dstr->SetInputFilterType(cp->InputSentenceListType);
