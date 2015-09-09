@@ -77,6 +77,8 @@ extern int              g_uncompressed_tile_size;
 
 class CompressionWorkerPool;
 CompressionWorkerPool   *g_CompressorPool;
+static wxMutex 		s_MutexPool;
+
 
 extern PFNGLGETCOMPRESSEDTEXIMAGEPROC s_glGetCompressedTexImage;
 extern PFNGLCOMPRESSEDTEXIMAGE2DPROC s_glCompressedTexImage2D;
@@ -85,9 +87,6 @@ extern bool GetMemoryStatus( int *mem_total, int *mem_used );
 
 bool bthread_debug;
 bool g_throttle_squish;
-
-#include <wx/arrimpl.cpp> 
-WX_DEFINE_OBJARRAY(ArrayOfCatalogEntries);
 
 class CompressionPoolThread;
 class JobTicket
@@ -343,9 +342,9 @@ bool DoCompress(JobTicket *pticket, glTextureDescriptor *ptd, int level)
             }
 
             bool b_flip = false;
-#ifdef __WXMSW__ //ocpnUSE_ocpnBitmap
-            b_flip = true;
-#endif            
+//#ifdef __WXMSW__ //ocpnUSE_ocpnBitmap
+//            b_flip = true;
+//#endif            
             squish::CompressImageRGB_Flatten_Flip_Throttle( ptd->map_array[level], dim, dim, tex_data, flags,
                                                             true, b_flip, pticket->b_throttle );
  
@@ -548,9 +547,9 @@ void * CompressionPoolThread::Entry()
                 }
             
                 bool b_flip = false;
-    #ifdef __WXMSW__ //ocpnUSE_ocpnBitmap
-                b_flip = true;
-    #endif            
+//    #ifdef __WXMSW__ //ocpnUSE_ocpnBitmap
+//                b_flip = true;
+//    #endif            
                 squish::CompressImageRGB_Flatten_Flip_Throttle( m_bit_array[i], dim, dim, tex_data, flags,
                                                             true, b_flip, m_pticket->b_throttle );
             
@@ -608,6 +607,9 @@ void * CompressionPoolThread::Entry()
             }
         }
     }
+    else {
+        m_pticket->b_isaborted = true;
+    }
 
 SendEvtAndReturn:
     
@@ -616,10 +618,9 @@ SendEvtAndReturn:
         Nevent.SetTicket(m_pticket);
         
         m_pMessageTarget->AddPendingEvent(Nevent);
+        // from here m_pticket is undefined (if deleted in event handler)
     }
 
-    m_pticket->b_isaborted = true;
-    
     return 0;
 
     }           // try
@@ -629,12 +630,11 @@ SendEvtAndReturn:
     {
         if( m_pMessageTarget ) {
             OCPN_CompressionThreadEvent Nevent(wxEVT_OCPN_COMPRESSIONTHREAD, 0);
-            Nevent.SetTicket(m_pticket);
-            
+            m_pticket->b_isaborted = true;
+            Nevent.SetTicket(m_pticket);            
             m_pMessageTarget->AddPendingEvent(Nevent);
         }
         
-        m_pticket->b_isaborted = true;
         
         return 0;
     }
@@ -679,8 +679,6 @@ void CompressionWorkerPool::OnEvtThread( OCPN_CompressionThreadEvent & event )
     JobTicket *ticket = event.GetTicket();
     
     if(ticket->b_abort){
-        running_list.DeleteObject(ticket);
-        m_njobs_running--;
 
         for(int i=0 ; i < g_mipmap_max_level+1 ; i++){
             free(ticket->comp_bits_array[i]);
@@ -696,10 +694,13 @@ void CompressionWorkerPool::OnEvtThread( OCPN_CompressionThreadEvent & event )
             free( ticket->compcomp_bits_array );
         }
         
+        m_njobs_running--;
         if(bthread_debug)
             printf( "    Abort job: %08X  Jobs running: %d             Job count: %lu   \n",
                     ticket->ident, m_njobs_running, (unsigned long)todo_list.GetCount());
 
+        running_list.DeleteObject(ticket);
+        delete ticket;
         StartTopJob();
         return;
     }
@@ -724,12 +725,13 @@ void CompressionWorkerPool::OnEvtThread( OCPN_CompressionThreadEvent & event )
         }
     }
     
-    running_list.DeleteObject(ticket);
     m_njobs_running--;
     
     if(bthread_debug)
         printf( "    Finished job: %08X  Jobs running: %d             Job count: %lu   \n",
                 ticket->ident, m_njobs_running, (unsigned long)todo_list.GetCount());
+
+    running_list.DeleteObject(ticket);
 
 //    int mem_used;
 //    GetMemoryStatus(0, &mem_used);
@@ -737,7 +739,8 @@ void CompressionWorkerPool::OnEvtThread( OCPN_CompressionThreadEvent & event )
 ///    qDebug() << "Finished" << m_njobs_running <<  (unsigned long)todo_list.GetCount() << mem_used << g_tex_mem_used;
     
     StartTopJob();
-    
+
+    delete ticket;
 }
 
 bool CompressionWorkerPool::ScheduleJob(glTexFactory* client, const wxRect &rect, int level,
@@ -783,8 +786,8 @@ bool CompressionWorkerPool::ScheduleJob(glTexFactory* client, const wxRect &rect
     if(!b_immediate){
         todo_list.Append(pt);
         if(bthread_debug){
-            int mem_total, mem_used;
-            GetMemoryStatus(&mem_total, &mem_used);
+            int mem_used;
+            GetMemoryStatus(0, &mem_used);
             
             if(bthread_debug)
                 printf( "Adding job: %08X  Job Count: %lu  mem_used %d\n", pt->ident, (unsigned long)todo_list.GetCount(), mem_used);
@@ -865,6 +868,20 @@ bool CompressionWorkerPool::DoJob(JobTicket* pticket)
     return ret;
 }
 
+bool CompressionWorkerPool::AsJob( wxString const &chart_path ) const
+{
+    if(chart_path.Len()){    
+        wxJobListNode *tnode = running_list.GetFirst();
+        while(tnode){
+            JobTicket *ticket = tnode->GetData();
+            if(ticket->m_ChartPath.IsSameAs(chart_path)){
+                return true;
+            }
+            tnode = tnode->GetNext();
+        }
+    }
+    return false;
+}
 
 void CompressionWorkerPool::PurgeJobList( wxString chart_path )
 {
@@ -877,29 +894,44 @@ void CompressionWorkerPool::PurgeJobList( wxString chart_path )
                 if(bthread_debug)
                     printf("Pool:  Purge pending job for purged chart\n");
                 todo_list.DeleteNode(tnode);
+                delete ticket;
                 tnode = todo_list.GetFirst();  // restart the list
             }
             else{
                 tnode = tnode->GetNext();
             }
         }
+
+        wxJobListNode *node = running_list.GetFirst();
+        while(node){
+            JobTicket *ticket = node->GetData();
+            if(ticket->m_ChartPath.IsSameAs(chart_path)){
+                ticket->b_isaborted = false;
+                ticket->b_abort = true;
+            }
+            node = node->GetNext();
+        }
             
         if(bthread_debug)
             printf("Pool:  Purge, todo count: %lu\n", (long unsigned)todo_list.GetCount());
     }
     else {
+        wxJobListNode *node = todo_list.GetFirst();
+        while(node){
+            JobTicket *ticket = node->GetData();
+            delete ticket;
+            node = node->GetNext();
+        }
         todo_list.Clear();
+        //  Mark all running tasks for "abort"
+        node = running_list.GetFirst();
+        while(node){
+            JobTicket *ticket = node->GetData();
+            ticket->b_isaborted = false;
+            ticket->b_abort = true;
+            node = node->GetNext();
+        }
     }        
-
-    //  Mark all running tasks for "abort"
-    wxJobListNode *node = running_list.GetFirst();
-    while(node){
-        JobTicket *ticket = node->GetData();
-        ticket->b_isaborted = false;
-        ticket->b_abort = true;
-        node = node->GetNext();
-    }
-    
 }
 
 
@@ -1010,26 +1042,33 @@ glTexFactory::glTexFactory(ChartBase *chart, GLuint raster_format)
     m_ntex = m_nx_tex * m_ny_tex;
     m_td_array = (glTextureDescriptor **)calloc(m_ntex, sizeof(glTextureDescriptor *));
     
-    if(!g_CompressorPool)
-        g_CompressorPool = new CompressionWorkerPool;
-    
-    m_timer.SetOwner(this, FACTORY_TIMER);
-    m_timer.Start( 500 );
+    {
+        // we only want one pool but glTexFactory could be created from 
+        // many concurrent threads in rebuildCache.
+        wxMutexLocker lock(s_MutexPool);
+         
+        if(!g_CompressorPool)
+            g_CompressorPool = new CompressionWorkerPool;
+    }
+
+    m_ticks = 0;
+    // only the main thread can start timer
+    if (wxThread::IsMain()) {
+        m_timer.SetOwner(this, FACTORY_TIMER);
+        m_timer.Start( 500 );
+    }
 }
 
 glTexFactory::~glTexFactory()
 {
-    if(m_fs && m_fs->IsOpened()){
-        m_fs->Close();
-    }
+    delete m_fs;
 
-    while(!m_catalog.IsEmpty()){
-        CatalogEntry **t = m_catalog.Detach(0);
-        delete *t;
+    WX_CLEAR_ARRAY (m_catalog); 	 
+
+    if (wxThread::IsMain()) {
+        PurgeBackgroundCompressionPool();
     }
-    
-    m_catalog.Clear();
-    
+    DeleteAllTextures();
     DeleteAllDescriptors();
  
     free( m_td_array );         // array is empty
@@ -1037,7 +1076,7 @@ glTexFactory::~glTexFactory()
 
 glTextureDescriptor *glTexFactory::GetpTD( wxRect & rect )
 {
-    int array_index = ((rect.y / m_tex_dim) * m_stride) + (rect.x / m_tex_dim);
+    int array_index = ArrayIndex(rect.x, rect.y);
     return m_td_array[array_index];
 }
 
@@ -1045,7 +1084,7 @@ glTextureDescriptor *glTexFactory::GetpTD( wxRect & rect )
 void glTexFactory::DeleteTexture(const wxRect &rect)
 {
     //    Is this texture tile defined?
-    int array_index = ((rect.y / m_tex_dim) * m_stride) + (rect.x / m_tex_dim);
+    int array_index = ArrayIndex(rect.x, rect.y);
     glTextureDescriptor *ptd = m_td_array[array_index];
 
     
@@ -1103,13 +1142,13 @@ void glTexFactory::FreeSome( long target )
         
         if( ptd ) {
             ptd->FreeAll();
+        
+            int mem_used;
+            GetMemoryStatus(0, &mem_used);
+        
+            if(mem_used <= target)
+                break;
         }
-        
-        int mem_total, mem_used;
-        GetMemoryStatus(&mem_total, &mem_used);
-        
-        if(mem_used <= target)
-            break;
     }
 }
 
@@ -1123,6 +1162,14 @@ void glTexFactory::DeleteAllDescriptors( void )
         m_td_array[i] = 0;
     }
     
+}
+
+bool glTexFactory::BackgroundCompressionAsJob() const
+{
+    if(g_CompressorPool) {
+        return g_CompressorPool->AsJob( m_ChartPath );
+    }
+    return false;
 }
 
 void glTexFactory::PurgeBackgroundCompressionPool()
@@ -1164,7 +1211,7 @@ void glTexFactory::DeleteSingleTexture( glTextureDescriptor *ptd )
 
 bool glTexFactory::IsCompressedArrayComplete( int base_level, const wxRect &rect)
 {
-    int array_index = ((rect.y / m_tex_dim) * m_stride) + (rect.x / m_tex_dim);
+    int array_index = ArrayIndex(rect.x, rect.y);
     glTextureDescriptor *ptd = m_td_array[array_index];
 
     return IsCompressedArrayComplete( base_level, ptd);
@@ -1196,32 +1243,34 @@ bool glTexFactory::IsCompressedArrayComplete( int base_level, glTextureDescripto
 }
 
 
+CatalogEntry *glTexFactory::GetCacheEntry(int level, int x, int y, ColorScheme color_scheme)
+{
+
+    LoadCatalog();
+    
+    //  Search the catalog for this particular texture
+    for(int i=0 ; i < n_catalog_entries ; i++){
+        CatalogEntry *p = m_catalog.Item(i);
+        if( p && p->mip_level == level &&
+                p->x == x && p->y == y &&
+                p->tcolorscheme == color_scheme ) 
+        {
+            return p;
+        }
+    }
+    return 0;
+}
+
 bool glTexFactory::IsLevelInCache( int level, const wxRect &rect, ColorScheme color_scheme )
 {
     bool b_ret = false;
     
     if(g_GLOptions.m_bTextureCompression &&
         g_GLOptions.m_bTextureCompressionCaching) {
-    //  Look in the cache
          
-        LoadCatalog();
-    
     //  Search for the requested texture
-        bool b_found = false;
-        CatalogEntry *p;
-        //  Search the catalog for this particular texture
-        for(int i=0 ; i < n_catalog_entries ; i++){
-            p = m_catalog.Item(i);
-            if( (p->mip_level == level )  &&
-                (p->x == rect.x) &&
-                (p->y == rect.y) &&
-                (p->tcolorscheme == color_scheme )) {
-                b_found = true;
-            break;
-                }
-        }
-        
-        b_ret = b_found;
+        if (GetCacheEntry(level, rect.x, rect.y, color_scheme) != 0)
+            b_ret = true;
     }
     
     return b_ret;
@@ -1229,7 +1278,7 @@ bool glTexFactory::IsLevelInCache( int level, const wxRect &rect, ColorScheme co
 
 void glTexFactory::DoImmediateFullCompress(const wxRect &rect)
 {
-    int array_index = ((rect.y / m_tex_dim) * m_stride) + (rect.x / m_tex_dim);
+    int array_index = ArrayIndex(rect.x, rect.y);
     glTextureDescriptor *ptd = m_td_array[array_index];
     
     // if not found in the hash map, then get the bits as a texture descriptor
@@ -1295,8 +1344,8 @@ void glTexFactory::OnTimer(wxTimerEvent &event)
     if(g_GLOptions.m_bTextureCompression && g_GLOptions.m_bTextureCompressionCaching) {
         if((m_ticks % 120) == 0){
             
-            int mem_total, mem_used;
-            GetMemoryStatus(&mem_total, &mem_used);
+            int mem_used;
+            GetMemoryStatus(0, &mem_used);
             unsigned int nCache = 0;
             unsigned int lcache_limit = (unsigned int)g_nCacheLimit * 8 / 10;
             if(ChartData)
@@ -1354,7 +1403,7 @@ void glTexFactory::OnTimer(wxTimerEvent &event)
 
 bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorScheme color_scheme, bool b_throttle_thread)
 {
-    int array_index = ((rect.y / m_tex_dim) * m_stride) + (rect.x / m_tex_dim);
+    int array_index = ArrayIndex(rect.x, rect.y);
     glTextureDescriptor *ptd = m_td_array[array_index];
 
     m_colorscheme = color_scheme;
@@ -1371,40 +1420,39 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
         m_td_array[array_index] = p;
         ptd = p;
     }
-
-         
-    /* Some non-compliant OpenGL drivers need the complete mipmap set when using compressed textures */
-    if( glChartCanvas::s_b_UploadFullMipmaps )
-        base_level = 0;
-
-        
-    //  Now is a good time to update the cache, syncronously
-    if(g_GLOptions.m_bTextureCompression && g_GLOptions.m_bTextureCompressionCaching) {
-        if( ptd->nCache_Color != color_scheme ){
-            if( IsCompressedArrayComplete( 0, ptd) ){
-                for(int level = 0; level < g_mipmap_max_level + 1; level++ )
-                    UpdateCacheLevel( rect, level, color_scheme );
+    else 
+    {
+        //  Now is a good time to update the cache, syncronously
+        if(g_GLOptions.m_bTextureCompression && g_GLOptions.m_bTextureCompressionCaching) {
+            if( ptd->nCache_Color != color_scheme ){
+                if( IsCompressedArrayComplete( 0, ptd) ){
+                    g_Platform->ShowBusySpinner();
                 
-                //      We can free all the ptd memory completely
-                //      and the texture will be reloaded from disk cache    
-                ptd->FreeAll();
+                    for(int level = 0; level < g_mipmap_max_level + 1; level++ )
+                        UpdateCacheLevel( rect, level, color_scheme );
                 
-                ptd->nCache_Color = color_scheme;               // mark this TD as cached.
-                    
+                    //      We can free all the ptd memory completely
+                    //      and the texture will be reloaded from disk cache    
+                    ptd->FreeAll();
+                
+                    ptd->nCache_Color = color_scheme;               // mark this TD as cached.
+                }
+            }
+        }
+    
+        //  If we are not compressing/caching, We can do some housekeeping here, to recover some memory
+        //   Free bitmap memory that has already been uploaded to the GPU
+        if(!g_GLOptions.m_bTextureCompression) {
+            for(int level = 0; level < g_mipmap_max_level+1; level++ ) {
+                if(ptd->miplevel_upload[level]){
+                    ptd->FreeAll();
+                    break;
+                }
             }
         }
     }
     
-    //  If we are not compressing/caching, We can do some housekeeping here, to recover some memory
-    //   Free bitmap memory that has already been uploaded to the GPU
-    if(!g_GLOptions.m_bTextureCompression) {
-        for(int level = 0; level < g_mipmap_max_level+1; level++ ) {
-            if(ptd->miplevel_upload[level]){
-                ptd->FreeAll();
-            }
-        }
-    }
-    
+
     
     //    If the GPU does not know about this texture, create it
     if( ptd->tex_name == 0 ) {
@@ -1433,6 +1481,11 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
     glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE );
     
         
+    /* Some non-compliant OpenGL drivers need the complete mipmap set when using compressed textures */
+    if( glChartCanvas::s_b_UploadFullMipmaps )
+        base_level = 0;
+
+
     //  Texture requested has already been physically uploaded to the GPU
     //  so we are done
     if(base_level >= ptd->level_min){
@@ -1444,6 +1497,8 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
     }
     
 
+
+    g_Platform->ShowBusySpinner();
     
     int dim = g_GLOptions.m_iTextureDimension;
     int size = g_tile_size;
@@ -1588,8 +1643,8 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
     //   Of course, this means that if the texture is deleted elsewhere, then the bits will need to be
     //   regenerated.  The price to pay for memory limits....
     
-    int mem_total, mem_used;
-    GetMemoryStatus(&mem_total, &mem_used);
+    int mem_used;
+    GetMemoryStatus(0, &mem_used);
 //    qDebug() << mem_used;
     
     unsigned int nCache = 0;
@@ -1603,6 +1658,8 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
     {
         ptd->FreeAll();
     }
+    
+//    g_Platform->HideBusySpinner();
     
     return true;
     }   //try
@@ -1621,26 +1678,12 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
 
 void glTexFactory::UpdateCacheLevel( const wxRect &rect, int level, ColorScheme color_scheme )
 {
-    //  look in the cache
-        LoadCatalog();
-    
     //  Search for the requested texture
-        bool b_found = false;
-        CatalogEntry *p;
         //  Search the catalog for this particular texture
-        for(int i=0 ; i < n_catalog_entries ; i++){
-            p = m_catalog.Item(i);
-            if( (p->mip_level == level )  &&
-                (p->x == rect.x) &&
-                (p->y == rect.y) &&
-                (p->tcolorscheme == color_scheme )) {
-                b_found = true;
-            break;
-                }
-        }
+        CatalogEntry *v = GetCacheEntry(level, rect.x, rect.y, color_scheme) ;
         
         //      This texture is already done
-        if(b_found)
+        if(v != 0)
             return;
     
     
@@ -1648,7 +1691,7 @@ void glTexFactory::UpdateCacheLevel( const wxRect &rect, int level, ColorScheme 
 //    printf("Update cache level %d\n", level);
     
     //    Is this texture tile already defined?
-    int array_index = ((rect.y / m_tex_dim) * m_stride) + (rect.x / m_tex_dim);
+    int array_index = ArrayIndex(rect.x, rect.y);
     glTextureDescriptor *ptd = m_td_array[array_index];
     
     if(ptd){
@@ -1716,26 +1759,13 @@ int glTexFactory::GetTextureLevel( glTextureDescriptor *ptd, const wxRect &rect,
     if(g_GLOptions.m_bTextureCompression &&
         g_GLOptions.m_bTextureCompressionCaching) {
         
-        LoadCatalog();
-    
     //  Search for the requested texture
-        bool b_found = false;
-        CatalogEntry *p;
         //  Search the catalog for this particular texture
-        for(int i=0 ; i < n_catalog_entries ; i++){
-            p = m_catalog.Item(i);
-            if( (p->mip_level == level )  &&
-                (p->x == ptd->x) &&
-                (p->y == ptd->y) &&
-                (p->tcolorscheme == color_scheme )) {
-                b_found = true;
-            break;
-                }
-        }
+        CatalogEntry *p = GetCacheEntry(level, rect.x, rect.y, color_scheme);
         
         //      Requested texture level is found in the cache
         //      so go load it
-        if( b_found ) {
+        if( p != 0 ) {
             
             int dim = g_GLOptions.m_iTextureDimension;
             int size = g_tile_size;
@@ -1795,7 +1825,7 @@ bool glTexFactory::LoadHeader(void)
 
         if(wxFileName::FileExists(m_CompressedCacheFilePath)) {
             
-            m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+            m_fs = new wxFFile(m_CompressedCacheFilePath, _T("rb+"));
             if(m_fs->IsOpened()){
             
                 CompressedCacheHeader hdr;
@@ -1813,14 +1843,14 @@ bool glTexFactory::LoadHeader(void)
                         m_fs->Close();
                         delete m_fs;
                     
-                        m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::write);
+                        m_fs = new wxFFile(m_CompressedCacheFilePath, _T("wb"));
                         n_catalog_entries = 0;
                         m_catalog_offset = 0;
                         WriteCatalogAndHeader();
                         m_fs->Close();
                         delete m_fs;
                     
-                        m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+                        m_fs = new wxFFile(m_CompressedCacheFilePath, _T("rb+"));
                     
                         m_hdrOK = true;
                     }
@@ -1844,14 +1874,14 @@ bool glTexFactory::LoadHeader(void)
                 delete m_fs;
                 wxRemoveFile(m_CompressedCacheFilePath);
                 
-                m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::write);
+                m_fs = new wxFFile(m_CompressedCacheFilePath, _T("wb"));
                 n_catalog_entries = 0;
                 m_catalog_offset = 0;
                 WriteCatalogAndHeader();
                 m_fs->Close();
                 delete m_fs;
                 
-                m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+                m_fs = new wxFFile(m_CompressedCacheFilePath, _T("rb+"));
                 
                 m_hdrOK = true;
                 ret = true;
@@ -1867,14 +1897,14 @@ bool glTexFactory::LoadHeader(void)
                 fn.Mkdir();
             
             //  Create new file, with empty catalog, and correct header
-            m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::write);
+            m_fs = new wxFFile(m_CompressedCacheFilePath, _T("wb"));
             n_catalog_entries = 0;
             m_catalog_offset = 0;
             WriteCatalogAndHeader();
             m_fs->Close();
             delete m_fs;
-            
-            m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+
+            m_fs = new wxFFile(m_CompressedCacheFilePath, _T("rb+"));
             ret = true;
             
         }
@@ -1945,6 +1975,7 @@ bool glTexFactory::WriteCatalogAndHeader()
         hdr.chartdate = m_chart_date_binary;
         
         m_fs->Write( &hdr, sizeof(hdr));
+        m_fs->Flush();
         
         return true;
     }
@@ -1955,19 +1986,10 @@ bool glTexFactory::WriteCatalogAndHeader()
 bool glTexFactory::UpdateCache(unsigned char *data, int data_size, glTextureDescriptor *ptd, int level,
                                ColorScheme color_scheme)
 {
-    LoadCatalog();
-    
     bool b_found = false;
     //  Search the catalog for this particular texture
-    for(int i=0 ; i < n_catalog_entries ; i++){
-        CatalogEntry *p = m_catalog.Item(i);
-        if( (p->mip_level == level )  &&
-            (p->x == ptd->x) &&
-            (p->y == ptd->y) &&
-            (p->tcolorscheme == color_scheme )) {
-            b_found = true;
-            break;
-        }
+    if (GetCacheEntry(level, ptd->x, ptd->y, color_scheme) != 0) {
+        b_found = true;
     }
     
     if( ! b_found ) {                           // not found, so add it
@@ -1981,11 +2003,11 @@ bool glTexFactory::UpdateCache(unsigned char *data, int data_size, glTextureDesc
                 fn.Mkdir();
             
             if(!fn.FileExists()){
-                wxFile new_file(m_CompressedCacheFilePath, wxFile::write);
+                wxFFile new_file(m_CompressedCacheFilePath, _T("wb"));
                 new_file.Close();
             }
             
-            m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+            m_fs = new wxFFile(m_CompressedCacheFilePath, _T("rb+"));
             
             WriteCatalogAndHeader();
         }
@@ -2026,19 +2048,10 @@ bool glTexFactory::UpdateCache(unsigned char *data, int data_size, glTextureDesc
 bool glTexFactory::UpdateCachePrecomp(unsigned char *data, int data_size, glTextureDescriptor *ptd, int level,
                                ColorScheme color_scheme)
 {
-    LoadCatalog();
-    
     bool b_found = false;
     //  Search the catalog for this particular texture
-    for(int i=0 ; i < n_catalog_entries ; i++){
-        CatalogEntry *p = m_catalog.Item(i);
-        if( (p->mip_level == level )  &&
-            (p->x == ptd->x) &&
-            (p->y == ptd->y) &&
-            (p->tcolorscheme == color_scheme )) {
-            b_found = true;
-        break;
-            }
+    if (GetCacheEntry(level, ptd->x, ptd->y, color_scheme) != 0)  {
+        b_found = true;
     }
     
     if( ! b_found ) {                           // not found, so add it
@@ -2052,11 +2065,11 @@ bool glTexFactory::UpdateCachePrecomp(unsigned char *data, int data_size, glText
                 fn.Mkdir();
             
             if(!fn.FileExists()){
-                wxFile new_file(m_CompressedCacheFilePath, wxFile::write);
+                wxFFile new_file(m_CompressedCacheFilePath, _T("wb"));
                 new_file.Close();
             }
             
-            m_fs = new wxFile(m_CompressedCacheFilePath, wxFile::read_write);
+            m_fs = new wxFFile(m_CompressedCacheFilePath, _T("rwb"));
             
             WriteCatalogAndHeader();
         }

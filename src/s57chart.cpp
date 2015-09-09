@@ -35,6 +35,7 @@
 #include <wx/textfile.h>
 
 #include "dychart.h"
+#include "OCPNPlatform.h"
 
 #include "s52s57.h"
 #include "s52plib.h"
@@ -48,6 +49,7 @@
 #include "ocpn_pixel.h"
 #include "ocpndc.h"
 #include "s52utils.h"
+#include "wx28compat.h"
 
 #include "cpl_csv.h"
 #include "setjmp.h"
@@ -55,6 +57,8 @@
 #include "mygdal/ogr_s57.h"
 
 #include "pluginmanager.h"                      // for S57 lights overlay
+
+#include "Osenc.h"
 
 #ifdef __MSVC__
 #define _CRTDBG_MAP_ALLOC
@@ -69,6 +73,11 @@
 #endif
 
 #include <algorithm>          // for std::sort
+
+#ifdef __WXMSW__
+#define strncasecmp(x,y,z) _strnicmp(x,y,z)
+#endif
+
 
 extern bool GetDoubleAttr(S57Obj *obj, const char *AttrName, double &val);      // found in s52cnsy
 
@@ -201,7 +210,17 @@ S57Obj::~S57Obj()
         }
         free( att_array );
 
-        if( pPolyTessGeo ) delete pPolyTessGeo;
+        if( pPolyTessGeo ) {
+#ifdef ocpnUSE_GL 
+            bool b_useVBO = g_b_EnableVBO  && !auxParm1;    // VBO allowed?
+
+            PolyTriGroup *ppg_vbo = pPolyTessGeo->Get_PolyTriGroup_head();
+            if (b_useVBO && ppg_vbo && auxParm0 > 0 && ppg_vbo->single_buffer && s_glDeleteBuffers) {
+                s_glDeleteBuffers(1, (GLuint *)&auxParm0);
+            }
+#endif
+            delete pPolyTessGeo;
+        }
 
         if( pPolyTrapGeo ) delete pPolyTrapGeo;
 
@@ -591,8 +610,12 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
 
                         my_fgets( buf, MAX_LINE, *pfpx );
                         int sb_len = atoi( buf + 2 );
+                        unsigned char *buft;
+                        if (sb_len > MAX_LINE) 
+                            buft = (unsigned char *) malloc( sb_len );
+                        else
+                            buft = (unsigned char *) buf;
 
-                        unsigned char *buft = (unsigned char *) malloc( sb_len );
                         pfpx->Read( buft, sb_len );
 
                         npt = *( (int *) ( buft + 5 ) );
@@ -632,7 +655,8 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
                         ymax = *pf++;
                         ymin = *pf;
 #endif
-                        free( buft );
+                        if (sb_len > MAX_LINE) 
+                            free( buft );
 
                         // set s57obj bbox as lat/lon
                         BBObj.SetMin( xmin, ymin );
@@ -695,11 +719,17 @@ S57Obj::S57Obj( char *first_line, wxInputStream *pfpx, double dummy, double dumm
                         sscanf( buf, " %s %d %f %f", tbuf, &nrecl, &area_ref_lat, &area_ref_lon );
 
                         if( nrecl ) {
-                            unsigned char *polybuf = (unsigned char *) malloc( nrecl + 1 );
+                            unsigned char *polybuf;
+                            if (nrecl > MAX_LINE)
+                                polybuf = (unsigned char *) malloc( nrecl + 1 );
+                            else
+                                polybuf = (unsigned char *)buf;
+
                             pfpx->Read( polybuf, nrecl );
                             polybuf[nrecl] = 0;                     // endit
                             PolyTessGeo *ppg = new PolyTessGeo( polybuf, nrecl, FEIndex, senc_file_version );
-                            free( polybuf );
+                            if (nrecl > MAX_LINE)
+                                free( polybuf );
 
                             pPolyTessGeo = ppg;
 
@@ -1033,6 +1063,7 @@ s57chart::s57chart()
     m_next_safe_cnt = 1e6;
     m_LineVBO_name = -1;
     m_line_vertex_buffer = 0;
+    m_this_chart_context =  0;
 }
 
 s57chart::~s57chart()
@@ -1089,7 +1120,7 @@ s57chart::~s57chart()
     if(s_glDeleteBuffers && (m_LineVBO_name > 0))
         s_glDeleteBuffers(1, (GLuint *)&m_LineVBO_name);
 #endif
-    
+    free (m_this_chart_context);    
 }
 
 void s57chart::GetValidCanvasRegion( const ViewPort& VPoint, OCPNRegion *pValidRegion )
@@ -1555,6 +1586,48 @@ void s57chart::SetLinePriorities( void )
 }
 
 
+int s57chart::GetLineFeaturePointArray(S57Obj *obj, void **ret_array)
+{
+    //  Walk the line segment list once to get the required array size
+    
+    int nPoints = 0;
+    line_segment_element *ls_list = obj->m_ls_list;
+    while( ls_list){
+        nPoints += ls_list->n_points;
+        ls_list = ls_list->next;
+    }
+    
+    if(!nPoints){
+        *ret_array = 0;
+        return 0;
+    }
+    
+    //  Allocate the buffer
+    float *ret_temp = (float *)malloc(nPoints * 2 * sizeof(float));
+    
+    // populate the buffer
+    unsigned char *source_buffer = (unsigned char *)GetLineVertexBuffer();
+    float *br = ret_temp;
+    ls_list = obj->m_ls_list;
+    while( ls_list){
+        float *pt = (float *)(source_buffer + ls_list->vbo_offset);
+        float a = *pt++;
+        float b = *pt++;
+        
+        memcpy(br, source_buffer + ls_list->vbo_offset, ls_list->n_points * 2 * sizeof(float));
+        br += ls_list->n_points * 2;
+        ls_list = ls_list->next;
+    }
+    
+    *ret_array = ret_temp;
+    
+    return nPoints;
+        
+    
+}
+
+
+
 void s57chart::AssembleLineGeometry( void )
 {
             // Walk the hash tables to get the required buffer size
@@ -1793,11 +1866,11 @@ void s57chart::AssembleLineGeometry( void )
                             while( top != NULL ) {
                                 S57Obj *obj = top->obj;
                                 
-                                line_segment_element *list_top = new line_segment_element;
-                                list_top->n_points = 0;
-                                list_top->next = 0;
+                                line_segment_element list_top;
+                                list_top.n_points = 0;
+                                list_top.next = 0;
                                 
-                                line_segment_element *le_current = list_top;
+                                line_segment_element *le_current = &list_top;
                                 
                                 for( int iseg = 0; iseg < obj->m_n_lsindex; iseg++ ) {
                                     int seg_index = iseg * 3;
@@ -1822,7 +1895,7 @@ void s57chart::AssembleLineGeometry( void )
                                     VC_Element *epnode = 0;
                                     epnode = m_vc_hash[enode];
                                     
-                                    double e0, n0, e1, n1;
+                                    double e0=0, n0=0, e1, n1;
                                     
                                     if( ipnode ) {
                                         double *ppt = ipnode->pPoint;
@@ -1966,8 +2039,7 @@ void s57chart::AssembleLineGeometry( void )
                                 }  // for
                                 
                                 //  All done, so assign the list to the object
-                                obj->m_ls_list = list_top->next;    // skipping the empty first placeholder element
-                                delete list_top;
+                                obj->m_ls_list = list_top.next;    // skipping the empty first placeholder element
                                 
                                 
                                 top = top->next;
@@ -2160,6 +2232,8 @@ bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& V
 
             glColor3f( r, g, b ); /* nodta color */
             glChartCanvas::SetClipRegion( temp_vp, OCPNRegion(rect), false, !b_overlay); /* no rotation, clear */
+            if( !glChartCanvas::s_b_useStencil )
+                ps52plib->m_last_clip_region = OCPNRegion(rect);
             DoRenderRectOnGL( glc, temp_vp, rect );
             glChartCanvas::DisableClipRegion();
 
@@ -2199,6 +2273,8 @@ bool s57chart::DoRenderRegionViewOnGL( const wxGLContext &glc, const ViewPort& V
 
         glColor3f( r, g, b ); /* nodta color */
         glChartCanvas::SetClipRegion( temp_vp, Region, false, !b_overlay ); /* no rotation */
+        if( !glChartCanvas::s_b_useStencil )
+            ps52plib->m_last_clip_region = Region;
         DoRenderRectOnGL( glc, temp_vp, rect );
         glChartCanvas::DisableClipRegion();
         
@@ -2305,6 +2381,7 @@ bool s57chart::DoRenderRegionViewOnDC( wxMemoryDC& dc, const ViewPort& VPoint,
         ClearRenderedTextCache();                       // and reset the text renderer,
                                                         //for the case where depth(height) units change
         ResetPointBBoxes( m_last_vp, VPoint );
+        SetSafetyContour();
     }
 
     if( VPoint.view_scale_ppm != m_last_vp.view_scale_ppm ) {
@@ -2872,7 +2949,7 @@ InitReturn s57chart::Init( const wxString& name, ChartInitFlag flags )
 
     if( fn.GetExt() == _T("000") ) {
         if( m_bbase_file_attr_known ) {
-            ::wxBeginBusyCursor();
+            OCPNPlatform::ShowBusySpinner();
 
             int sret = FindOrCreateSenc( name );
             if( sret != BUILD_SENC_OK ) {
@@ -2882,18 +2959,18 @@ InitReturn s57chart::Init( const wxString& name, ChartInitFlag flags )
             } else
                 ret_value = PostInit( flags, m_global_color_scheme );
 
-            ::wxEndBusyCursor();
+            OCPNPlatform::HideBusySpinner();
         }
 
     }
 
     else if( fn.GetExt() == _T("S57") ) {
-        ::wxBeginBusyCursor();
+        OCPNPlatform::ShowBusySpinner();
 
         m_SENCFileName = name;
         ret_value = PostInit( flags, m_global_color_scheme );
 
-        ::wxEndBusyCursor();
+        OCPNPlatform::HideBusySpinner();
 
     }
 
@@ -2934,133 +3011,88 @@ InitReturn s57chart::FindOrCreateSenc( const wxString& name )
 
 //      Look for SENC file in the target directory
 
-    if( m_SENCFileName.FileExists() ) {
-        wxFile f;
-        if( f.Open( m_SENCFileName.GetFullPath() ) ) {
-            if( f.Length() == 0 ) {
-                f.Close();
-                build_ret_val = BuildSENCFile( name, m_SENCFileName.GetFullPath() );
-            } else                                      // file exists, non-zero
-            {                                         // so check for new updates
+    {
+        int force_make_senc = 0;
+        
+        if( m_SENCFileName.FileExists() ){                    // SENC file exists
 
-                f.Seek( 0 );
-                wxFileInputStream *pfpx_u = new wxFileInputStream( f );
-                wxBufferedInputStream *pfpx = new wxBufferedInputStream( *pfpx_u );
-                int dun = 0;
-                int last_update = 0;
-                int senc_file_version = 0;
-                int force_make_senc = 0;
-                char buf[256];
-                char *pbuf = buf;
+            Osenc senc;
+            if(senc.ingestHeader( m_SENCFileName.GetFullPath() ) ){
+                bbuild_new_senc = true;
+            }
+            else{
+            
+                int senc_file_version = senc.getSencVersion();
+            
+                int last_update = senc.getLastUpdate();
+            
+                wxString str = senc.getFileModTime();
                 wxDateTime ModTime000;
-                int size000 = 0;
-                wxString senc_base_edtn;
-
-                while( !dun ) {
-                    if( my_fgets( pbuf, 256, *pfpx ) == 0 ) {
-                        dun = 1;
-                        force_make_senc = 1;
-                        break;
-                    } else {
-                        if( !strncmp( pbuf, "OGRF", 4 ) ) {
-                            dun = 1;
-                            break;
-                        }
-
-                        wxString str_buf( pbuf, wxConvUTF8 );
-                        wxStringTokenizer tkz( str_buf, _T("=") );
-                        wxString token = tkz.GetNextToken();
-
-                        if( token.IsSameAs( _T("UPDT"), TRUE ) ) {
-                            int i;
-                            i = tkz.GetPosition();
-                            last_update = atoi( &pbuf[i] );
-                        }
-
-                        else if( token.IsSameAs( _T("SENC Version"), TRUE ) ) {
-                            int i;
-                            i = tkz.GetPosition();
-                            senc_file_version = atoi( &pbuf[i] );
-                        }
-
-                        else if( token.IsSameAs( _T("FILEMOD000"), TRUE ) ) {
-                            int i;
-                            i = tkz.GetPosition();
-                            wxString str( &pbuf[i], wxConvUTF8 );
-                            str.Trim();                               // gets rid of newline, etc...
-                            if( !ModTime000.ParseFormat( str,
-                                    _T("%Y%m%d")/*(const wxChar *)"%Y%m%d"*/) ) ModTime000.SetToCurrent();
-                            ModTime000.ResetTime();                   // to midnight
-                        }
-
-                        else if( token.IsSameAs( _T("FILESIZE000"), TRUE ) ) {
-                            int i;
-                            i = tkz.GetPosition();
-                            size000 = atoi( &pbuf[i] );
-                        }
-
-                        else if( token.IsSameAs( _T("EDTN000"), TRUE ) ) {
-                            int i;
-                            i = tkz.GetPosition();
-                            wxString str( &pbuf[i], wxConvUTF8 );
-                            str.Trim();                               // gets rid of newline, etc...
-                            senc_base_edtn = str;
-                        }
-
-                    }
-                }
-
-                delete pfpx;
-                delete pfpx_u;
-                f.Close();
+                if( !ModTime000.ParseFormat( str, _T("%Y%m%d")/*(const wxChar *)"%Y%m%d"*/) )
+                    ModTime000.SetToCurrent();
+                ModTime000.ResetTime();                   // to midnight
+            
+                wxULongLong size000 = senc.getFileSize000();
+                wxString ssize000 = senc.getsFileSize000();
+                
+                wxString senc_base_edtn = senc.getEdition();
+            
 //              Anything to do?
-// force_make_senc = 1;
+//force_make_senc = 1;
                 //  SENC file version has to be correct for other tests to make sense
-                if( senc_file_version != CURRENT_SENC_FORMAT_VERSION ) bbuild_new_senc = true;
+                if( senc_file_version != CURRENT_SENC_FORMAT_VERSION )
+                    bbuild_new_senc = true;
 
                 //  Senc EDTN must be the same as .000 file EDTN.
                 //  This test catches the usual case where the .000 file is updated from the web,
                 //  and all updates (.001, .002, etc.)  are subsumed.
-                else if( !senc_base_edtn.IsSameAs( m_edtn000 ) ) bbuild_new_senc = true;
+                else if( !senc_base_edtn.IsSameAs( m_edtn000 ) )
+                    bbuild_new_senc = true;
 
                 else {
                     //    See if there are any new update files  in the ENC directory
-                    int most_recent_update_file = GetUpdateFileArray( FileName000, NULL );
+                    int most_recent_update_file = GetUpdateFileArray( FileName000, NULL, m_date000, m_edtn000 );
 
-                    if( last_update != most_recent_update_file ) bbuild_new_senc = true;
+                    if( last_update != most_recent_update_file )
+                        bbuild_new_senc = true;
 
 //          Make two simple tests to see if the .000 file is "newer" than the SENC file representation
 //          These tests may be redundant, since the DSID:EDTN test above should catch new base files
                     wxDateTime OModTime000;
                     FileName000.GetTimes( NULL, &OModTime000, NULL );
                     OModTime000.ResetTime();                      // to midnight
-                    if( ModTime000.IsValid() ) if( OModTime000.IsLaterThan( ModTime000 ) ) bbuild_new_senc =
-                            true;
+                    if( ModTime000.IsValid() ){
+                        if( OModTime000.IsLaterThan( ModTime000 ) )
+                            bbuild_new_senc = true;
+                    }
 
                     int Osize000l = FileName000.GetSize().GetLo();
-                    if( size000 != Osize000l ) bbuild_new_senc = true;
+                    int Osize000h = FileName000.GetSize().GetHi();
+                    wxString t;
+                    t.Printf(_T("%d%d"), Osize000h, Osize000l);
+                    if( !t.IsSameAs( ssize000) )
+                        bbuild_new_senc = true;
+                    
                 }
 
-                if( force_make_senc ) bbuild_new_senc = true;
-
-                if( bbuild_new_senc ) build_ret_val = BuildSENCFile( name,
-                        m_SENCFileName.GetFullPath() );
+                if( force_make_senc )
+                    bbuild_new_senc = true;
 
             }
         }
+        else if( !m_SENCFileName.FileExists() )                    // SENC file does not exist
+        {
+            bbuild_new_senc = true;
+        }
     }
-
-    else                    // SENC file does not exist
-    {
-        build_ret_val = BuildSENCFile( name, m_SENCFileName.GetFullPath() );
-        bbuild_new_senc = true;
-    }
-
-    if( bbuild_new_senc ) m_bneed_new_thumbnail = true; // force a new thumbnail to be built in PostInit()
 
     if( bbuild_new_senc ) {
-        if( BUILD_SENC_NOK_PERMANENT == build_ret_val ) return INIT_FAIL_REMOVE;
-        if( BUILD_SENC_NOK_RETRY == build_ret_val ) return INIT_FAIL_RETRY;
+        m_bneed_new_thumbnail = true; // force a new thumbnail to be built in PostInit()
+        build_ret_val = BuildSENCFile( name, m_SENCFileName.GetFullPath() );
+        if( BUILD_SENC_NOK_PERMANENT == build_ret_val ) 
+            return INIT_FAIL_REMOVE;
+        if( BUILD_SENC_NOK_RETRY == build_ret_val ) 
+            return INIT_FAIL_RETRY;
     }
 
     return INIT_OK;
@@ -3128,6 +3160,10 @@ void s57chart::BuildDepthContourArray( void )
     }
 
     ObjRazRules *top;
+    // some ENC have a lot of DEPCNT objects but they seem to store them
+    // in VALDCO order, try to take advantage of that.
+    double prev_valdco = 0.0;
+    
     for( int i = 0; i < PRIO_NUM; ++i ) {
         for( int j = 0; j < LUPNAME_NUM; j++ ) {
 
@@ -3136,14 +3172,17 @@ void s57chart::BuildDepthContourArray( void )
                 if( !strncmp( top->obj->FeatureName, "DEPCNT", 6 ) ) {
                     double valdco = 0.0;
                     if( GetDoubleAttr( top->obj, "VALDCO", valdco ) ) {
-                        m_nvaldco++;
-                        if( m_nvaldco > m_nvaldco_alloc ) {
-                            void *tr = realloc( (void *) m_pvaldco_array,
-                                    m_nvaldco_alloc * 2 * sizeof(double) );
-                            m_pvaldco_array = (double *) tr;
-                            m_nvaldco_alloc *= 2;
+                        if (valdco != prev_valdco) {
+                            prev_valdco = valdco;
+                            m_nvaldco++;
+                            if( m_nvaldco > m_nvaldco_alloc ) {
+                                void *tr = realloc( (void *) m_pvaldco_array,
+                                        m_nvaldco_alloc * 2 * sizeof(double) );
+                                m_pvaldco_array = (double *) tr;
+                                m_nvaldco_alloc *= 2;
+                            }
+                            m_pvaldco_array[m_nvaldco - 1] = valdco;
                         }
-                        m_pvaldco_array[m_nvaldco - 1] = valdco;
                     }
                 }
                 ObjRazRules *nxx = top->next;
@@ -3151,7 +3190,6 @@ void s57chart::BuildDepthContourArray( void )
             }
         }
     }
-
     std::sort( m_pvaldco_array, m_pvaldco_array + m_nvaldco );
 }
 
@@ -3532,20 +3570,17 @@ bool s57chart::CreateHeaderDataFromENC( void )
 bool s57chart::CreateHeaderDataFromSENC( void )
 {
     bool ret_val = true;
-    //    Sanity check for existence of file
 
-    if( !m_SENCFileName.FileExists() ) {
-        wxString msg( _T("   Cannot open SENC file ") );
-        msg.Append( m_SENCFileName.GetFullPath() );
-        wxLogMessage( msg );
+    wxFFileInputStream fpx( m_SENCFileName.GetFullPath() );
+    if (!fpx.IsOk()) {
+        if( !m_SENCFileName.FileExists() ) {
+            wxString msg( _T("   Cannot open SENC file ") );
+            msg.Append( m_SENCFileName.GetFullPath() );
+            wxLogMessage( msg );
 
-        return 1;
+        }
+        return false;
     }
-
-    wxString ifs( m_SENCFileName.GetFullPath() );
-
-    wxFileInputStream fpx_u( ifs );
-    wxBufferedInputStream fpx( fpx_u );
 
     int MAX_LINE = 499999;
     char *buf = (char *) malloc( MAX_LINE + 1 );
@@ -3859,8 +3894,12 @@ static int ExtensionCompare( const wxString& first, const wxString& second )
     return ext1.Cmp( ext2 );
 }
 
-int s57chart::GetUpdateFileArray( const wxFileName file000, wxArrayString *UpFiles )
+
+
+int s57chart::GetUpdateFileArray( const wxFileName file000, wxArrayString *UpFiles,
+                                  wxDateTime date000, wxString edtn000)
 {
+                                  
     wxString DirName000 = file000.GetPath( (int) ( wxPATH_GET_SEPARATOR | wxPATH_GET_VOLUME ) );
     wxDir dir( DirName000 );
     wxString ext;
@@ -3950,7 +3989,7 @@ int s57chart::GetUpdateFileArray( const wxFileName file000, wxArrayString *UpFil
                 
                 delete poModule;
                 
-                if( ( !umdate.IsEarlierThan( m_date000 ) ) && ( umedtn.IsSameAs( m_edtn000 ) ) ) // Note polarity on Date compare....
+                if( ( !umdate.IsEarlierThan( date000 ) ) && ( umedtn.IsSameAs( edtn000 ) ) ) // Note polarity on Date compare....
                 dummy_array->Add( FileToAdd );                    // Looking for umdate >= m_date000
             }
         }
@@ -3976,6 +4015,8 @@ int s57chart::GetUpdateFileArray( const wxFileName file000, wxArrayString *UpFil
     return retval;
 }
 
+
+
 int s57chart::ValidateAndCountUpdates( const wxFileName file000, const wxString CopyDir,
         wxString &LastUpdateDate, bool b_copyfiles )
 {
@@ -3985,7 +4026,7 @@ int s57chart::ValidateAndCountUpdates( const wxFileName file000, const wxString 
     //       wxString DirName000 = file000.GetPath((int)(wxPATH_GET_SEPARATOR | wxPATH_GET_VOLUME));
     //       wxDir dir(DirName000);
     wxArrayString *UpFiles = new wxArrayString;
-    retval = GetUpdateFileArray( file000, UpFiles );
+    retval = GetUpdateFileArray( file000, UpFiles, m_date000, m_edtn000);
 
     if( UpFiles->GetCount() ) {
         //      The s57reader of ogr requires that update set be sequentially complete
@@ -4113,6 +4154,7 @@ int s57chart::ValidateAndCountUpdates( const wxFileName file000, const wxString 
     return retval;
 }
 
+
 wxString s57chart::GetISDT( void )
 {
     if( m_date000.IsValid() ) return m_date000.Format( _T("%Y%m%d") );
@@ -4202,669 +4244,228 @@ int s57chart::BuildSENCFile( const wxString& FullPath000, const wxString& SENCFi
 {
     //  LOD calculation
     double display_ppm = 1 / .00025;     // nominal for most LCD displays
-//    double meters_per_pixel = m_Chart_Scale/display_ppm;  // meters per pixel at nominal chart scale
     double meters_per_pixel_max_scale = GetNormalScaleMin(0,g_b_overzoom_x)/display_ppm;
     m_LOD_meters = meters_per_pixel_max_scale * g_SENC_LOD_pixels;
     
-    OGRFeature *objectDef;
-    OGRFeature *pEdgeVectorRecordFeature;
-    S57Reader *poReader;
-    int feid = 0;
-
-    int nProg = 0;
-    wxString nice_name;
-    int bbad_update = false;
-
-    wxString msg0( _T("Building SENC file for ") );
-    msg0.Append( FullPath000 );
-    msg0.Append( _T(" to ") );
-    msg0.Append( SENCFileName );
-    wxLogMessage( msg0 );
-
-    wxFileName SENCfile = wxFileName( SENCFileName );
-    wxFileName file000 = wxFileName( FullPath000 );
-
-    //      Make the target directory if needed
-    if( true != SENCfile.DirExists( SENCfile.GetPath() ) ) {
-        if( !SENCfile.Mkdir( SENCfile.GetPath() ) ) {
-            wxLogMessage(
-                    _T("   Cannot create SENC file directory for ") + SENCfile.GetFullPath() );
-            return BUILD_SENC_NOK_RETRY;
-        }
-    }
-
-    GetChartNameFromTXT( FullPath000, nice_name );
-
-    wxFileName tfn;
-    wxString tmp_file = tfn.CreateTempFileName( _T("") );
-
-    FILE *fps57;
-    const char *pp = "wb";
-    fps57 = fopen( tmp_file.mb_str(), pp );
-
-    if( fps57 == NULL ) {
-        wxString msg( _T("   s57chart::BuildS57File  Unable to create temp SENC file ") );
-        msg.Append( tfn.GetFullPath() );
-        wxLogMessage( msg );
-        return 0;
-    }
-
-    char temp[201];
-
-    fprintf( fps57, "SENC Version= %d\n", CURRENT_SENC_FORMAT_VERSION );
-
-    wxCharBuffer buffer=nice_name.ToUTF8();
-    if(buffer.data()) 
-        strncpy( temp, buffer.data(), 200 );
-    else
-        strncpy( temp, "UTF8Error", 200 );
+    Osenc senc;
     
-    temp[200] = '\0';
-    fprintf( fps57, "NAME=%s\n", temp );
+    senc.setRegistrar( g_poRegistrar );
+    senc.setRefLocn(ref_lat, ref_lon);
+    senc.SetLODMeters(m_LOD_meters);
 
-    wxString date000 = m_date000.Format( _T("%Y%m%d") );
-    strncpy( temp, date000.mb_str(), 200 );
-    fprintf( fps57, "DATE000=%s\n", temp );
-
-    strncpy( temp, m_edtn000.mb_str(), 200 );
-    fprintf( fps57, "EDTN000=%s\n", temp );
-
-    //      Record .000 file date and size for primitive detection of updates to .000 file
-    wxDateTime ModTime000;
-    wxString mt = _T("20000101");
-    if( file000.GetTimes( NULL, &ModTime000, NULL ) )
-        mt = ModTime000.Format( _T("%Y%m%d") );
-    strncpy( temp, mt.mb_str(), 200 );
-    fprintf( fps57, "FILEMOD000=%s\n", temp );
-
-    int size000 = file000.GetSize().GetHi();
-    int size000l = file000.GetSize().GetLo();
-    fprintf( fps57, "FILESIZE000=%d%d\n", size000, size000l );
-
-    fprintf( fps57, "NOGR=%d\n", m_nGeoRecords );
-    fprintf( fps57, "SCALE=%d\n", m_native_scale );
-
-    wxString Message = SENCfile.GetFullPath();
-    Message.Append( _T("...Ingesting") );
-
-    wxString Title( _("OpenCPN S57 SENC File Create...") );
-    Title.append( SENCfile.GetFullPath() );
-
-    cc1->StopMovement();
-    s_ProgDialog = new wxProgressDialog( Title, Message, m_nGeoRecords, GetOCPNCanvasWindow(),
-                                         wxPD_AUTO_HIDE | wxPD_SMOOTH | wxSTAY_ON_TOP | wxPD_APP_MODAL);
-
-    //      Analyze Updates
-    //      The OGR library will apply updates automatically, if enabled.
-    //      Alternatively, we can explicitely find and apply updates from any source directory.
-    //      We need to keep track of the last sequential update applied, to look out for new updates
-
-    int last_applied_update = 0;
-    wxString LastUpdateDate = date000;
-    last_applied_update = ValidateAndCountUpdates( file000, SENCfile.GetPath(), LastUpdateDate,
-            true );
-
-    if( last_applied_update > 0 ){
-        wxString msg1;
-        msg1.Printf( _T("Preparing to apply ENC updates, target final update is %3d."), last_applied_update );
-        wxLogMessage( msg1 );
-    }
-
-    fprintf( fps57, "UPDT=%d\n", last_applied_update );
-
-    strncpy( temp, LastUpdateDate.mb_str(), 200 );
-    fprintf( fps57, "DATEUPD=%s\n", temp );
-
-    //      Insert my local error handler to catch OGR errors,
-    //      Especially CE_Fatal type errors
-    //      Discovered/debugged on US5MD11M.017.  VI 548 geometry deleted
-    CPLPushErrorHandler( OpenCPN_OGRErrorHandler );
-
-    bool bcont = true;
-    int iObj = 0;
-    OGRwkbGeometryType geoType;
-    wxString sobj;
-
-    bcont = s_ProgDialog->Update( 1, _T("") );
-
-    //  Here comes the actual ISO8211 file reading
-    OGRS57DataSource *poS57DS = new OGRS57DataSource;
-    poS57DS->SetS57Registrar( g_poRegistrar );
-
-    //  Set up the options
-    char ** papszReaderOptions = NULL;
-//    papszReaderOptions = CSLSetNameValue(papszReaderOptions, S57O_LNAM_REFS, "ON" );
-    papszReaderOptions = CSLSetNameValue( papszReaderOptions, S57O_UPDATES, "ON" );
-    papszReaderOptions = CSLSetNameValue( papszReaderOptions, S57O_RETURN_LINKAGES, "ON" );
-    papszReaderOptions = CSLSetNameValue( papszReaderOptions, S57O_RETURN_PRIMITIVES, "ON" );
-    poS57DS->SetOptionList( papszReaderOptions );
-
-    //      Open the OGRS57DataSource
-    //      This will ingest the .000 file from the working dir, and apply updates
-
-    int open_return = poS57DS->Open( m_tmpup_array->Item( 0 ).mb_str(), TRUE, NULL/*&s_ProgressCallBack*/ ); ///172
-    if( open_return == BAD_UPDATE )         ///172
-    bbad_update = true;
-
-    bcont = s_ProgDialog->Update( 2, _T("") );
-    if( !bcont ) goto abort_point;
-
-    //      Get a pointer to the reader
-    poReader = poS57DS->GetModule( 0 );
-
-//        Prepare Vector Edge Helper table
-//        And fill in the table
-    feid = 0;
-    pEdgeVectorRecordFeature = poReader->ReadVector( feid, RCNM_VE );
-    while( NULL != pEdgeVectorRecordFeature ) {
-        int record_id = pEdgeVectorRecordFeature->GetFieldAsInteger( "RCID" );
-
-        m_vector_helper_hash[record_id] = feid;
-
-        feid++;
-        delete pEdgeVectorRecordFeature;
-        pEdgeVectorRecordFeature = poReader->ReadVector( feid, RCNM_VE );
-    }
-
-    //      Update the options, removing the RETURN_PRIMITIVES flags
-    //      This flag needed to be set on ingest() to create the proper field defns,
-    //      but cleared to fetch normal features
-
-    papszReaderOptions = CSLSetNameValue( papszReaderOptions, S57O_RETURN_PRIMITIVES, "OFF" );
-    poReader->SetOptions( papszReaderOptions );
-    CSLDestroy( papszReaderOptions );
-
-    while( bcont ) {
-        //  Prepare for possible CE_Fatal error in GDAL
-        //  Corresponding longjmp() is in the local error handler
-        int setjmp_ret = 0;
-        setjmp_ret = setjmp( env_ogrf );
-        if( setjmp_ret == 1 )             //  CE_Fatal happened in GDAL library
-                                          //  in the ReadNextFeature() call below.
-                                          //  Seems odd, but that's setjmp/longjmp behaviour
-                                          //      Discovered/debugged on US5MD11M.017.  VI 548 geometry deleted
-
-                {
-//                TODO need to debug thissssssssss
-            wxLogMessage( _T("   s57chart(): GDAL/OGR Fatal Error caught on Obj #%d"), iObj );
-        }
-
-        objectDef = poReader->ReadNextFeature();
-
-        if( objectDef != NULL ) {
-
-            iObj++;
-
-//  Update the progress dialog
-            if( iObj > m_nGeoRecords - 1 )
-                nProg = m_nGeoRecords - 1;
-            else
-                nProg = iObj;
-            if( s_ProgDialog && nProg % 10 == 0 )
-            {
-                sobj = wxString( objectDef->GetDefnRef()->GetName(), wxConvUTF8 );
-                sobj.Append( wxString::Format( _T("  %d/%d       "), iObj, m_nGeoRecords ) );
-
-                bcont = s_ProgDialog->Update( nProg, sobj ); //We update just every 10th object to improve performance as updating the dialog is very expensive...
-            }
-            geoType = wkbUnknown;
-//      This test should not be necessary for real (i.e not C_AGGR) features
-//      However... some update files contain errors, and have deleted some
-//      geometry without deleting the corresponding feature(s).
-//      So, GeometryType becomes Unknown.
-//      e.g. US5MD11M.017
-//      In this case, all we can do is skip the feature....sigh.
-
-            if( objectDef->GetGeometryRef() != NULL ) geoType =
-                    objectDef->GetGeometryRef()->getGeometryType();
-
-//      n.b  This next line causes skip of C_AGGR features w/o geometry
-            if( geoType != wkbUnknown )                             // Write only if has wkbGeometry
-                    {
-                CreateSENCRecord( objectDef, fps57, 1, poReader );
-            }
-
-            delete objectDef;
-
-        } else
-            break;
-
-    }
-
-    if( bcont ) {
-        //      Create and write the Vector Edge Table
-        CreateSENCVectorEdgeTable( fps57, poReader );
-
-        //      Create and write the Connected NodeTable
-        CreateSENCConnNodeTable( fps57, poReader );
-    }
-
-    abort_point: delete poS57DS;
-
-    delete s_ProgDialog;
-    s_ProgDialog = NULL;
-
-    fclose( fps57 );
-
-    CPLPopErrorHandler();
-
-    //  Delete any temporary (working) real and dummy update files,
-    //  as well as .000 file created by ValidateAndCountUpdates()
-    if( m_tmpup_array ) {
-        for( unsigned int iff = 0; iff < m_tmpup_array->GetCount(); iff++ )
-            remove( m_tmpup_array->Item( iff ).mb_str() );
-        delete m_tmpup_array;
-    }
-
-    int ret_code = 0;
-
-    if( !bcont )                // aborted
-    {
-        wxRemoveFile( tmp_file );                     // kill the temp file
-        ret_code = BUILD_SENC_NOK_RETRY;
-    }
-
-    if( bcont ) {
-        remove( SENCfile.GetFullPath().mb_str() );
-        unlink( SENCfile.GetFullPath().mb_str() );       //  Delete any existing SENC file....
-
-        bool cpok = wxCopyFile( tmp_file, SENCfile.GetFullPath() );         // Delete temp file too?
-        wxRemoveFile( tmp_file );
-
-        if( !cpok ) {
-            wxString msg( _T("   Cannot copy temporary SENC file ") );
-            msg.Append( tmp_file );
-            msg.Append( _T(" to ") );
-            msg.Append( SENCfile.GetFullPath() );
-            wxLogMessage( msg );
-#ifdef __OCPN__ANDROID__
-            wxLogMessage(_T("   Android: Error overridden / ignored.") );
-            ret_code = BUILD_SENC_OK;
-#else      
-            ret_code = BUILD_SENC_NOK_RETRY;
-#endif            
-        } else
-            ret_code = BUILD_SENC_OK;
-
-    }
-
-/*    
-    if( bbad_update ) OCPNMessageBox(NULL, 
-            _T("Errors encountered processing ENC update file(s).\nENC features may be incomplete or inaccurate."),
-            _T("OpenCPN Create SENC"), wxOK | wxICON_EXCLAMATION );
-*/
-    return ret_code;
+    int ret = senc.createSenc124( FullPath000, SENCFileName );
+    
+    return ret;
 }
+    
+    
+
 
 int s57chart::BuildRAZFromSENCFile( const wxString& FullPath )
 {
     int ret_val = 0;                    // default is OK
-    int senc_file_version = 0;
     
-    //    Sanity check for existence of file
-    wxFileName SENCFileName( FullPath );
-    if( !SENCFileName.FileExists() ) {
-        wxString msg( _T("   Cannot open SENC file ") );
-        msg.Append( SENCFileName.GetFullPath() );
-        wxLogMessage( msg );
-
+    Osenc sencfile;
+    
+    // Set up the containers for ingestion results.
+    // These will be populated by Osenc, and owned by the caller (this).
+    S57ObjVector Objects;
+    VE_ElementVector VEs;
+    VC_ElementVector VCs;
+    
+    int srv = sencfile.ingest(FullPath, &Objects, &VEs, &VCs);
+    
+    if(srv != SENC_NO_ERROR){
+        wxLogMessage( sencfile.getLastError() );
+        //TODO  Clean up here, or massive leaks result
         return 1;
     }
-
-    int nProg = 0;
-
-    wxString ifs( FullPath );
-
-    wxFileInputStream fpx_u( ifs );
-    wxBufferedInputStream fpx( fpx_u );
-
-    int MAX_LINE = 499999;
-    char *buf = (char *) malloc( MAX_LINE + 1 );
-
-    LUPrec *LUP;
-    LUPname LUP_Name = PAPER_CHART;
-
-    int nGeoFeature;
-
-    int object_count = 0;
-
-    OGREnvelope Envelope;
-
-    int dun = 0;
-
-    hdr_buf = (char *) malloc( 1 );
-    wxProgressDialog *SENC_prog = NULL;
-    int nGeo1000;
-    wxString date_000, date_upd;
-
-//        if(my_fgets(buf, MAX_LINE, fpx) == 0)
-//           dun = 1;
-    double scale = gFrame->GetBestVPScale(this);
-    int nativescale = GetNativeScale();
     
-    while( !dun ) {
-
-        if( my_fgets( buf, MAX_LINE, fpx ) == 0 ) {
-            dun = 1;
-            break;
-        }
-
-        if( !strncmp( buf, "OGRF", 4 ) ) {
-
-            S57Obj *obj = new S57Obj( buf, &fpx, 0, 0, senc_file_version );
-            if( obj ) {
-                wxString objnam  = obj->GetAttrValueAsString("OBJNAM");
-                wxString fe_name = wxString(obj->FeatureName, wxConvUTF8);
-                if (objnam.Len() > 0)
-                    g_pi_manager->SendVectorChartObjectInfo( FullPath, fe_name, objnam, obj->m_lat, obj->m_lon, scale, nativescale );
-                
-//      Build/Maintain the ATON floating/rigid arrays
-                if( GEO_POINT == obj->Primitive_type ) {
-
-// set floating platform
-                    if( ( !strncmp( obj->FeatureName, "LITFLT", 6 ) )
-                            || ( !strncmp( obj->FeatureName, "LITVES", 6 ) )
-                            || ( !strncmp( obj->FeatureName, "BOY", 3 ) ) ) {
-                        pFloatingATONArray->Add( obj );
-                    }
-
-// set rigid platform
-                    if( !strncmp( obj->FeatureName, "BCN", 3 ) ) {
-                        pRigidATONArray->Add( obj );
-                    }
-
-                    //    Mark the object as an ATON
-                    if( ( !strncmp( obj->FeatureName, "LIT", 3 ) )
-                            || ( !strncmp( obj->FeatureName, "LIGHTS", 6 ) )
-                            || ( !strncmp( obj->FeatureName, "BCN", 3 ) )
-                            || ( !strncmp( obj->FeatureName, "BOY", 3 ) ) ) {
-                        obj->bIsAton = true;
-                    }
-
-                }
-
-                //      Ensure that Area objects actually describe a valid object
-                if( GEO_AREA == obj->Primitive_type ) {
-                    if( !obj->BBObj.GetValid() ) {
-                        delete obj;
-                        continue;
-                    }
-                }
-                    
-//      This is where Simplified or Paper-Type point features are selected
-                switch( obj->Primitive_type ){
-                    case GEO_POINT:
-                    case GEO_META:
-                    case GEO_PRIM:
-
-                        if( PAPER_CHART == ps52plib->m_nSymbolStyle ) LUP_Name = PAPER_CHART;
-                        else
-                            LUP_Name = SIMPLIFIED;
-
-                        break;
-
-                    case GEO_LINE:
-                        LUP_Name = LINES;
-                        break;
-
-                    case GEO_AREA:
-                        if( PLAIN_BOUNDARIES == ps52plib->m_nBoundaryStyle ) LUP_Name =
-                                PLAIN_BOUNDARIES;
-                        else
-                            LUP_Name = SYMBOLIZED_BOUNDARIES;
-
-                        break;
-                }
-
-                LUP = ps52plib->S52_LUPLookup( LUP_Name, obj->FeatureName, obj );
-
-                if( NULL == LUP ) {
-                    if( g_bDebugS57 ) {
-                        wxString msg( obj->FeatureName, wxConvUTF8 );
-                        msg.Prepend( _T("   Could not find LUP for ") );
-                        LogMessageOnce( msg );
-                    }
-                    delete obj;
-                } else {
-//              Convert LUP to rules set
-                    ps52plib->_LUP2rules( LUP, obj );
-
-//              Add linked object/LUP to the working set
-                    _insertRules( obj, LUP, this );
-
-//              Establish Object's Display Category
-                    obj->m_DisplayCat = LUP->DISC;
- 
-//              Establish objects base display priority         
-                    obj->m_DPRI = LUP->DPRI - '0';
-                    
-                    //  Is this a catagory-movable object?
-                    if( !strncmp(obj->FeatureName, "OBSTRN", 6) ||
-                        !strncmp(obj->FeatureName, "WRECKS", 6) ||
-                        !strncmp(obj->FeatureName, "DEPCNT", 6) ||
-                        !strncmp(obj->FeatureName, "UWTROC", 6) )
-                        {
-                            obj->m_bcategory_mutable = true;
-                        }
-                    else{
-                        obj->m_bcategory_mutable = false;
-                    }
-                        
-                }
-            }
-
-            object_count++;
-
-            if( ( object_count % 500 ) == 0 ) {
-                nProg = object_count / 500;
-                if( nProg > nGeo1000 - 1 ) nProg = nGeo1000 - 1;
-
-                if( SENC_prog ) SENC_prog->Update( nProg );
-            }
-
-            continue;
-
-        }               //OGRF
-
-        else if( !strncmp( buf, "VETableStart", 12 ) ) {
-            //    Use a wxArray for temp storage
-            //    then transfer to a simple linear array
-            ArrayOfVE_Elements ve_array;
-
-            int index = -1;
-            int count;
-
-            fpx.Read( &index, sizeof(int) );
-
-            while( -1 != index ) {
-                fpx.Read( &count, sizeof(int) );
-
-                double *pPoints = NULL;
-                if( count ) {
-                    pPoints = (double *) malloc( count * 2 * sizeof(double) );
-                    fpx.Read( pPoints, count * 2 * sizeof(double) );
-                }
-
-                VE_Element vee;
-                vee.index = index;
-                vee.nCount = count;
-                vee.pPoints = pPoints;
-                vee.max_priority = 0;//-99;            // Default
-
-                ve_array.Add( vee );
-
-                //    Next element
-                fpx.Read( &index, sizeof(int) );
-            }
-
-            //    Create a hash map of VE_Element pointers as a chart class member
-            int n_ve_elements = ve_array.GetCount();
-
-            for( int i = 0; i < n_ve_elements; i++ ) {
-                VE_Element ve_from_array = ve_array.Item( i );
-                VE_Element *vep = new VE_Element;
-                vep->index = ve_from_array.index;
-                vep->nCount = ve_from_array.nCount;
-                vep->pPoints = ve_from_array.pPoints;
-                vep->max_priority = 0;            // Default
+    //  Process the Edge feature arrays.
+    
+    //    Create a hash map of VE_Element pointers as a chart class member
+    int n_ve_elements = VEs.size();
+    
+    for( int i = 0; i < n_ve_elements; i++ ) {
+        VE_Element *pve_from_array = VEs.at( i );
         
-                if(vep->nCount){
-                //  Get a bounding box for the edge
-                    double east_max = -1e7; double east_min = 1e7;
-                    double north_max = -1e7; double north_min = 1e7;
+ //       VE_Element ve_from_array = VEs.at( i );
+        VE_Element *vep = new VE_Element;
+        vep->index = pve_from_array->index;
+        vep->nCount = pve_from_array->nCount;
+        vep->pPoints = pve_from_array->pPoints;
+        vep->max_priority = 0;            // Default
+        
+        if(vep->nCount){
+            //  Get a bounding box for the edge
+            double east_max = -1e7; double east_min = 1e7;
+            double north_max = -1e7; double north_min = 1e7;
+            
+            double *vrun = vep->pPoints;
+            for(size_t i=0 ; i < vep->nCount; i++){
+                east_max = wxMax(east_max, *vrun);
+                east_min = wxMin(east_min, *vrun);
+                vrun++;
                 
-                    double *vrun = vep->pPoints;
-                    for(size_t i=0 ; i < vep->nCount; i++){
-                        east_max = wxMax(east_max, *vrun);
-                        east_min = wxMin(east_min, *vrun);
-                        vrun++;
-                    
-                        north_max = wxMax(north_max, *vrun);
-                        north_min = wxMin(north_min, *vrun);
-                        vrun++;
-                    }
+                north_max = wxMax(north_max, *vrun);
+                north_min = wxMin(north_min, *vrun);
+                vrun++;
+            }
+            
+            double lat, lon;
+            fromSM( east_min, north_min, ref_lat, ref_lon, &lat, &lon );
+            vep->BBox.SetMin( lon, lat);
+            fromSM( east_max, north_max, ref_lat, ref_lon, &lat, &lon );
+            vep->BBox.SetMax( lon, lat);
+        }
+        
+        m_ve_hash[vep->index] = vep;
+    }
+    
+    //    Create a hash map VC_Element pointers as a chart class member
+    int n_vc_elements = VCs.size();
+    
+    for( int i = 0; i < n_vc_elements; i++ ) {
+        VC_Element *vc_from_array = VCs.at( i );
+        VC_Element *vcp = new VC_Element;
+        vcp->index = vc_from_array->index;
+        vcp->pPoint = vc_from_array->pPoint;
+        
+        m_vc_hash[vcp->index] = vcp;
+    }
+    
+    
+    
+    //Walk the vector of S57Objs, associating LUPS, instructions, etc...
+    
+    for(unsigned int i=0 ; i < Objects.size() ; i++){
+
+        S57Obj *obj = Objects[i];
+        
+        //      This is where Simplified or Paper-Type point features are selected
+        LUPrec *LUP;
+        LUPname LUP_Name = PAPER_CHART;
+        
+        switch( obj->Primitive_type ){
+            case GEO_POINT:
+            case GEO_META:
+            case GEO_PRIM:
                 
-                    double lat, lon;
-                    fromSM( east_min, north_min, ref_lat, ref_lon, &lat, &lon );
-                    vep->BBox.SetMin( lon, lat);
-                    fromSM( east_max, north_max, ref_lat, ref_lon, &lat, &lon );
-                    vep->BBox.SetMax( lon, lat);
+                if( PAPER_CHART == ps52plib->m_nSymbolStyle )
+                    LUP_Name = PAPER_CHART;
+                else
+                    LUP_Name = SIMPLIFIED;
+                
+                break;
+                
+            case GEO_LINE:
+                LUP_Name = LINES;
+                break;
+                
+            case GEO_AREA:
+                if( PLAIN_BOUNDARIES == ps52plib->m_nBoundaryStyle )
+                    LUP_Name = PLAIN_BOUNDARIES;
+                else
+                    LUP_Name = SYMBOLIZED_BOUNDARIES;
+                
+                break;
+        }
+        
+        LUP = ps52plib->S52_LUPLookup( LUP_Name, obj->FeatureName, obj );
+        
+        if( NULL == LUP ) {
+            if( g_bDebugS57 ) {
+                wxString msg( obj->FeatureName, wxConvUTF8 );
+                msg.Prepend( _T("   Could not find LUP for ") );
+                LogMessageOnce( msg );
+            }
+            delete obj;
+            Objects[i] = NULL;
+        } else {
+            //              Convert LUP to rules set
+            ps52plib->_LUP2rules( LUP, obj );
+            
+            //              Add linked object/LUP to the working set
+            _insertRules( obj, LUP, this );
+            
+            //              Establish Object's Display Category
+            obj->m_DisplayCat = LUP->DISC;
+            
+            //              Establish objects base display priority         
+            obj->m_DPRI = LUP->DPRI - '0';
+                
+                //  Is this a category-movable object?
+            if( !strncmp(obj->FeatureName, "OBSTRN", 6) ||
+                    !strncmp(obj->FeatureName, "WRECKS", 6) ||
+                    !strncmp(obj->FeatureName, "DEPCNT", 6) ||
+                    !strncmp(obj->FeatureName, "UWTROC", 6) )
+                {
+                    obj->m_bcategory_mutable = true;
                 }
-                
-                m_ve_hash[vep->index] = vep;
-
-            }
-
-        }
-
-        else if( !strncmp( buf, "VCTableStart", 12 ) ) {
-            //    Use a wxArray for temp storage
-            //    then transfer to a simple linear array
-            ArrayOfVC_Elements vc_array;
-
-            int index = -1;
-            int index_max = -1;
-
-            fpx.Read( &index, sizeof(int) );
-
-            while( -1 != index ) {
-
-                double *pPoint = NULL;
-                pPoint = (double *) malloc( 2 * sizeof(double) );
-                fpx.Read( pPoint, 2 * sizeof(double) );
-
-                VC_Element vce;
-                vce.index = index;
-                vce.pPoint = pPoint;
-
-                vc_array.Add( vce );
-
-                if( index > index_max ) index_max = index;
-
-                //    Next element
-                fpx.Read( &index, sizeof(int) );
-            }
-
-            //    Create a hash map VC_Element pointers as a chart class member
-            int n_vc_elements = vc_array.GetCount();
-
-            for( int i = 0; i < n_vc_elements; i++ ) {
-                VC_Element vc_from_array = vc_array.Item( i );
-                VC_Element *vcp = new VC_Element;
-                vcp->index = vc_from_array.index;
-                vcp->pPoint = vc_from_array.pPoint;
-
-                m_vc_hash[vcp->index] = vcp;
+            else{
+                obj->m_bcategory_mutable = false;
             }
         }
 
-        else if( !strncmp( buf, "SENC", 4 ) ) {
-            sscanf( buf, "SENC Version=%i", &senc_file_version );
-            if( senc_file_version != CURRENT_SENC_FORMAT_VERSION ) {
-                wxString msg( _T("   Wrong version on SENC file ") );
-                msg.Append( SENCFileName.GetFullPath() );
-                wxLogMessage( msg );
-
-                dun = 1;
-                ret_val = 1;                   // error
+        //      Build/Maintain the ATON floating/rigid arrays
+        if( GEO_POINT == obj->Primitive_type ) {
+            
+            // set floating platform
+            if( ( !strncmp( obj->FeatureName, "LITFLT", 6 ) )
+                || ( !strncmp( obj->FeatureName, "LITVES", 6 ) )
+                || ( !strncasecmp( obj->FeatureName, "BOY", 3 ) ) ) {
+                    pFloatingATONArray->Add( obj );
+            }
+        
+            // set rigid platform
+            if( !strncasecmp( obj->FeatureName, "BCN", 3 ) ) {
+                pRigidATONArray->Add( obj );
+            }
+    
+    
+            //    Mark the object as an ATON
+            if( ( !strncmp( obj->FeatureName, "LIT", 3 ) )
+                    || ( !strncmp( obj->FeatureName, "LIGHTS", 6 ) )
+                    || ( !strncasecmp( obj->FeatureName, "BCN", 3 ) )
+                    || ( !strncasecmp( obj->FeatureName, "BOY", 3 ) ) ) {
+                obj->bIsAton = true;
             }
         }
+        
+    }   // Objects iterator
 
-        else if( !strncmp( buf, "DATEUPD", 7 ) ) {
-            date_upd.Append( wxString( &buf[8], wxConvUTF8 ).BeforeFirst( '\n' ) );
-        }
-
-        else if( !strncmp( buf, "DATE000", 7 ) ) {
-            date_000.Append( wxString( &buf[8], wxConvUTF8 ).BeforeFirst( '\n' ) );
-        }
-
-        else if( !strncmp( buf, "SCALE", 5 ) ) {
-            int ins;
-            sscanf( buf, "SCALE=%d", &ins );
-            m_Chart_Scale = ins;
-        }
-
-        else if( !strncmp( buf, "NAME", 4 ) ) {
-            m_Name = wxString( &buf[5], wxConvUTF8 ).BeforeFirst( '\n' );
-        }
-
-        else if( !strncmp( buf, "NOGR", 4 ) ) {
-            sscanf( buf, "NOGR=%d", &nGeoFeature );
-
-            nGeo1000 = nGeoFeature / 500;
-
-#ifdef __WXMSW__
-            wxBeginBusyCursor();
-            /*
-             SENC_prog = new wxProgressDialog(  _("OpenCPN S57 SENC File Load"), FullPath, nGeo1000, NULL,
-             wxPD_AUTO_HIDE | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME | wxPD_ESTIMATED_TIME | wxPD_REMAINING_TIME | wxPD_SMOOTH);
-             */
-            wxEndBusyCursor();
-
-#endif
-        }
-    }                       //while(!dun)
-
-//      fclose(fpx);
-
-    free( buf );
-
-    free( hdr_buf );
-
-    delete SENC_prog;
 
     //   Decide on pub date to show
-    int d000 = 0;
-    wxString sd000 =date_000.Mid( 0, 4 );
-    wxCharBuffer dbuffer=sd000.ToUTF8();
-    if(dbuffer.data())
-        d000 = atoi(dbuffer.data() );
-
-    int dupd = 0;
-    wxString sdupd =date_upd.Mid( 0, 4 );
-    wxCharBuffer ubuffer = sdupd.ToUTF8();
-    if(ubuffer.data())
-        dupd = atoi(ubuffer.data() );
-
-    if( dupd > d000 )
-        m_PubYear = sdupd;
+    
+    wxDateTime d000;
+    d000.ParseFormat( sencfile.getBaseDate(), _T("%Y%m%d") );
+    if( !d000.IsValid() ) d000.ParseFormat( _T("20000101"), _T("%Y%m%d") );
+    
+    wxDateTime updt;
+    updt.ParseFormat( sencfile.getUpdateDate(), _T("%Y%m%d") );
+    if( !updt.IsValid() ) updt.ParseFormat( _T("20000101"), _T("%Y%m%d") );
+    
+    if(updt.IsLaterThan(d000))
+        m_PubYear.Printf(_T("%4d"), updt.GetYear());
     else
-        m_PubYear = sd000;
+        m_PubYear.Printf(_T("%4d"), d000.GetYear());
+    
+    
 
+//    Set some base class values
+     wxDateTime upd = updt;
+     if( !upd.IsValid() ) upd.ParseFormat( _T("20000101"), _T("%Y%m%d") );
 
-    //    Set some base class values
-    wxDateTime upd;
-    upd.ParseFormat( date_upd, _T("%Y%m%d") );
-    if( !upd.IsValid() ) upd.ParseFormat( _T("20000101"), _T("%Y%m%d") );
-
-    upd.ResetTime();
-    m_EdDate = upd;
+     upd.ResetTime();
+     m_EdDate = upd;
 
     m_SE = m_edtn000;
     m_datum_str = _T("WGS84");
 
     m_SoundingsDatum = _T("MEAN LOWER LOW WATER");
-    m_ID = SENCFileName.GetName();
+    m_ID = sencfile.getID();
+    m_Name = sencfile.getName();
+    
 
     // Validate hash maps....
 
@@ -5252,6 +4853,7 @@ void s57chart::UpdateLUPs( s57chart *pOwner )
     // TODO really should make the dynamic LUPs belong to the chart class that created them
 }
 
+#if 0
 void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S57Reader *poReader )
 {
 
@@ -5341,7 +4943,7 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
     }
 
     if( mode == 1 ) {
-        sprintf( line, "  %s %g %g\n", pGeo->getGeometryName(), ref_lat, ref_lon );
+        sprintf( line, "  %s %f %f\n", pGeo->getGeometryName(), ref_lat, ref_lon );
         sheader += wxString( line, wxConvUTF8 );
     }
     wxCharBuffer buffer=sheader.ToUTF8();
@@ -5536,7 +5138,6 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
                 wkb_len = pGeo->WkbSize();
                 fprintf( fpOut, "  %d\n", wkb_len );
                 fwrite( pwkb_buffer, 1, wkb_len, fpOut );
-
                 break;
 
             case wkbPoint: {
@@ -5793,6 +5394,10 @@ void s57chart::CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S
     }
 }
 
+#endif
+
+
+#if 0
 void s57chart::CreateSENCVectorEdgeTable( FILE * fpOut, S57Reader *poReader )
 {
     fprintf( fpOut, "VETableStart\n" );
@@ -5982,8 +5587,10 @@ void s57chart::CreateSENCConnNodeTable( FILE * fpOut, S57Reader *poReader )
     CSLDestroy( papszReaderOptions );
 }
 
+#endif
+
 ListOfObjRazRules *s57chart::GetObjRuleListAtLatLon( float lat, float lon, float select_radius,
-        ViewPort *VPoint )
+        ViewPort *VPoint, int selection_mask )
 {
 
     ListOfObjRazRules *ret_ptr = new ListOfObjRazRules;
@@ -5993,60 +5600,67 @@ ListOfObjRazRules *s57chart::GetObjRuleListAtLatLon( float lat, float lon, float
     ObjRazRules *top;
 
     for( int i = 0; i < PRIO_NUM; ++i ) {
-        // Points by type, array indices [0..1]
+        
+        if(selection_mask & MASK_POINT){
+            // Points by type, array indices [0..1]
 
-        int point_type = ( ps52plib->m_nSymbolStyle == SIMPLIFIED ) ? 0 : 1;
-        top = razRules[i][point_type];
+            int point_type = ( ps52plib->m_nSymbolStyle == SIMPLIFIED ) ? 0 : 1;
+            top = razRules[i][point_type];
 
-        while( top != NULL ) {
-            if( top->obj->npt == 1 )       // Do not select Multipoint objects (SOUNDG) yet.
-                    {
-                if( ps52plib->ObjectRenderCheck( top, VPoint ) ) {
-                    if( DoesLatLonSelectObject( lat, lon, select_radius, top->obj ) )
-                        ret_ptr->Append( top );
-                }
-            }
-
-            //    Check the child branch, if any.
-            //    This is where Multipoint soundings are captured individually
-            if( top->child ) {
-                ObjRazRules *child_item = top->child;
-                while( child_item != NULL ) {
-                    if( ps52plib->ObjectRenderCheck( child_item, VPoint ) ) {
-                        if( DoesLatLonSelectObject( lat, lon, select_radius, child_item->obj ) )
-                            ret_ptr->Append( child_item );
+            while( top != NULL ) {
+                if( top->obj->npt == 1 )       // Do not select Multipoint objects (SOUNDG) yet.
+                        {
+                    if( ps52plib->ObjectRenderCheck( top, VPoint ) ) {
+                        if( DoesLatLonSelectObject( lat, lon, select_radius, top->obj ) )
+                            ret_ptr->Append( top );
                     }
-
-                    child_item = child_item->next;
                 }
-            }
 
-            top = top->next;
+                //    Check the child branch, if any.
+                //    This is where Multipoint soundings are captured individually
+                if( top->child ) {
+                    ObjRazRules *child_item = top->child;
+                    while( child_item != NULL ) {
+                        if( ps52plib->ObjectRenderCheck( child_item, VPoint ) ) {
+                            if( DoesLatLonSelectObject( lat, lon, select_radius, child_item->obj ) )
+                                ret_ptr->Append( child_item );
+                        }
+
+                        child_item = child_item->next;
+                    }
+                }
+
+                top = top->next;
+            }
+        }
+        
+        if(selection_mask & MASK_AREA){
+                // Areas by boundary type, array indices [3..4]
+
+            int area_boundary_type = ( ps52plib->m_nBoundaryStyle == PLAIN_BOUNDARIES ) ? 3 : 4;
+            top = razRules[i][area_boundary_type];           // Area nnn Boundaries
+            while( top != NULL ) {
+                if( ps52plib->ObjectRenderCheck( top, VPoint ) ) {
+                    if( DoesLatLonSelectObject( lat, lon, select_radius, top->obj ) ) ret_ptr->Append(
+                            top );
+                }
+
+                top = top->next;
+            }         // while
         }
 
-        // Areas by boundary type, array indices [3..4]
+        if(selection_mask & MASK_LINE){
+                // Finally, lines
+            top = razRules[i][2];           // Lines
 
-        int area_boundary_type = ( ps52plib->m_nBoundaryStyle == PLAIN_BOUNDARIES ) ? 3 : 4;
-        top = razRules[i][area_boundary_type];           // Area nnn Boundaries
-        while( top != NULL ) {
-            if( ps52plib->ObjectRenderCheck( top, VPoint ) ) {
-                if( DoesLatLonSelectObject( lat, lon, select_radius, top->obj ) ) ret_ptr->Append(
-                        top );
+            while( top != NULL ) {
+                if( ps52plib->ObjectRenderCheck( top, VPoint ) ) {
+                    if( DoesLatLonSelectObject( lat, lon, select_radius, top->obj ) ) ret_ptr->Append(
+                            top );
+                }
+
+                top = top->next;
             }
-
-            top = top->next;
-        }         // while
-
-        // Finally, lines
-        top = razRules[i][2];           // Lines
-
-        while( top != NULL ) {
-            if( ps52plib->ObjectRenderCheck( top, VPoint ) ) {
-                if( DoesLatLonSelectObject( lat, lon, select_radius, top->obj ) ) ret_ptr->Append(
-                        top );
-            }
-
-            top = top->next;
         }
     }
 
@@ -6126,6 +5740,12 @@ bool s57chart::DoesLatLonSelectObject( float lat, float lon, float select_radius
                 double easting, northing;
                 toSM( lat, lon, ref_lat, ref_lon, &easting, &northing );
 
+                float *ptest;
+                int ntp = GetLineFeaturePointArray(obj, (void **) &ptest);
+                
+                if(!ntp)
+                    return false;
+                
                 pt *ppt = obj->geoPt;
                 int npt = obj->npt;
 
@@ -6136,9 +5756,20 @@ bool s57chart::DoesLatLonSelectObject( float lat, float lon, float select_radius
 
                 double north0 = ( ppt->y * yr ) + yo;
                 double east0 = ( ppt->x * xr ) + xo;
+                float a0 = *ptest++;
+                float b0 = *ptest++;
+                
                 ppt++;
 
                 for( int ip = 1; ip < npt; ip++ ) {
+                    
+                    float a = *ptest++;
+                    float b = *ptest++;
+                    float c = ppt->y;
+                    float d = ppt->x;
+                    printf("%g %g %g %g\n", a,b,c,d);
+                    
+                    
                     double north = ( ppt->y * yr ) + yo;
                     double east = ( ppt->x * xr ) + xo;
 
@@ -6269,9 +5900,9 @@ bool s57chart::IsPointInObjArea( float lat, float lon, float select_radius, S57O
             easting = easting_scaled;
         }
 
+        wxBoundingBox tp_box;
         while( pTP ) {
 //  Coarse test
-            wxBoundingBox tp_box;
             tp_box.SetMin(pTP->minx, pTP->miny);
             tp_box.SetMax(pTP->maxx, pTP->maxy);
 
@@ -6544,12 +6175,8 @@ bool s57chart::InitFromSENCMinimal( const wxString &FullPath )
     m_FullPath = FullPath;
     m_Description = m_FullPath;
 
-    wxFileName S57FileName( FullPath );
-
-    if( !S57FileName.FileExists() ) return false;
-
     wxFile f;
-    if( f.Open( S57FileName.GetFullPath() ) ) {
+    if( f.Open( FullPath ) ) {
         if( f.Length() == 0 ) {
             f.Close();
             ret_val = false;
@@ -6752,6 +6379,7 @@ wxString s57chart::GetObjectAttributeValueAsString( S57Obj *obj, int iatt, wxStr
             else if( curAttrName == _T("SIGPER") ) val_suffix = _T("s");
             else if( curAttrName == _T("VALACM") ) val_suffix = _T(" Minutes/year");
             else if( curAttrName == _T("VALMAG") ) val_suffix = _T("&deg;");
+            else if( curAttrName == _T("CURVEL") ) val_suffix = _T(" kt");
             
             if( dval - floor( dval ) < 0.01 ) value.Printf( _T("%2.0f"), dval );
             else
@@ -6881,6 +6509,7 @@ wxString s57chart::GetAttributeValueAsString( S57attVal *pAttrVal, wxString Attr
                 else if( AttrName == _T("SIGPER") ) val_suffix = _T("s");
                 else if( AttrName == _T("VALACM") ) val_suffix = _T(" Minutes/year");
                 else if( AttrName == _T("VALMAG") ) val_suffix = _T("&deg;");
+                else if( AttrName == _T("CURVEL") ) val_suffix = _T(" kt");
                
                if( dval - floor( dval ) < 0.01 ) value.Printf( _T("%2.0f"), dval );
                else
@@ -7471,7 +7100,7 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
             rangePx = rangePx * rangeScale;
 
             int legOpacity;
-            wxPen *arcpen = wxThePenList->FindOrCreatePen( sectorlegs[i].color, 12, wxSOLID );
+            wxPen *arcpen = wxThePenList->FindOrCreatePen( sectorlegs[i].color, 12, wxPENSTYLE_SOLID );
             arcpen->SetCap( wxCAP_BUTT );
             dc.SetPen( *arcpen );
 
@@ -7499,7 +7128,7 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
                 yellowCone[0] = lightPos;
                 yellowCone[1] = end1;
                 yellowCone[2] = end2;
-                arcpen = wxThePenList->FindOrCreatePen( wxColor( 0,0,0,0 ), 1, wxSOLID );
+                arcpen = wxThePenList->FindOrCreatePen( wxColor( 0,0,0,0 ), 1, wxPENSTYLE_SOLID );
                 dc.SetPen( *arcpen );
                 wxColor c = sectorlegs[i].color;
                 c.Set( c.Red(), c.Green(), c.Blue(), 0.6*c.Alpha() );
@@ -7518,7 +7147,7 @@ void s57_DrawExtendedLightSectors( ocpnDC& dc, ViewPort& viewport, std::vector<s
                 legOpacity = 128;
             }
 
-            arcpen = wxThePenList->FindOrCreatePen( wxColor( 0,0,0,legOpacity ), 1, wxSOLID );
+            arcpen = wxThePenList->FindOrCreatePen( wxColor( 0,0,0,legOpacity ), 1, wxPENSTYLE_SOLID );
             dc.SetPen( *arcpen );
 
             // Only draw each leg line once.
@@ -7595,7 +7224,7 @@ bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& viewport, std::vec
         ListOfObjRazRules* rule_list = NULL;
         ListOfPI_S57Obj* pi_rule_list = NULL;
         if( Chs57 )
-            rule_list = Chs57->GetObjRuleListAtLatLon( cursor_lat, cursor_lon, selectRadius, &viewport );
+            rule_list = Chs57->GetObjRuleListAtLatLon( cursor_lat, cursor_lon, selectRadius, &viewport, MASK_POINT );
         else if( target_plugin_chart )
             pi_rule_list = g_pi_manager->GetPlugInObjRuleListAtLatLon( target_plugin_chart,
                                                                        cursor_lat, cursor_lon, selectRadius, viewport );

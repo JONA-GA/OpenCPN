@@ -68,7 +68,7 @@ IF (NOT WIN32)
   SET (LIB_INSTALL_DIR "lib")
   IF (EXISTS /etc/debian_version)
     SET (PACKAGE_FORMAT "DEB")
-    SET (PACKAGE_DEPS "libc6, libwxgtk2.8-0 (>= 2.8.7.1), wx2.8-i18n, libglu1-mesa (>= 7.0.0), libgl1-mesa-glx (>= 7.0.0), zlib1g, bzip2, libtinyxml2.6.2, libportaudio2")
+    SET (PACKAGE_DEPS "libc6, libwxgtk3.0-0, wx3.0-i18n, libglu1-mesa (>= 7.0.0), libgl1-mesa-glx (>= 7.0.0), zlib1g, bzip2, libtinyxml2.6.2, libportaudio2")
     SET (PACKAGE_RECS "xcalib,xdg-utils")
     SET (LIB_INSTALL_DIR "lib")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
@@ -244,7 +244,10 @@ ENDIF(BUNDLE_TCDATA MATCHES "ON")
 
 
 #  To build for android, use this cmake invocation..
-#$cmake -D_wx_selected_config=androideabi-qt -DCMAKE_TOOLCHAIN_FILE=../buildandroid/build_android.cmake ..
+#$cmake -DUSE_GARMINHOST=OFF -D_wx_selected_config=androideabi-qt
+#-DCMAKE_TOOLCHAIN_FILE=../buildandroid/build_android.cmake
+#-DwxQt_Build=build_android_53 -DwxQt_Base=/home/dsr/Projects/wxqt/wxWidgets
+#-DQt_Base /home/dsr/Qt/5.3) ..
 
 IF(DEFINED _wx_selected_config)
 
@@ -252,6 +255,8 @@ MESSAGE (STATUS "selected config ${_wx_selected_config}")
 
 IF(_wx_selected_config MATCHES "androideabi-qt")
   MESSAGE (STATUS "Building for wxQt-Android")
+  MESSAGE (STATUS "Qt_Base: " ${Qt_Base})
+  MESSAGE (STATUS "wxQt_Base/Build: " ${wxQt_Base} "/" ${wxQt_Build})
   SET(QT_ANDROID "ON")
   SET(QT_LINUX "OFF")
   SET(QT "ON")
@@ -283,6 +288,7 @@ ELSE()
 SET(wxWidgets_USE_LIBS base core net xml html adv aui)
 ENDIF()
 
+OPTION (USE_GL "Enable OpenGL support" ON)
 
 # Search for opengles, short of running a program to test the speed
 # of acceleration, I simply use gles on "native linux" arm systems
@@ -329,7 +335,12 @@ ENDIF(QT_ANDROID)
 
 IF ((NOT OPENGLES_FOUND) AND (NOT QT_ANDROID))
 
+IF(USE_GL)
 FIND_PACKAGE(OpenGL)
+ELSE(USE_GL)
+    MESSAGE (STATUS "OpenGL disabled by option..." )
+ENDIF(USE_GL)
+
 IF(OPENGL_FOUND)
 
     SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
@@ -418,7 +429,7 @@ ENDIF(APPLE)
 IF(WIN32)
     ADD_DEFINITIONS(-DOCPN_USE_CRASHRPT)
     INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/buildwin/crashrpt)
-    SET(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1401.lib)
+    SET(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1402.lib)
     SET(CMAKE_EXE_LINKER_FLAGS /DEBUG)
 ELSE(WIN32)
     IF(NOT APPLE AND NOT QT_ANDROID)
@@ -463,29 +474,37 @@ ENDIF (GTK2_FOUND)
 ENDIF(GTK2)
 
 IF(QT_ANDROID)
+  SET(CMAKE_BUILD_TYPE Debug)
   ADD_DEFINITIONS(-D__WXQT__)
   ADD_DEFINITIONS(-DOCPN_USE_WRAPPER)
   ADD_DEFINITIONS(-D__OCPN__ANDROID__)
   ADD_DEFINITIONS(-DANDROID)
 
-  SET(CMAKE_CXX_FLAGS "-pthread -fPIC")
+  SET(CMAKE_CXX_FLAGS "-pthread -fPIC -s -O2")
 
-  INCLUDE_DIRECTORIES("${Qt_Base}/5.2.1/android_armv7/include/QtCore")
-  INCLUDE_DIRECTORIES("${Qt_Base}/5.2.1/android_armv7/include")
-  INCLUDE_DIRECTORIES("${Qt_Base}/5.2.1/android_armv7/include/QtWidgets")
-  INCLUDE_DIRECTORIES("${Qt_Base}/5.2.1/android_armv7/include/QtGui")
-  INCLUDE_DIRECTORIES("${Qt_Base}/5.2.1/android_armv7/include/QtOpenGL")
-  INCLUDE_DIRECTORIES("${Qt_Base}/5.2.1/android_armv7/include/QtTest")
+  ## Compiler flags
+ #   if(CMAKE_COMPILER_IS_GNUCXX)
+ #       set(CMAKE_CXX_FLAGS "-O2")        ## Optimize
+        set(CMAKE_EXE_LINKER_FLAGS "-s")  ## Strip binary
+ #   endif()
+    
+  INCLUDE_DIRECTORIES("${Qt_Base}/android_armv7/include/QtCore")
+  INCLUDE_DIRECTORIES("${Qt_Base}/android_armv7/include")
+  INCLUDE_DIRECTORIES("${Qt_Base}/android_armv7/include/QtWidgets")
+  INCLUDE_DIRECTORIES("${Qt_Base}/android_armv7/include/QtGui")
+  INCLUDE_DIRECTORIES("${Qt_Base}/android_armv7/include/QtOpenGL")
+  INCLUDE_DIRECTORIES("${Qt_Base}/android_armv7/include/QtTest")
+
+  INCLUDE_DIRECTORIES( "${wxQt_Base}/${wxQt_Build}/lib/wx/include/arm-linux-androideabi-qt-unicode-static-3.1")
+  INCLUDE_DIRECTORIES("${wxQt_Base}/include")
 
   ADD_DEFINITIONS(-DQT_WIDGETS_LIB)
 
-  INCLUDE_DIRECTORIES("${wxQt_Base}/include")
-  INCLUDE_DIRECTORIES( "${wxQt_Base}/${wxQt_Build}/lib/wx/include/arm-linux-androideabi-qt-unicode-static-3.1")
-ENDIF()
+ENDIF(QT_ANDROID)
 
 
 
-IF(UNIX)
+IF(UNIX AND NOT QT_ANDROID)
 INCLUDE("FindPortaudio.cmake")
 IF (PORTAUDIO_FOUND)
     MESSAGE (STATUS "Portaudio Found")
@@ -499,7 +518,7 @@ ENDIF (PORTAUDIO_FOUND)
 
 #SET(EXTRA_LIBS ${EXTRA_LIBS} "/usr/lib/i386-linux-gnu/libportaudio.so.2.0.0")
 #ADD_DEFINITIONS(-DOCPN_USE_PORTAUDIO)
-ENDIF(UNIX)
+ENDIF(UNIX AND NOT QT_ANDROID)
 
 ENDIF (NOT WIN32 AND NOT APPLE)
 
@@ -510,6 +529,7 @@ IF(UNIX)
     FIND_PACKAGE(BZip2 REQUIRED)
     INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
     FIND_PACKAGE(ZLIB REQUIRED)
+    FIND_PACKAGE(X11)
     INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR})
     FIND_PACKAGE(TinyXML)
   ENDIF(NOT QT_ANDROID)  
@@ -659,7 +679,7 @@ SET(HDRS
 		include/routeprintout.h
 		include/PositionParser.h
 		include/printtable.h
-		include/statwin.h
+		include/chartbarwin.h
 		include/tcmgr.h
 		include/Station_Data.h
 		include/IDX_entry.h
@@ -683,7 +703,7 @@ SET(HDRS
 		include/wx/jsonreader.h
 		include/styles.h
 		include/toolbar.h
-		include/compasswin.h
+		include/compass.h
 		include/geodesic.h
 		include/datastream.h
                 include/Seatalk.h
@@ -751,7 +771,7 @@ SET(SRCS
 		src/routeprintout.cpp
 		src/PositionParser.cpp
 		src/printtable.cpp
-		src/statwin.cpp
+		src/chartbarwin.cpp
 		src/tcmgr.cpp
 		src/Station_Data.cpp
 		src/IDX_entry.cpp
@@ -773,7 +793,7 @@ SET(SRCS
 		src/wxJSON/jsonval.cpp
 		src/styles.cpp
 		src/toolbar.cpp
-		src/compasswin.cpp
+		src/compass.cpp
 		src/geodesic.cpp
 		src/datastream.cpp
 		src/Seatalk.cpp
@@ -865,6 +885,8 @@ IF (USE_S57)
 		src/mygeom.cpp
 		include/cm93.h
 		src/tri.c
+		src/Osenc.cpp
+		include/Osenc.h
 		src/myiso8211/ddffielddefn.cpp
 		src/myiso8211/ddfmodule.cpp
 		src/myiso8211/ddfrecord.cpp
@@ -1325,7 +1347,16 @@ ADD_EXECUTABLE(${PACKAGE_NAME} ${HDRS} ${SRCS})
 ENDIF(UNIX AND NOT APPLE)
 
 IF(QT_ANDROID)
-ADD_LIBRARY(gorp ${HDRS} ${SRCS})
+ADD_LIBRARY(gorp ${HDRS} ${SRCS}
+        ${SRC_NMEA0183}
+        ${SRC_S57ENC}
+#        ${SRC_GARMINHOST}
+        ${SRC_TEXCMP}
+        ${SRC_SYMBOLS}
+        )
+        
+TARGET_LINK_LIBRARIES( gorp ${wxWidgets_LIBRARIES} )
+      
 ENDIF()
 
 
@@ -1357,6 +1388,11 @@ TARGET_LINK_LIBRARIES(${PACKAGE_NAME}
       ${BZIP2_LIBRARIES}
       ${ZLIB_LIBRARY}
       )
+
+IF(X11_FOUND AND NOT APPLE)
+ADD_DEFINITIONS(-DOCPN_HAVE_X11)
+TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${X11_LIBRARIES} )
+ENDIF(X11_FOUND AND NOT APPLE)
 
 IF(TINYXML_FOUND)
    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${TINYXML_LIBRARIES} )
@@ -1557,12 +1593,13 @@ ENDIF(WIN32 OR APPLE)
 
 # On Windows builds, copy the wxWidgets dlls and helpers to the executable directory
 IF(WIN32 AND NOT UNIX)
-FILE(GLOB wxdll_files "${CMAKE_CURRENT_SOURCE_DIR}/wxWidgets/*.dll")
+FILE(GLOB wxdll_files "${CMAKE_CURRENT_SOURCE_DIR}/buildwin/wxWidgets/*.dll")
 INSTALL(FILES ${wxdll_files} DESTINATION ".")
-INSTALL(DIRECTORY buildwin/vc10/ DESTINATION ".\\\\vc10" )
+FILE(GLOB vcdll_files "${CMAKE_CURRENT_SOURCE_DIR}/buildwin/vc/*.dll")
+INSTALL(FILES ${vcdll_files} DESTINATION ".")
 
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1401.dll DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashSender1401.exe DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashRpt1402.dll DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/CrashSender1402.exe DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/crashrpt_lang.ini DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/dbghelp.dll DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/buildwin/crashrpt/PrivacyPolicy.txt DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
@@ -1572,11 +1609,9 @@ ENDIF(WIN32 AND NOT UNIX)
 
 MESSAGE (STATUS "")
 
-IF(NOT QT_ANDROID) 
 IF(NOT SKIP_PLUGINS)
  add_subdirectory (plugins)
 ENDIF(NOT SKIP_PLUGINS)
-ENDIF(NOT QT_ANDROID)
 
 # build a CPack driven installer package
 #include (InstallRequiredSystemLibraries)
@@ -1607,16 +1642,6 @@ IF(WIN32 AND NOT UNIX)
 
   SET(CPACK_NSIS_DIR "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode")  #Gunther
   SET(CPACK_BUILDWIN_DIR "${CMAKE_SOURCE_DIR}/buildwin")  #Gunther
-
-# Install the VC100 Redistributable
-  SET(vc10_redist "vcredist_x86.exe")
-
-    STRING( REPLACE "/" "\\\\" Temp_vc10_redist ${vc10_redist} )
-    GET_FILENAME_COMPONENT( VC10_FILE_NAME ${vc10_redist} NAME )
-    SET( CPACK_NSIS_EXTRA_INSTALL_COMMANDS ${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}
-      "ExecWait '\\\"$INSTDIR\\\\vc10\\\\${VC10_FILE_NAME}\\\" /q /norestart' $0\\n"
-      " Remove folder\\n  RMDir /r \\\"$INSTDIR\\\\vc10\\\"\\n\\n" )
-
 
 ELSE(WIN32 AND NOT UNIX)
   SET(CPACK_PACKAGE_INSTALL_DIRECTORY ${PACKAGE_NAME})

@@ -22,6 +22,8 @@
  ***************************************************************************
  */
 
+#include "wx/tokenzr.h"
+
 #include "AIS_Decoder.h"
 #include "AIS_Target_Data.h"
 #include "AISTargetAlertDialog.h"
@@ -29,6 +31,7 @@
 #include "georef.h"
 #include "OCPN_DataStreamEvent.h"
 #include <fstream>
+#include "OCPNPlatform.h"
 
 #if !defined(NAN)
 static const long long lNaN = 0xfff8000000000000;
@@ -84,6 +87,7 @@ extern Route    *pAISMOBRoute;
 extern wxString AISTargetNameFileName;
 extern MyConfig *pConfig;
 extern RouteList *pRouteList;
+extern OCPNPlatform     *g_Platform;
 
 bool g_benableAISNameCache;
 
@@ -1262,8 +1266,7 @@ bool AIS_Decoder::Parse_VDXBitstring( AIS_Bitstring *bstr, AIS_Target_Data *ptd 
     bool b_posn_report = false;
 
     wxDateTime now = wxDateTime::Now();
-    now.MakeGMT( true );                    // no DST
-    if( now.IsDST() ) now.Subtract( wxTimeSpan( 1, 0, 0, 0 ) );
+    now.MakeGMT( );                    
     int message_ID = bstr->GetInt( 1, 6 );        // Parse on message ID
     ptd->MID = message_ID;
     ptd->MMSI = bstr->GetInt( 9, 30 );           // MMSI is always in the same spot in the bitstream
@@ -2305,9 +2308,9 @@ void AIS_Decoder::OnTimerAIS( wxTimerEvent& event )
                 AISTargetAlertDialog *pAISAlertDialog = new AISTargetAlertDialog();
                 pAISAlertDialog->Create( palert_target->MMSI, m_parent_frame, this,
                                          b_jumpto, b_createWP, b_ack,
-                                         -1, _("AIS Alert"), wxPoint( g_ais_alert_dialog_x, g_ais_alert_dialog_y ),
-                    wxSize( g_ais_alert_dialog_sx, g_ais_alert_dialog_sy ) );
-
+                                         -1, _("AIS Alert"));
+                g_Platform->PositionAISAlert(pAISAlertDialog);
+                
                 g_pais_alert_dialog_active = pAISAlertDialog;
                 pAISAlertDialog->Show();                     // Show modeless, so it stays on the screen
             }

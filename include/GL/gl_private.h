@@ -56,6 +56,15 @@ extern "C" {
 
 typedef double          GLclampd;       /* double precision float in [0,1] */
 
+// These two definitions need to be present for Qt 5.5, but removed for Qt 5.3
+
+#ifdef __OCPN__ANDROID__
+#if QT_VERSION >= 0x050500
+typedef double          GLdouble;       /* double precision float */
+#define GL_DOUBLE                               0x140A
+#endif
+#endif
+
 GLAPI void GLAPIENTRY glPushAttrib( GLbitfield mask );
 GLAPI void GLAPIENTRY glPopAttrib( void );
 GLAPI void GLAPIENTRY glEnd( void );
@@ -80,6 +89,7 @@ GLAPI void GLAPIENTRY glDrawPixels( GLsizei width, GLsizei height,
                                     GLenum format, GLenum type,
                                     const GLvoid *pixels );
 GLAPI void GLAPIENTRY glTexCoord2f( GLfloat s, GLfloat t );
+GLAPI void GLAPIENTRY glTexCoord2i( GLint s, GLint t );
 GLAPI void GLAPIENTRY glColor3ub( GLubyte red, GLubyte green, GLubyte blue );
 GLAPI void GLAPIENTRY glTexEnvi( GLenum target, GLenum pname, GLint param );
 GLAPI void GLAPIENTRY glTexEnvf( GLenum target, GLenum pname, GLfloat param );
@@ -121,6 +131,7 @@ GLAPI void GLAPIENTRY glTranslated( GLdouble x, GLdouble y, GLdouble z );
 GLAPI void GLAPIENTRY glTranslatef( GLfloat x, GLfloat y, GLfloat z );
 
 GLAPI void GLAPIENTRY glReadBuffer( GLenum mode );
+GLAPI void GLAPIENTRY glColor3ubv( const GLubyte *v );
 
 /*
  * Depth Buffer
@@ -418,6 +429,12 @@ GLAPI void GLAPIENTRY gluTessNormal (GLUtesselator* tess, GLdouble valueX, GLdou
 GLAPI void GLAPIENTRY gluTessProperty (GLUtesselator* tess, GLenum which, GLdouble data);
 GLAPI const GLubyte * GLAPIENTRY gluErrorString (GLenum error);
 
+GLAPI void GLAPIENTRY glColorPointer( GLint size, GLenum type,
+                                      GLsizei stride, const GLvoid *ptr );
+GLAPI void GLAPIENTRY glTexCoordPointer( GLint size, GLenum type,
+                                         GLsizei stride, const GLvoid *ptr );
+
+
 #define GLU_TESS_BEGIN                     100100
 #define GLU_TESS_VERTEX                    100101
 #define GLU_TESS_END                       100102
@@ -462,6 +479,8 @@ GLAPI const GLubyte * GLAPIENTRY gluErrorString (GLenum error);
 #define GLU_TESS_WINDING_POSITIVE          100132
 #define GLU_TESS_WINDING_NEGATIVE          100133
 #define GLU_TESS_WINDING_ABS_GEQ_TWO       100134
+#define GL_COLOR_ARRAY                          0x8076
+#define GL_TEXTURE_COORD_ARRAY                  0x8078
 
 #ifdef __cplusplus
 }

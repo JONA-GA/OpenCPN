@@ -79,7 +79,7 @@ class ViewPort;
 class PixelCache;
 class ocpnBitmap;
 
-class wxFileInputStream;
+class wxFFileInputStream;
 
 //-----------------------------------------------------------------------------
 //    Helper classes
@@ -103,15 +103,18 @@ public:
 
 
 
-
+struct TileOffsetCache
+{
+    int offset; // offset from start of line pointer
+    int pixel; // offset from current pixel
+};
 
 class CachedLine
 {
 public:
-      int               xstart;
-      int               xlength;
-      unsigned char     *pPix;
-      unsigned char     *pRGB;
+      unsigned char    *pPix;
+      TileOffsetCache  *pTileOffset; // entries for random access
+
       bool              bValid;
 };
 
@@ -216,7 +219,7 @@ protected:
 
 
       virtual int BSBScanScanline(wxInputStream *pinStream);
-      virtual int ReadBSBHdrLine( wxFileInputStream*, char *, int );
+      virtual int ReadBSBHdrLine( wxFFileInputStream*, char *, int );
       virtual int AnalyzeRefpoints(void);
       virtual bool AnalyzeSkew(void);
       
@@ -268,8 +271,8 @@ protected:
 
       CachedLine  *pLineCache;
 
-      wxFileInputStream     *ifs_hdr;
-      wxFileInputStream     *ifss_bitmap;
+      wxFFileInputStream    *ifs_hdr;
+      wxFFileInputStream    *ifss_bitmap;
       wxBufferedInputStream *ifs_bitmap;
 
       wxString          *pBitmapFilePath;

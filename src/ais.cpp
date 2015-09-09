@@ -50,6 +50,7 @@
 #include "AIS_Target_Data.h"
 #include "AISTargetAlertDialog.h"
 #include "AISTargetQueryDialog.h"
+#include "wx28compat.h"
 
 extern  int             s_dns_test_flag;
 extern  Select          *pSelectAIS;
@@ -57,7 +58,7 @@ extern  double          gLat, gLon, gSog, gCog;
 extern ChartCanvas      *cc1;
 extern MyFrame          *gFrame;
 extern MyConfig         *pConfig;
-extern bool                      g_bskew_comp;
+extern bool              g_bskew_comp;
 
 int                      g_ais_cog_predictor_width;
 extern AIS_Decoder              *g_pAIS;
@@ -116,6 +117,9 @@ extern double           g_AckTimeout_Mins;
 
 extern bool             bGPSValid;
 extern ArrayOfMMSIProperties   g_MMSI_Props_Array;
+
+extern bool             g_bresponsive;
+extern float            g_ChartScaleFactorExp;
 
 extern PlugInManager    *g_pi_manager;
 extern ocpnStyle::StyleManager* g_StyleManager;
@@ -467,8 +471,8 @@ void AISDrawAreaNotices( ocpnDC& dc )
     wxColour yellow;
     wxColour green;
     wxPen pen;
-    wxBrush *yellow_brush = wxTheBrushList->FindOrCreateBrush( wxColour(0,0,0), wxTRANSPARENT );
-    wxBrush *green_brush  = wxTheBrushList->FindOrCreateBrush( wxColour(0,0,0), wxTRANSPARENT );;
+    wxBrush *yellow_brush = wxTheBrushList->FindOrCreateBrush( wxColour(0,0,0), wxBRUSHSTYLE_TRANSPARENT );
+    wxBrush *green_brush  = wxTheBrushList->FindOrCreateBrush( wxColour(0,0,0), wxBRUSHSTYLE_TRANSPARENT );;
     wxBrush *brush;
 
     AIS_Target_Hash *current_targets = g_pAIS->GetAreaNoticeSourcesList();
@@ -492,8 +496,8 @@ void AISDrawAreaNotices( ocpnDC& dc )
                 pen.SetColour( yellow );
                 pen.SetWidth( 2 );
 
-                yellow_brush = wxTheBrushList->FindOrCreateBrush( yellow, wxCROSSDIAG_HATCH );
-                green_brush = wxTheBrushList->FindOrCreateBrush( green, wxTRANSPARENT );
+                yellow_brush = wxTheBrushList->FindOrCreateBrush( yellow, wxBRUSHSTYLE_CROSSDIAG_HATCH );
+                green_brush = wxTheBrushList->FindOrCreateBrush( green, wxBRUSHSTYLE_TRANSPARENT );
                 brush = yellow_brush;
 
                 b_pens_set = true;
@@ -621,7 +625,7 @@ static void AtoN_Diamond( ocpnDC &dc, int x, int y, int radius, AIS_Target_Data*
           | ( td->NavStatus == ATON_VIRTUAL_OFFPOSITION );
 
     if( b_virt ) 
-        aton_DrawPen.SetStyle(wxSHORT_DASH );
+        aton_DrawPen.SetStyle(wxPENSTYLE_SHORT_DASH );
     
     aton_WhiteBorderPen = wxPen(GetGlobalColor( _T ( "UWHIT" ) ), aton_DrawPen.GetWidth()+2 );
    
@@ -793,7 +797,7 @@ static void SART_Render( ocpnDC &dc, wxPen pen, int x, int y, int radius )
     dc.SetPen( pen );
 
     wxBrush brush_save = dc.GetBrush();
-    wxBrush *ppBrush = wxTheBrushList->FindOrCreateBrush( wxColour( 0, 0, 0 ), wxTRANSPARENT );
+    wxBrush *ppBrush = wxTheBrushList->FindOrCreateBrush( wxColour( 0, 0, 0 ), wxBRUSHSTYLE_TRANSPARENT );
     dc.SetBrush( *ppBrush );
 
     dc.DrawCircle( x, y, radius );
@@ -817,7 +821,12 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
 
     //    Target is lost due to position report time-out, but still in Target List
     if( td->b_lost ) return;
-
+    
+    float scale_factor = 1.0;
+    if(g_bresponsive){
+        scale_factor =  g_ChartScaleFactorExp;
+    }
+    
     //      Skip anchored/moored (interpreted as low speed) targets if requested
     //      unless the target is NUC or AtoN, in which case it is always displayed.
     if( ( !g_bShowMoored ) && ( td->SOG <= g_ShowMoored_Kts )
@@ -1020,7 +1029,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                              &tCPAPoint.y, 0, cc1->GetVP().pix_width, 0, cc1->GetVP().pix_height );
 
             if( res != Invisible ) {
-                wxPen ppPen2( GetGlobalColor( _T ( "URED" ) ), 2, wxUSER_DASH );
+                wxPen ppPen2( GetGlobalColor( _T ( "URED" ) ), 2, wxPENSTYLE_USER_DASH );
                 ppPen2.SetDashes( 2, dash_long );
                 dc.SetPen( ppPen2 );
 
@@ -1057,7 +1066,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                 dc.SetPen( wxPen( yellow, 4 ) );
                 dc.StrokeLine( tCPAPoint.x, tCPAPoint.y, oCPAPoint.x, oCPAPoint.y );
 
-                wxPen ppPen2( GetGlobalColor( _T ( "URED" ) ), 2, wxUSER_DASH );
+                wxPen ppPen2( GetGlobalColor( _T ( "URED" ) ), 2, wxPENSTYLE_USER_DASH );
                 ppPen2.SetDashes( 2, dash_long );
                 dc.SetPen( ppPen2 );
                 dc.StrokeLine( tCPAPoint.x, tCPAPoint.y, oCPAPoint.x, oCPAPoint.y );
@@ -1082,7 +1091,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                                                                0, cc1->GetVP().pix_width, 0, cc1->GetVP().pix_height );
 
             if ( ownres != Invisible ) {
-                wxPen ppPen2 ( GetGlobalColor ( _T ( "URED" )), 2, wxUSER_DASH );
+                wxPen ppPen2 ( GetGlobalColor ( _T ( "URED" )), 2, wxPENSTYLE_USER_DASH );
                 ppPen2.SetDashes( 2, dash_long );
                 dc.SetPen(ppPen2);
 
@@ -1219,7 +1228,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
 
             wxPen target_outline_pen( GetGlobalColor( _T ( "UBLCK" ) ), 2 );
             dc.SetPen( target_outline_pen );
-            dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxTRANSPARENT ) );
+            dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxBRUSHSTYLE_TRANSPARENT ) );
             dc.StrokePolygon( 9, SarRot, TargetPoint.x, TargetPoint.y );
 
             // second half
@@ -1240,7 +1249,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
             }
 
             dc.SetPen( target_outline_pen );
-            dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxTRANSPARENT ) );
+            dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxBRUSHSTYLE_TRANSPARENT ) );
             dc.StrokePolygon( 9, SarRot, TargetPoint.x, TargetPoint.y );
 
         } else {         // ship class A or B or a Buddy or DSC
@@ -1259,23 +1268,23 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
                 ais_tri_icon[0] = ais_quad_icon[0];
                 ais_tri_icon[1] = ais_quad_icon[1];
                 ais_tri_icon[2] = ais_quad_icon[3];
-                dc.StrokePolygon( 3, ais_tri_icon, TargetPoint.x, TargetPoint.y );
+                dc.StrokePolygon( 3, ais_tri_icon, TargetPoint.x, TargetPoint.y, scale_factor );
 
                 ais_tri_icon[0] = ais_quad_icon[1];
                 ais_tri_icon[1] = ais_quad_icon[2];
                 ais_tri_icon[2] = ais_quad_icon[3];
-                dc.StrokePolygon( 3, ais_tri_icon, TargetPoint.x, TargetPoint.y );
+                dc.StrokePolygon( 3, ais_tri_icon, TargetPoint.x, TargetPoint.y, scale_factor );
 
                 dc.SetPen( target_pen );
-                dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxTRANSPARENT ) );
+                dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxBRUSHSTYLE_TRANSPARENT ) );
             }
 
-            dc.StrokePolygon( 4, ais_quad_icon, TargetPoint.x, TargetPoint.y );
+            dc.StrokePolygon( 4, ais_quad_icon, TargetPoint.x, TargetPoint.y, scale_factor );
 
             if (g_bDrawAISSize && bcan_draw_size)
             {
-                dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxTRANSPARENT ) );
-                dc.StrokePolygon( 6, ais_real_size, TargetPoint.x, TargetPoint.y );
+                dc.SetBrush( wxBrush( GetGlobalColor( _T ( "UBLCK" ) ), wxBRUSHSTYLE_TRANSPARENT ) );
+                dc.StrokePolygon( 6, ais_real_size, TargetPoint.x, TargetPoint.y, scale_factor );
             }
 
             dc.SetBrush( wxBrush( GetGlobalColor( _T ( "SHIPS" ) ) ) );
@@ -1381,7 +1390,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc )
         }
 
         if (g_bShowAISName) {
-            double true_scale_display = floor( cc1->GetVP().chart_scale / 100. ) * 100.;
+            int true_scale_display = (int) (floor( cc1->GetVP().chart_scale / 100. ) * 100);
             if( true_scale_display < g_Show_Target_Name_Scale ) { // from which scale to display name
 
                 wxString tgt_name = td->GetFullName();

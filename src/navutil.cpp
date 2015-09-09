@@ -106,6 +106,7 @@ extern int              g_nbrightness;
 extern bool             g_bShowMag;
 extern double           g_UserVar;
 extern bool             g_bShowStatusBar;
+extern bool             g_bUIexpert;
 
 extern wxToolBarBase    *toolBar;
 
@@ -124,6 +125,7 @@ extern RouteProp        *pRoutePropDialog;
 extern bool             s_bSetSystemTime;
 extern bool             g_bDisplayGrid;         //Flag indicating if grid is to be displayed
 extern bool             g_bPlayShipsBells;
+extern int              g_iSoundDeviceIndex;
 extern bool             g_bFullscreenToolbar;
 extern bool             g_bShowLayers;
 extern bool             g_bTransparentToolbar;
@@ -134,6 +136,7 @@ extern bool             g_bAutoAnchorMark;
 extern bool             g_bskew_comp;
 extern bool             g_bopengl;
 extern bool             g_bdisable_opengl;
+extern bool             g_bSoftwareGL;
 extern bool             g_bShowFPS;
 extern bool             g_bsmoothpanzoom;
 extern bool             g_fog_overzoom;
@@ -355,10 +358,20 @@ extern wxString         g_TalkerIdText;
 extern bool             g_bAdvanceRouteWaypointOnArrivalOnly;
 extern double           g_display_size_mm;
 extern double           g_config_display_size_mm;
+extern bool             g_config_display_size_manual;
+
 extern bool             g_benable_rotate;
 extern bool             g_bEmailCrashReport;
 
 extern int              g_default_font_size;
+
+extern bool             g_bAutoHideToolbar;
+extern int              g_nAutoHideToolbar;
+extern int              g_GUIScaleFactor;
+extern int              g_ChartScaleFactor;
+extern float            g_ChartScaleFactorExp;
+
+extern wxString         g_uiStyle;
 
 #ifdef ocpnUSE_GL
 extern ocpnGLOptions g_GLOptions;
@@ -399,6 +412,7 @@ Track::Track( void )
     m_fixedTP = NULL;
     m_track_run = 0;
     m_CurrentTrackSeg = 0;
+    m_prev_dist = 999.0;
 }
 
 Track::~Track()
@@ -705,12 +719,12 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
                     basic_colour = GetGlobalColor( _T ( "CHMGD" ) );
             }
 
-    int style = wxSOLID;
-    int width = g_track_line_width;
+    wxPenStyle style = wxPENSTYLE_SOLID;
+    int width = g_pRouteMan->GetTrackPen()->GetWidth();
     wxColour col;
-    if( m_style != STYLE_UNDEFINED )
+    if( m_style != wxPENSTYLE_INVALID )
         style = m_style;
-    if( m_width != STYLE_UNDEFINED )
+    if( m_width != WIDTH_UNDEFINED )
         width = m_width;
     if( m_Colour == wxEmptyString ) {
         col = basic_colour;
@@ -723,7 +737,7 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
         }
     }
     dc.SetPen( *wxThePenList->FindOrCreatePen( col, width, style ) );
-    dc.SetBrush( *wxTheBrushList->FindOrCreateBrush( col, wxSOLID ) );
+    dc.SetBrush( *wxTheBrushList->FindOrCreateBrush( col, wxBRUSHSTYLE_SOLID ) );
 
     std::list< std::list<wxPoint> > pointlists;
     std::list<wxPoint> pointlist;
@@ -793,7 +807,7 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP )
             wxColour y = GetGlobalColor( _T ( "YELO1" ) );
             wxColour hilt( y.Red(), y.Green(), y.Blue(), 128 );
 
-            wxPen HiPen( hilt, hilite_width, wxSOLID );
+            wxPen HiPen( hilt, hilite_width, wxPENSTYLE_SOLID );
             dc.SetPen( HiPen );
 
             dc.StrokeLines( i, points );
@@ -1104,6 +1118,12 @@ MyConfig::MyConfig( const wxString &appName, const wxString &vendorName,
 
 void MyConfig::CreateRotatingNavObjBackup()
 {
+
+    // Avoid nonsense log errors...
+#ifdef __OCPN__ANDROID__    
+    wxLogNull logNo;
+#endif    
+    
     //Rotate navobj backups, but just in case there are some changes in the current version
     //to prevent the user trying to "fix" the problem by continuously starting the
     //application to overwrite all of his good backups...
@@ -1168,11 +1188,11 @@ int MyConfig::LoadMyConfig()
     Read( _T ( "ConfigVersionString" ), &g_config_version_string, _T("") );
     Read( _T ( "NavMessageShown" ), &n_NavMessageShown, 0 );
 
-    wxString uiStyle;
-    Read( _T ( "UIStyle" ), &uiStyle, wxT("") );
-    g_StyleManager->SetStyle( uiStyle );
+    Read( _T ( "UIexpert" ), &g_bUIexpert, 1 );
+    
+    Read( _T ( "UIStyle" ), &g_uiStyle, wxT("Traditional") );
 
-    Read( _T ( "NCacheLimit" ), &g_nCacheLimit, CACHE_N_LIMIT_DEFAULT );
+    Read( _T ( "NCacheLimit" ), &g_nCacheLimit, 0 );
 
     int mem_limit;
     Read( _T ( "MEMCacheLimit" ), &mem_limit, 0 );
@@ -1204,12 +1224,20 @@ int MyConfig::LoadMyConfig()
     Read( _T ( "UseNMEA_GLL" ), &g_bUseGLL, 1 );
     Read( _T ( "UseBigRedX" ), &g_bbigred, 0 );
 
+    Read( _T ( "AutoHideToolbar" ), &g_bAutoHideToolbar, 0 );
+    Read( _T ( "AutoHideToolbarSecs" ), &g_nAutoHideToolbar, 0 );
+    
     int size_mm;
     Read( _T ( "DisplaySizeMM" ), &size_mm, -1 );
     g_config_display_size_mm = size_mm;
     if((size_mm > 100) && (size_mm < 2000)){
         g_display_size_mm = size_mm;
     }
+    Read( _T ( "DisplaySizeManual" ), &g_config_display_size_manual, 0 );
+    
+    Read( _T ( "GUIScaleFactor" ), &g_GUIScaleFactor, 0 );
+    Read( _T ( "ChartObjectScaleFactor" ), &g_ChartScaleFactor, 0 );
+    g_ChartScaleFactorExp = g_Platform->getChartScaleFactorExp( g_ChartScaleFactor );
     
     Read( _T ( "FilterNMEA_Avg" ), &g_bfilter_cogsog, 0 );
     Read( _T ( "FilterNMEA_Sec" ), &g_COGFilterSec, 1 );
@@ -1248,6 +1276,7 @@ int MyConfig::LoadMyConfig()
     Read( _T ( "OpenGL" ), &g_bopengl, 0 );
     if ( g_bdisable_opengl )
         g_bopengl = false;
+    Read( _T ( "SoftwareGL" ), &g_bSoftwareGL, 0 );
     
     Read( _T ( "ShowFPS" ), &g_bShowFPS, 0 );
     
@@ -1327,6 +1356,7 @@ int MyConfig::LoadMyConfig()
     Read( _T ( "ShowCompassWindow" ), &m_bShowCompassWin, 1 );
     Read( _T ( "ShowGrid" ), &g_bDisplayGrid, 0 );
     Read( _T ( "PlayShipsBells" ), &g_bPlayShipsBells, 0 );
+    Read( _T ( "SoundDeviceIndex" ), &g_iSoundDeviceIndex, -1 );
     Read( _T ( "FullscreenToolbar" ), &g_bFullscreenToolbar, 1 );
     Read( _T ( "TransparentToolbar" ), &g_bTransparentToolbar, 1 );
     Read( _T ( "PermanentMOBIcon" ), &g_bPermanentMOBIcon, 0 );
@@ -1980,16 +2010,16 @@ void MyConfig::LoadS57Config()
     Read( _T ( "nBoundaryStyle" ), &read_int, PLAIN_BOUNDARIES );
     ps52plib->m_nBoundaryStyle = (LUPname) read_int;
 
-    Read( _T ( "bShowSoundg" ), &read_int, 0 );
+    Read( _T ( "bShowSoundg" ), &read_int, 1 );
     ps52plib->m_bShowSoundg = !( read_int == 0 );
 
     Read( _T ( "bShowMeta" ), &read_int, 0 );
     ps52plib->m_bShowMeta = !( read_int == 0 );
 
-    Read( _T ( "bUseSCAMIN" ), &read_int, 0 );
+    Read( _T ( "bUseSCAMIN" ), &read_int, 1 );
     ps52plib->m_bUseSCAMIN = !( read_int == 0 );
 
-    Read( _T ( "bShowAtonText" ), &read_int, 0 );
+    Read( _T ( "bShowAtonText" ), &read_int, 1 );
     ps52plib->m_bShowAtonText = !( read_int == 0 );
 
     Read( _T ( "bDeClutterText" ), &read_int, 0 );
@@ -2465,12 +2495,19 @@ void MyConfig::LoadConfigGroups( ChartGroupArray *pGroupArray )
 
 void MyConfig::UpdateSettings()
 {
+    //  Temporarily suppress logging of trivial non-fatal wxLogSysError() messages provoked by Android security...
+#ifdef __OCPN__ANDROID__    
+    wxLogNull logNo;
+#endif    
+    
 //    Global options and settings
     SetPath( _T ( "/Settings" ) );
 
     Write( _T ( "ConfigVersionString" ), g_config_version_string );
     Write( _T ( "NavMessageShown" ), n_NavMessageShown );
 
+    Write( _T ( "UIexpert" ), g_bUIexpert );
+    
     Write( _T ( "UIStyle" ), g_StyleManager->GetStyleNextInvocation() );
     Write( _T ( "ChartNotRenderScaleFactor" ), g_ChartNotRenderScaleFactor );
 
@@ -2484,6 +2521,7 @@ void MyConfig::UpdateSettings()
     Write( _T ( "SetSystemTime" ), s_bSetSystemTime );
     Write( _T ( "ShowGrid" ), g_bDisplayGrid );
     Write( _T ( "PlayShipsBells" ), g_bPlayShipsBells );
+    Write( _T ( "SoundDeviceIndex" ), g_iSoundDeviceIndex );
     Write( _T ( "FullscreenToolbar" ), g_bFullscreenToolbar );
     Write( _T ( "TransparentToolbar" ), g_bTransparentToolbar );
     Write( _T ( "PermanentMOBIcon" ), g_bPermanentMOBIcon );
@@ -2498,6 +2536,9 @@ void MyConfig::UpdateSettings()
     Write( _T ( "MostRecentGPSUploadConnection" ), g_uploadConnection );
     Write( _T ( "ShowChartBar" ), g_bShowChartBar );
     
+    Write( _T ( "GUIScaleFactor" ), g_GUIScaleFactor );
+    Write( _T ( "ChartObjectScaleFactor" ), g_ChartScaleFactor );
+
     Write( _T ( "FilterNMEA_Avg" ), g_bfilter_cogsog );
     Write( _T ( "FilterNMEA_Sec" ), g_COGFilterSec );
 
@@ -2511,6 +2552,7 @@ void MyConfig::UpdateSettings()
 
     Write( _T ( "SkewToNorthUp" ), g_bskew_comp );
     Write( _T ( "OpenGL" ), g_bopengl );
+    Write( _T ( "SoftwareGL" ), g_bSoftwareGL );
     Write( _T ( "ShowFPS" ), g_bShowFPS );
     
     Write( _T ( "ZoomDetailFactor" ), g_chart_zoom_modifier );
@@ -2591,9 +2633,13 @@ void MyConfig::UpdateSettings()
 
     Write( _T ( "MobileTouch" ), g_btouch );
     Write( _T ( "ResponsiveGraphics" ), g_bresponsive );
+
+    Write( _T ( "AutoHideToolbar" ), g_bAutoHideToolbar );
+    Write( _T ( "AutoHideToolbarSecs" ), g_nAutoHideToolbar );
     
     Write( _T ( "DisplaySizeMM" ), g_config_display_size_mm );
-
+    Write( _T ( "DisplaySizeManual" ), g_config_display_size_manual );
+    
     wxString st0;
     st0.Printf( _T ( "%g" ), g_PlanSpeed );
     Write( _T ( "PlanSpeed" ), st0 );
@@ -2870,32 +2916,50 @@ void MyConfig::UpdateNavObj( void )
     if( ::wxFileExists( m_sNavObjSetChangesFile ) )
         wxRemoveFile( m_sNavObjSetChangesFile );
 
-    delete m_pNavObjectChangesSet;
-    m_pNavObjectChangesSet = new NavObjectChanges(m_sNavObjSetChangesFile);
+    //delete m_pNavObjectChangesSet;
+    //m_pNavObjectChangesSet = new NavObjectChanges(m_sNavObjSetChangesFile);
 
 }
 
 bool MyConfig::ExportGPXRoutes( wxWindow* parent, RouteList *pRoutes, const wxString suggestedName )
 {
-    wxFileDialog saveDialog( NULL, _( "Export GPX file" ), m_gpx_path, suggestedName,
+    wxString path;
+    
+    int response = g_Platform->DoFileSelectorDialog( NULL, &path,
+                                                     _( "Export GPX file" ),
+                                                     m_gpx_path,
+                                                     suggestedName,
+                                                     wxT ( "*.gpx" )
+    );
+    
+    wxFileName fn( path );
+    m_gpx_path = fn.GetPath();
+    
+#if 0    
+    wxFileDialog *psaveDialog = new wxFileDialog( NULL, _( "Export GPX file" ), m_gpx_path, suggestedName,
             wxT ( "GPX files (*.gpx)|*.gpx" ), wxFD_SAVE );
+
+    if(g_bresponsive)
+        psaveDialog = g_Platform->AdjustFileDialogFont(parent, psaveDialog);
 
 #ifdef __WXOSX__
     if(parent)
         parent->HideWithEffect(wxSHOW_EFFECT_BLEND );
 #endif
 
-     int response = saveDialog.ShowModal();
+     int response = psaveDialog->ShowModal();
 
 #ifdef __WXOSX__
     if(parent)
         parent->ShowWithEffect(wxSHOW_EFFECT_BLEND );
 #endif
 
-    wxString path = saveDialog.GetPath();
+    wxString path = psaveDialog->GetPath();
     wxFileName fn( path );
     m_gpx_path = fn.GetPath();
-
+    delete psaveDialog;
+#endif
+    
     if( response == wxID_OK ) {
         fn.SetExt( _T ( "gpx" ) );
 
@@ -2917,15 +2981,34 @@ bool MyConfig::ExportGPXRoutes( wxWindow* parent, RouteList *pRoutes, const wxSt
 
 bool MyConfig::ExportGPXWaypoints( wxWindow* parent, RoutePointList *pRoutePoints, const wxString suggestedName )
 {
-    wxFileDialog saveDialog( NULL, _( "Export GPX file" ), m_gpx_path, suggestedName,
-            wxT ( "GPX files (*.gpx)|*.gpx" ), wxFD_SAVE );
+    wxString path;
+    
+    int response = g_Platform->DoFileSelectorDialog( NULL, &path,
+                                                     _( "Export GPX file" ),
+                                                     m_gpx_path,
+                                                     suggestedName,
+                                                     wxT ( "*.gpx" )
+                                                     );
 
-    int response = saveDialog.ShowModal();
-
-    wxString path = saveDialog.GetPath();
     wxFileName fn( path );
     m_gpx_path = fn.GetPath();
+    
 
+#if 0        
+    wxFileDialog *psaveDialog = new wxFileDialog( NULL, _( "Export GPX file" ), m_gpx_path, suggestedName,
+            wxT ( "GPX files (*.gpx)|*.gpx" ), wxFD_SAVE );
+
+    if(g_bresponsive)
+        psaveDialog = g_Platform->AdjustFileDialogFont(parent, psaveDialog);
+    
+    int response = psaveDialog->ShowModal();
+
+    wxString path = psaveDialog->GetPath();
+    wxFileName fn( path );
+    m_gpx_path = fn.GetPath();
+    delete psaveDialog;
+#endif
+    
     if( response == wxID_OK ) {
         fn.SetExt( _T ( "gpx" ) );
 
@@ -2947,15 +3030,34 @@ bool MyConfig::ExportGPXWaypoints( wxWindow* parent, RoutePointList *pRoutePoint
 
 void MyConfig::ExportGPX( wxWindow* parent, bool bviz_only, bool blayer )
 {
-    wxFileDialog saveDialog( NULL, _( "Export GPX file" ), m_gpx_path, wxT ( "" ),
-            wxT ( "GPX files (*.gpx)|*.gpx" ), wxFD_SAVE );
-
-    int response = saveDialog.ShowModal();
-
-    wxString path = saveDialog.GetPath();
+    wxString path;
+    
+    int response = g_Platform->DoFileSelectorDialog( NULL, &path,
+                                                     _( "Export GPX file" ),
+                                                     m_gpx_path,
+                                                     _T("userobjects.gpx"),
+                                                     wxT ( "*.gpx" )
+    );
+    
     wxFileName fn( path );
     m_gpx_path = fn.GetPath();
+    
+    
+#if 0    
+    wxFileDialog *psaveDialog = new wxFileDialog( NULL, _( "Export GPX file" ), m_gpx_path, wxT ( "" ),
+            wxT ( "GPX files (*.gpx)|*.gpx" ), wxFD_SAVE );
 
+    if(g_bresponsive)
+        psaveDialog = g_Platform->AdjustFileDialogFont(parent, psaveDialog);
+    
+    int response = psaveDialog->ShowModal();
+
+    wxString path = psaveDialog->GetPath();
+    wxFileName fn( path );
+    m_gpx_path = fn.GetPath();
+    delete psaveDialog;
+#endif
+    
     if( response == wxID_OK ) {
         fn.SetExt( _T ( "gpx" ) );
 
@@ -3047,13 +3149,21 @@ void MyConfig::UI_ImportGPX( wxWindow* parent, bool islayer, wxString dirpath, b
     Layer *l = NULL;
 
     if( !islayer || dirpath.IsSameAs( _T("") ) ) {
-        wxFileDialog openDialog( NULL, _( "Import GPX file" ), m_gpx_path, wxT ( "" ),
+        
+        //  Platform DoFileSelectorDialog method does not properly handle multiple selections  
+        //  So use native method if not Android, which means Android gets single selection only.
+#ifndef __OCPN__ANDROID__        
+        wxFileDialog *popenDialog = new wxFileDialog( NULL, _( "Import GPX file" ), m_gpx_path, wxT ( "" ),
                 wxT ( "GPX files (*.gpx)|*.gpx|All files (*.*)|*.*" ),
                 wxFD_OPEN | wxFD_MULTIPLE );
-        openDialog.Centre();
-        response = openDialog.ShowModal();
+
+        if(g_bresponsive)
+            popenDialog = g_Platform->AdjustFileDialogFont(parent, popenDialog);
+        
+        popenDialog->Centre();
+        response = popenDialog->ShowModal();
         if( response == wxID_OK ) {
-            openDialog.GetPaths( file_array );
+            popenDialog->GetPaths( file_array );
 
             //    Record the currently selected directory for later use
             if( file_array.GetCount() ) {
@@ -3061,7 +3171,22 @@ void MyConfig::UI_ImportGPX( wxWindow* parent, bool islayer, wxString dirpath, b
                 m_gpx_path = fn.GetPath();
             }
         }
-
+        delete popenDialog;
+#else
+        wxString path;
+        response = g_Platform->DoFileSelectorDialog( NULL, &path,
+                                                         _( "Import GPX file" ),
+                                                         m_gpx_path,
+                                                         _T(""),
+                                                         wxT ( "*.gpx" )
+                                                         );
+                                                         
+        file_array.Add(path);
+        wxFileName fn( path );
+        m_gpx_path = fn.GetPath();
+                                                         
+#endif
+        
     } else {
         if( isdirectory ) {
             if( wxDir::GetAllFiles( dirpath, &file_array, wxT("*.gpx") ) )
@@ -3585,7 +3710,7 @@ void X11FontPicker::CreateWidgets()
     itemGridSizer4->Add ( itemBoxSizer5, 0, wxALIGN_CENTER_HORIZONTAL|wxEXPAND, 5 );
     wxStaticText* itemStaticText6 = new wxStaticText ( this, wxID_STATIC, _ ( "&Font family:" ),
             wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer5->Add ( itemStaticText6, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP|wxADJUST_MINSIZE, 5 );
+    itemBoxSizer5->Add ( itemStaticText6, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP, 5 );
 
     wxChoice* itemChoice7 = new wxChoice ( this, wxID_FONT_FAMILY, wxDefaultPosition,
             wxDefaultSize, *pFaceNameArray, 0 );
@@ -3597,7 +3722,7 @@ void X11FontPicker::CreateWidgets()
     wxBoxSizer* itemBoxSizer8 = new wxBoxSizer ( wxVERTICAL );
     itemGridSizer4->Add ( itemBoxSizer8, 0, wxALIGN_CENTER_HORIZONTAL|wxEXPAND, 5 );
     wxStaticText* itemStaticText9 = new wxStaticText ( this, wxID_STATIC, _ ( "&Style:" ), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer8->Add ( itemStaticText9, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP|wxADJUST_MINSIZE, 5 );
+    itemBoxSizer8->Add ( itemStaticText9, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP, 5 );
 
     wxChoice* itemChoice10 = new wxChoice ( this, wxID_FONT_STYLE, wxDefaultPosition, wxDefaultSize );
     itemChoice10->SetHelpText ( _ ( "The font style." ) );
@@ -3608,7 +3733,7 @@ void X11FontPicker::CreateWidgets()
     wxBoxSizer* itemBoxSizer11 = new wxBoxSizer ( wxVERTICAL );
     itemGridSizer4->Add ( itemBoxSizer11, 0, wxALIGN_CENTER_HORIZONTAL|wxEXPAND, 5 );
     wxStaticText* itemStaticText12 = new wxStaticText ( this, wxID_STATIC, _ ( "&Weight:" ), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer11->Add ( itemStaticText12, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP|wxADJUST_MINSIZE, 5 );
+    itemBoxSizer11->Add ( itemStaticText12, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP, 5 );
 
     wxChoice* itemChoice13 = new wxChoice ( this, wxID_FONT_WEIGHT, wxDefaultPosition, wxDefaultSize );
     itemChoice13->SetHelpText ( _ ( "The font weight." ) );
@@ -3622,7 +3747,7 @@ void X11FontPicker::CreateWidgets()
     {
         wxStaticText* itemStaticText15 = new wxStaticText ( this, wxID_STATIC, _ ( "C&olour:" ),
                 wxDefaultPosition, wxDefaultSize, 0 );
-        itemBoxSizer14->Add ( itemStaticText15, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP|wxADJUST_MINSIZE, 5 );
+        itemBoxSizer14->Add ( itemStaticText15, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP, 5 );
 
         wxSize colourSize = wxDefaultSize;
         if ( is_pda )
@@ -3640,7 +3765,7 @@ void X11FontPicker::CreateWidgets()
     itemGridSizer4->Add ( itemBoxSizer17, 0, wxALIGN_CENTER_HORIZONTAL|wxEXPAND, 5 );
     wxStaticText* itemStaticText18 = new wxStaticText ( this, wxID_STATIC, _ ( "&Point size:" ),
             wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer17->Add ( itemStaticText18, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP|wxADJUST_MINSIZE, 5 );
+    itemBoxSizer17->Add ( itemStaticText18, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP, 5 );
 
     wxChoice *pc = new wxChoice ( this, wxID_FONT_SIZE, wxDefaultPosition, wxDefaultSize );
     pc->SetHelpText ( _ ( "The font point size." ) );
@@ -3665,7 +3790,7 @@ void X11FontPicker::CreateWidgets()
     itemBoxSizer3->Add ( 5, 5, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5 );
 
     wxStaticText* itemStaticText23 = new wxStaticText ( this, wxID_STATIC, _ ( "Preview:" ), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer3->Add ( itemStaticText23, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP|wxADJUST_MINSIZE, 5 );
+    itemBoxSizer3->Add ( itemStaticText23, 0, wxALIGN_LEFT|wxLEFT|wxRIGHT|wxTOP, 5 );
 
     MyFontPreviewer* itemWindow24 = new MyFontPreviewer ( this, wxSize ( 400, 80 ) );
     m_previewer = itemWindow24;
@@ -4548,7 +4673,6 @@ void AlphaBlending( ocpnDC &dc, int x, int y, int size_x, int size_y, float radi
 #ifdef ocpnUSE_GL
         /* opengl version */
         glEnable( GL_BLEND );
-        glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 
         if(radius > 1.0f){
             wxColour c(color.Red(), color.Green(), color.Blue(), transparency);

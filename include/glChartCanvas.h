@@ -29,12 +29,9 @@
 #include "ocpn_types.h"
 #include "OCPNRegion.h"
 #include "viewport.h"
+#include "TexFont.h"
 
-#ifdef __WXMSW__
-#define FORMAT_BITS           GL_BGR
-#else
-#define FORMAT_BITS           GL_RGB
-#endif
+ #define FORMAT_BITS           GL_RGB
 
 #ifdef __OCPN__ANDROID__
 #include "wx/qt/private/wxQtGesture.h"
@@ -42,7 +39,8 @@
 
 #include "glTexCache.h"
 
-//class glTexFactory;
+#define GESTURE_EVENT_TIMER 78334
+
 //      This is a hashmap with Chart full path as key, and glTexFactory as value
 WX_DECLARE_STRING_HASH_MAP( glTexFactory*, ChartPathHashTexfactType );
 
@@ -74,12 +72,12 @@ public:
     static void SetClipRegion(const ViewPort &vp, const OCPNRegion &region,
                               bool apply_rotation=true, bool b_clear=false);
     static void DisableClipRegion();
-
+    void SetColorScheme(ColorScheme cs);
+    
     static bool         s_b_useScissorTest;
     static bool         s_b_useStencil;
     static bool         s_b_useStencilAP;
     static bool         s_b_UploadFullMipmaps;
-    static bool         s_b_useDisplayList;
     
     glChartCanvas(wxWindow *parent);
     ~glChartCanvas();
@@ -99,9 +97,11 @@ public:
 #ifdef __OCPN__ANDROID__    
     void OnEvtPanGesture( wxQT_PanGestureEvent &event);
     void OnEvtPinchGesture( wxQT_PinchGestureEvent &event);
+    void onGestureTimerEvent(wxTimerEvent &event);
 #endif
     
     wxString GetRendererString(){ return m_renderer; }
+    wxString GetVersionString(){ return m_version; }
     void EnablePaint(bool b_enable){ m_b_paint_enable = b_enable; }
 
     static void Invalidate();
@@ -112,9 +112,9 @@ public:
     void GridDraw( );
     void FlushFBO( void );
     
-    static void FixRenderIDL(int dl);
-
-    void DrawAllRoutesAndWaypoints( ViewPort &vp, OCPNRegion &region );
+    void DrawDynamicRoutesAndWaypoints( ViewPort &vp, OCPNRegion &region );
+    void DrawStaticRoutesAndWaypoints( ViewPort &vp, OCPNRegion &region );
+    
     void RenderAllChartOutlines( ocpnDC &dc, ViewPort &VP );
     void RenderChartOutline( int dbIndex, ViewPort &VP );
 
@@ -142,8 +142,12 @@ protected:
     void DrawFloatingOverlayObjects( ocpnDC &dc, OCPNRegion &region );
     void DrawGroundedOverlayObjectsRect(ocpnDC &dc, wxRect &rect);
 
+    void DrawChartBar( ocpnDC &dc );
     void DrawQuiting();
     void DrawCloseMessage(wxString msg);
+
+    void DrawGLTidesInBBox(ocpnDC& dc, LLBBox& BBox);
+    void DrawGLCurrentsInBBox(ocpnDC& dc, LLBBox& BBox);
     
     wxGLContext       *m_pcontext;
 
@@ -185,9 +189,13 @@ protected:
     int          m_cache_tex_y;
     OCPNRegion   m_gl_rendered_region;
 
+    int		m_prevMemUsed;
+
     GLuint      ownship_tex;
     int         ownship_color;
     wxSize      ownship_size, ownship_tex_size;
+
+    GLuint      m_piano_tex;
     
     float       m_fbo_offsetx;
     float       m_fbo_offsety;
@@ -195,10 +203,24 @@ protected:
     float       m_fbo_sheight;
     bool        m_binPinch;
     bool        m_binPan;
+    bool        m_bfogit;
+    bool        m_benableFog;
+    bool        m_benableVScale;
+    
+    wxTimer     m_gestureEeventTimer;
+    bool        m_bgestureGuard;
+    bool        m_bpinchGuard;
     
     OCPNRegion  m_canvasregion;
-    
+    TexFont     m_gridfont;
 
+    GLuint       m_tideTex;
+    GLuint       m_currentTex;
+    int          m_tideTexWidth;
+    int          m_tideTexHeight;
+    int          m_currentTexWidth;
+    int          m_currentTexHeight;
+    
     DECLARE_EVENT_TABLE()
 };
 

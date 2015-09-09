@@ -19,9 +19,23 @@ public class OCPNNativeLib {
   public native int test();
 
   public native int processNMEA(String nmea_string);
+  public native int processBTNMEA(String nmea_string);
 
   public native int onConfigChange();
 
   public native int onMenuKey();
 
+  public native int onStart();
+  public native int onStop();
+  public native int onPause();
+  public native int onResume();
+
+  public native int invokeMenuItem( int item);
+  public native int selectChartDisplay( int type, int family);
+  public native int invokeCmdEventCmdString( int cmd_id, String s);
+  public native String getVPCorners();
+  public native String getVPS();
+
+  public native int setDownloadStatus( int status, String url);
+  public native int onMouseWheel(int dir);
 }

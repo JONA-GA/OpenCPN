@@ -28,6 +28,14 @@
 
 #include <wx/geometry.h>
 
+#ifdef __OCPN__ANDROID__
+#include <qopengl.h>
+#include "GL/gl_private.h"
+#else
+#include "GL/gl.h"
+#endif
+
+
 #include "TexFont.h"
 
 //----------------------------------------------------------------------------------------------------------
@@ -44,9 +52,11 @@ public:
 
     ~GribOverlay( void )
     {
-        if(m_iTexture)
 #ifdef ocpnUSE_GL
+        if(m_iTexture) 
+        {
           glDeleteTextures( 1, &m_iTexture );
+        }
 #endif
         delete m_pDCBitmap, delete[] m_pRGBA;
     }
@@ -63,6 +73,7 @@ public:
 };
 
 #define MAX_PARTICLE_HISTORY 8
+#include <vector>
 #include <list>
 struct Particle {
     int m_Duration;
@@ -80,14 +91,19 @@ struct Particle {
 struct ParticleMap {
 public:
     ParticleMap(int settings)
-    : m_Setting(settings), array_size(0), color_array(NULL), vertex_array(NULL) { }
+    : m_Setting(settings), history_size(0), array_size(0),
+      color_array(NULL), vertex_array(NULL) 
+    {
+       // XXX should be done in default PlugIn_ViewPort CTOR
+        last_viewport.bValid = false;
+    }
 
     ~ParticleMap() {
         delete [] color_array;
         delete [] vertex_array;
     }
 
-    std::list<Particle> m_Particles;
+    std::vector<Particle> m_Particles;
 
     // particles are rebuilt whenever any of these fields change
     time_t m_Reference_Time;
@@ -123,13 +139,13 @@ private:
 //    Grib Overlay Factory Specification
 //----------------------------------------------------------------------------------------------------------
 
-class GRIBUIDialog;
+class GRIBUICtrlBar;
 class GribRecord;
 class GribTimelineRecordSet;
 
 class GRIBOverlayFactory : public wxEvtHandler {
 public:
-    GRIBOverlayFactory( GRIBUIDialog &dlg );
+    GRIBOverlayFactory( GRIBUICtrlBar &dlg );
     ~GRIBOverlayFactory();
 
     void SetSettings( bool hiDefGraphics, bool GradualColors )
@@ -142,7 +158,6 @@ public:
     void SetMessage( wxString message ) { m_Message = message; }
     void SetTimeZone( int TimeZone ) { m_TimeZone = TimeZone; }
     void SetParentSize( int w, int h ) { m_ParentSize.SetWidth(w) ; m_ParentSize.SetHeight(h) ;}
-    void SetAltitude(int altitude) { m_Altitude = altitude; }
 
     void SetGribTimelineRecordSet( GribTimelineRecordSet *pGribTimelineRecordSet1 );
     bool RenderGribOverlay( wxDC &dc, PlugIn_ViewPort *vp );
@@ -159,8 +174,9 @@ public:
     wxColour GetGraphicColor(int config, double val);
 
     wxSize  m_ParentSize;
-    int m_Altitude;
+
 private:
+    void InitColorsTable( );
 
     void SettingsIdToGribId(int i, int &idx, int &idy, bool &polar);
     bool DoRenderGribOverlay( PlugIn_ViewPort *vp );
@@ -221,7 +237,7 @@ private:
 
     TexFont m_TexFontMessage, m_TexFontNumbers;
 
-    GRIBUIDialog &m_dlg;
+    GRIBUICtrlBar &m_dlg;
     GribOverlaySettings &m_Settings;
 
     ParticleMap *m_ParticleMap;

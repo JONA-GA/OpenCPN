@@ -31,16 +31,21 @@
 
 class GrabberWin: public wxPanel {
 public:
-      GrabberWin( wxWindow *parent, float scale_factor );
+      GrabberWin( wxWindow *parent,  ocpnFloatingToolbarDialog *toolbar, float scale_factor,
+                  wxString icon_name, wxPoint position = wxDefaultPosition );
       void OnPaint( wxPaintEvent& event );
       void MouseEvent( wxMouseEvent& event );
       void SetColorScheme( ColorScheme cs );
-
+      wxBitmap &GetBitmap(){ return m_bitmap; }
+      
       wxBitmap m_bitmap;
       bool m_bLeftDown;
       bool m_bRightDown;
       ocpnStyle::Style* m_style;
       float m_scale_factor;
+      ocpnFloatingToolbarDialog *m_ptoolbar;
+      bool m_dragging;
+      wxString m_icon_name;
 
 DECLARE_EVENT_TABLE()
 };
@@ -120,6 +125,7 @@ public:
       // Called when the mouse cursor enters a tool bitmap.
       // Argument is wxID_ANY if mouse is exiting the toolbar.
       virtual void OnMouseEnter( int toolid );
+      virtual void DoPluginToolUp();
 
       size_t GetToolsCount() const {
             return m_tools.GetCount();
@@ -296,6 +302,8 @@ protected:
 
       float m_sizefactor;
 
+      int m_last_plugin_down_id;
+
 private:
 DECLARE_EVENT_TABLE()
 };
@@ -305,6 +313,7 @@ DECLARE_EVENT_TABLE()
 //----------------------------------------------------------------------------------------------------------
 
 #define FADE_TIMER 2
+#define DESTROY_TIMER 3
 
 class ocpnFloatingToolbarDialog: public wxDialog {
 DECLARE_EVENT_TABLE()
@@ -320,11 +329,15 @@ public:
       void FadeTimerEvent( wxTimerEvent& event );
       bool IsToolbarShown() { return ( m_ptoolbar != 0 ); }
       float GetScaleFactor() { return m_sizefactor; }
-
+      void SetGrabber( wxString icon_name );
+      void DestroyTimerEvent( wxTimerEvent& event );
+      
       void Realize();
       ocpnToolBarSimple *GetToolbar();
       void Submerge();
+      void SubmergeToGrabber();
       void Surface();
+      void SurfaceFromGrabber();
       void HideTooltip();
       void ShowTooltips();
       void EnableTooltips() { if(m_ptoolbar) m_ptoolbar->EnableTooltips(); }
@@ -336,12 +349,16 @@ public:
       void RePosition();
       void LockPosition(bool lock){ m_block = lock; }
       void SetColorScheme( ColorScheme cs );
-
-      void SetGeometry();
+      bool CheckSurfaceRequest( wxMouseEvent &event );
+      
+      void SetGeometry(bool bAvoid, wxRect rectAvoid);
       long GetOrient() {
             return m_orient;
       }
       void RefreshFadeTimer();
+      void SetAutoHideTimer(int time);
+      void SetAutoHide( bool hide ){ m_bAutoHideToolbar = hide; }
+      
       int GetDockX() {
             return m_dock_x;
       }
@@ -349,7 +366,10 @@ public:
             return m_dock_y;
       }
       bool toolbarConfigChanged;
-
+      GrabberWin *m_pRecoverwin;
+      bool m_bnavgrabber;
+      bool  m_bsubmerged;
+      
 private:
       void DoFade( int value );
 
@@ -372,6 +392,12 @@ private:
 
       bool m_marginsInvisible;
       float m_sizefactor;
+      wxTimer m_destroyTimer;
+      GrabberWin *m_destroyGrabber;
+      wxSize m_recoversize;
+      
+      bool m_bAutoHideToolbar;
+      int m_nAutoHideToolbar;
 
 };
 
@@ -385,3 +411,38 @@ public:
     ToolbarMOBDialog( wxWindow* parent );
     int GetSelection();
 };
+
+
+#define SYMBOL_ToolbarChoices_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX
+
+class ToolbarChoicesDialog: public wxDialog
+{
+    DECLARE_DYNAMIC_CLASS( ToolbarChoicesDialog )
+    DECLARE_EVENT_TABLE()
+    
+public:
+    /// Constructors
+    ToolbarChoicesDialog( );
+    ToolbarChoicesDialog( wxWindow* parent, wxWindowID id = -1,
+                        const wxString& caption = _T(""),
+                          const wxPoint& pos = wxDefaultPosition,
+                          const wxSize& size = wxDefaultSize,
+                          long style = SYMBOL_ToolbarChoices_STYLE );
+    
+    ~ToolbarChoicesDialog();
+    
+    void SetColorScheme(ColorScheme cs);
+    void RecalculateSize( void );
+    void CreateControls();
+    
+    void OnCancelClick( wxCommandEvent& event );
+    void OnOkClick( wxCommandEvent& event );
+    
+    
+    wxButton*     m_CancelButton;
+    wxButton*     m_OKButton;
+
+    std::vector<wxCheckBox*> cboxes;
+    
+};
+

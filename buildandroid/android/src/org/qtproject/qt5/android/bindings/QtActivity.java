@@ -40,19 +40,41 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.lang.Math;
+import java.util.concurrent.Semaphore;
+import java.util.StringTokenizer;
+
+import com.google.android.gms.common.GoogleApiAvailability;
+
 import org.kde.necessitas.ministro.IMinistro;
 import org.kde.necessitas.ministro.IMinistroCallback;
 
+import android.os.SystemClock;
+import android.os.Environment;
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.ActionBar;
+import android.app.ActionBar.Tab;
+import android.app.FragmentTransaction;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
+import android.content.DialogInterface.OnCancelListener;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+
+import android.app.DownloadManager;
+import android.app.DownloadManager.Query;
+import android.app.DownloadManager.Request;
+import android.content.BroadcastReceiver;
+import android.database.Cursor;
+import android.content.IntentFilter;
+
 import android.app.ActivityManager;
 import android.app.ActivityManager.MemoryInfo;
 import android.content.pm.PackageManager;
@@ -64,6 +86,7 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.Build;
@@ -73,6 +96,10 @@ import android.os.RemoteException;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.DisplayMetrics;
+import android.widget.Toast;
+import android.widget.ListView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
 
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -82,9 +109,13 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.Display;
+import android.view.MenuInflater;
+import android.view.InputDevice;
+
 import dalvik.system.DexClassLoader;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -97,11 +128,11 @@ import android.preference.Preference;
 import android.preference.PreferenceFragment;
 import org.opencpn.opencpn.R;
 
-//@ANDROID-11
+//ANDROID-11
 import android.app.Fragment;
 import android.view.ActionMode;
 import android.view.ActionMode.Callback;
-//@ANDROID-11
+//ANDROID-11
 
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.MulticastLock;
@@ -112,18 +143,57 @@ import android.bluetooth.BluetoothAdapter;
 import org.opencpn.GPSServer;
 import org.opencpn.OCPNNativeLib;
 
+import org.qtproject.qt5.android.QtNative;
+import org.qtproject.qt5.android.QtActivityDelegate;
+
 import android.bluetooth.BluetoothDevice;
 import org.opencpn.BTScanHelper;
 import app.akexorcist.bluetotohspp.library.BluetoothSPP;
 import app.akexorcist.bluetotohspp.library.BluetoothState;
+import app.akexorcist.bluetotohspp.library.BluetoothSPP.OnDataReceivedListener;
 
-public class QtActivity extends Activity
+import org.opencpn.SpinnerNavItem;
+import org.opencpn.TitleNavigationAdapter;
+
+import ar.com.daidalos.afiledialog.*;
+
+public class QtActivity extends Activity implements ActionBar.OnNavigationListener
 {
     private final static int MINISTRO_INSTALL_REQUEST_CODE = 0xf3ee; // request code used to know when Ministro instalation is finished
     private final static int OCPN_SETTINGS_REQUEST_CODE = 0xf3ef; // request code used to know when OCPNsettings dialog activity is done
+    private final static int OCPN_GOOGLEMAPS_REQUEST_CODE = 0xf3ed; // request code used to know when GoogleMaps activity is done
+
     private static final int MINISTRO_API_LEVEL = 4; // Ministro api level (check IMinistro.aidl file)
     private static final int NECESSITAS_API_LEVEL = 2; // Necessitas api level used by platform plugin
     private static final int QT_VERSION = 0x050100; // This app requires at least Qt version 5.1.0
+
+    private final static int OCPN_FILECHOOSER_REQUEST_CODE = 0x5555;
+    private final static int OCPN_AFILECHOOSER_REQUEST_CODE = 0x5556;
+
+    private final static int OCPN_ACTION_FOLLOW = 0x1000;
+    private final static int OCPN_ACTION_ROUTE = 0x1001;
+    private final static int OCPN_ACTION_RMD = 0x1002;
+    private final static int OCPN_ACTION_SETTINGS_BASIC = 0x1003;
+    private final static int OCPN_ACTION_SETTINGS_EXPERT = 0x1004;
+    private final static int OCPN_ACTION_TRACK_TOGGLE = 0x1005;
+    private final static int OCPN_ACTION_MOB = 0x1006;
+    private final static int OCPN_ACTION_TIDES_TOGGLE = 0x1007;
+    private final static int OCPN_ACTION_CURRENTS_TOGGLE = 0x1008;
+    private final static int OCPN_ACTION_ENCTEXT_TOGGLE = 0x1009;
+    private final static int OCPN_ACTION_TRACK_ON = 0x100a;
+    private final static int OCPN_ACTION_TRACK_OFF = 0x100b;
+
+
+    //  Definitions found in OCPN "chart1.h"
+    private final static int ID_CMD_APPLY_SETTINGS = 300;
+    private final static int ID_CMD_NULL_REFRESH = 301;
+    private final static int ID_CMD_TRIGGER_RESIZE  = 302;
+    private final static int ID_CMD_SETVP = 303;
+
+    private final static int CHART_TYPE_CM93COMP = 7;       // must line up with OCPN types
+    private final static int CHART_FAMILY_RASTER = 1;
+    private final static int CHART_FAMILY_VECTOR = 2;
+
 
     private static final String ERROR_CODE_KEY = "error.code";
     private static final String ERROR_MESSAGE_KEY = "error.message";
@@ -203,6 +273,9 @@ public class QtActivity extends Activity
                                                         // this repository is used to push Qt snapshots.
     private String[] m_qtLibs = null; // required qt libs
 
+    private DownloadManager m_dm;
+    private long m_enqueue;
+
     private static ActivityManager activityManager;
 
     private Float lastX;
@@ -212,13 +285,55 @@ public class QtActivity extends Activity
     private GPSServer m_GPSServer;
     public ProgressDialog ringProgressDialog;
     public boolean m_hasGPS;
+    private boolean m_backButtonEnable = true;
 
     private BTScanHelper scanHelper;
     private Boolean m_ScanHelperStarted = false;
     private BluetoothSPP m_BTSPP;
     private Boolean m_BTServiceCreated = false;
+    private String m_BTStat;
+    private Boolean m_FileChooserDone = false;
+    private String m_filechooserString;
+
+    private String m_downloadRet = "";
 
     OCPNNativeLib nativeLib;
+
+    // action bar
+    private ActionBar actionBar;
+
+        // Title navigation Spinner data
+    private ArrayList<SpinnerNavItem> navSpinner;
+    private SpinnerNavItem spinnerItemRaster;
+    private SpinnerNavItem spinnerItemVector;
+    private SpinnerNavItem spinnerItemcm93;
+
+        // Navigation adapter
+    private TitleNavigationAdapter adapter;
+
+        // Menu item used to indicate "RouteCreate" is active
+    MenuItem itemRouteAnnunciator;
+    MenuItem itemRouteMenuItem;
+    private boolean m_showRouteAnnunciator = false;
+
+    MenuItem itemFollowInActive;
+    MenuItem itemFollowActive;
+    private boolean m_isFollowActive = false;
+
+    MenuItem itemTrackInActive;
+    MenuItem itemTrackActive;
+    private boolean m_isTrackActive = false;
+
+    private static AudioManager audioManager;
+    private MediaPlayer mediaPlayer; // The media player to play the sounds, even in background
+
+    BroadcastReceiver downloadBCReceiver = null;
+
+    private double m_gminitialLat;
+    private double m_gminitialLon;
+    private double m_gminitialZoom;
+
+    private boolean m_fullScreen;
 
     public QtActivity()
     {
@@ -254,7 +369,7 @@ public class QtActivity extends Activity
     public static Activity activity()
     {
 //        synchronized (m_mainActivityMutex)
-        Log.i("DEBUGGER_TAG", "activity()");
+        //Log.i("DEBUGGER_TAG", "activity()");
 
         {
             return m_activity;
@@ -263,9 +378,72 @@ public class QtActivity extends Activity
 
     private String m_settingsReturn;
 
+    private void toggleFullscreen(){
+        m_fullScreen = !m_fullScreen;
+        setFullscreen(m_fullScreen);
+    }
+
+    public void setFullscreen( final boolean bfull){
+
+        final QtActivityDelegate delegate = QtNative.activityDelegate();
+
+        if(null != delegate){
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    delegate.setFullScreen( bfull );
+
+                }});
+        }
+    }
+
+
+
+    public String invokeGoogleMaps(){
+        Log.i("DEBUGGER_TAG", "invokeGoogleMaps");
+
+
+        Intent intent = new Intent(QtActivity.this, org.opencpn.OCPNMapsActivity.class);
+
+        String s = nativeLib.getVPCorners();
+
+        String v = nativeLib.getVPS();
+        Log.i("DEBUGGER_TAG", "initialPositionString" + v);
+
+        StringTokenizer tkz = new StringTokenizer(v, ";");
+
+        String initialLat = "";
+        String initialLon = "";
+        String initialZoom = "";
+
+        if(tkz.hasMoreTokens()){
+            initialLat = tkz.nextToken();
+            initialLon = tkz.nextToken();
+            initialZoom = tkz.nextToken();
+        }
+
+        m_gminitialZoom = Double.parseDouble(initialZoom);
+
+
+        intent.putExtra("VP_CORNERS", s);
+        intent.putExtra("VPS", v);
+
+        int height = this.getWindow().getDecorView().getHeight();
+        int width = this.getWindow().getDecorView().getWidth();
+        intent.putExtra("WIDTH", width);
+        intent.putExtra("HEIGHT", height);
+
+        startActivityForResult(intent, OCPN_GOOGLEMAPS_REQUEST_CODE);
+
+        int pss = 55;
+        String ret;
+        ret = String.format("%d", pss);
+        return ret;
+    }
+
     public String doAndroidSettings(String settings){
-        Log.i("DEBUGGER_TAG", "doAndroidSettings");
-        Log.i("DEBUGGER_TAG", settings);
+        //Log.i("DEBUGGER_TAG", "doAndroidSettings");
+        //Log.i("DEBUGGER_TAG", settings);
 
         m_settingsReturn = new String();
 
@@ -273,7 +451,7 @@ public class QtActivity extends Activity
         intent.putExtra("SETTINGS_STRING",settings);
         startActivityForResult(intent, OCPN_SETTINGS_REQUEST_CODE);
 
-        Log.i("DEBUGGER_TAG", "after start activity");
+        //Log.i("DEBUGGER_TAG", "after start activity");
 
         int pss = 55;
         String ret;
@@ -293,7 +471,7 @@ public class QtActivity extends Activity
 
 
     public String callFromCpp(int pid){
-        Log.i("DEBUGGER_TAG", "callFromCpp");
+        //Log.i("DEBUGGER_TAG", "callFromCpp");
 
 //        Intent intent = new Intent(QtActivity.this, org.opencpn.OCPNSettingsActivity.class);
 //        startActivity(intent);
@@ -337,7 +515,7 @@ public class QtActivity extends Activity
     public native int test();
 
     public String getDisplayMetrics(){
-        Log.i("DEBUGGER_TAG", "getDisplayDPI");
+        //Log.i("DEBUGGER_TAG", "getDisplayDPI");
 /*
         int i = nativeLib.test();
         String aa;
@@ -364,15 +542,22 @@ public class QtActivity extends Activity
 //            screen_h -= getResources().getDimensionPixelSize(typedValue.resourceId);
 //        }
 
+        int actionBarHeight = 0;
+        ActionBar actionBar = getActionBar();
+        if(actionBar.isShowing())
+            actionBarHeight = actionBar.getHeight();
+
+//            float getTextSize() //pixels
         int width = 600;
         int height = 400;
 
         Display display = getWindowManager().getDefaultDisplay();
 
+
         if (Build.VERSION.SDK_INT >= 13) {
 
             if(Build.VERSION.SDK_INT >= 17){
-                Log.i("DEBUGGER_TAG", "VERSION.SDK_INT >= 17");
+                //Log.i("DEBUGGER_TAG", "VERSION.SDK_INT >= 17");
                 width = dm.widthPixels;
                 height = dm.heightPixels;
             }
@@ -381,7 +566,7 @@ public class QtActivity extends Activity
                 switch (Build.VERSION.SDK_INT){
 
                     case 16:
-                        Log.i("DEBUGGER_TAG", "VERSION.SDK_INT == 16");
+                        //Log.i("DEBUGGER_TAG", "VERSION.SDK_INT == 16");
                         width = dm.widthPixels;
                         height = dm.heightPixels;
                         break;
@@ -405,28 +590,57 @@ public class QtActivity extends Activity
             }
         }
         else{
-            Log.i("DEBUGGER_TAG", "VERSION.SDK_INT < 13");
+            //Log.i("DEBUGGER_TAG", "VERSION.SDK_INT < 13");
             width = display.getWidth();
             height = display.getHeight();
         }
 
 
 
+//  In FullScreen immersive mode, height needs a fixup...
+        if(m_fullScreen){
+            Point outPoint = new Point();
+            display.getRealSize(outPoint);
+            if (outPoint != null){
+                width = outPoint.x;
+                height = outPoint.y;
+            }
+            height += statusBarHeight;
+        }
+
+
+        float tsize = new Button(this).getTextSize();       // in pixels
+
         String ret;
 
-        ret = String.format("%f;%f;%d;%d;%d;%d;%d;%d;%d", dm.xdpi, dm.density, dm.densityDpi,
+        ret = String.format("%f;%f;%d;%d;%d;%d;%d;%d;%d;%d;%f", dm.xdpi, dm.density, dm.densityDpi,
                width, height - statusBarHeight,
                width, height,
-               dm.widthPixels, dm.heightPixels);
+               dm.widthPixels, dm.heightPixels, actionBarHeight, tsize);
 
-        Log.i("DEBUGGER_TAG", ret);
+        //Log.i("DEBUGGER_TAG", ret);
+
+
 
         return ret;
     }
 
-    public String showBusyCircle(){
-        Log.i("DEBUGGER_TAG", "show");
+    public String getDeviceInfo(){
+        String s="Device Info:";
+                s += "\n OS Version: " + System.getProperty("os.version") + "(" + android.os.Build.VERSION.INCREMENTAL + ")";
+                s += "\n OS API Level: "+android.os.Build.VERSION.RELEASE + "("+android.os.Build.VERSION.SDK_INT+")";
+                s += "\n Device: " + android.os.Build.DEVICE;
+                s += "\n Model (and Product): " + android.os.Build.MODEL + " ("+ android.os.Build.PRODUCT + ")";
 
+        //Log.i("DEBUGGER_TAG", s);
+
+        return s;
+    }
+
+
+    public String showBusyCircle(){
+    //if(!m_fullScreen)
+    {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -440,16 +654,20 @@ public class QtActivity extends Activity
                  Drawable myIcon = getResources().getDrawable( R.drawable.progressbar_custom );
                  ringProgressDialog.setIndeterminateDrawable(myIcon);
 
+                 //  THIS IS IMPORTANT...Keeps the busy spinner from surfacing the hidden navigation buttons.
+                 ringProgressDialog.getWindow().setFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
                  QtActivity.this.ringProgressDialog.show();
-
-             }});
+         }});
+     }
 
         String ret = "";
         return ret;
     }
 
     public String hideBusyCircle(){
-        Log.i("DEBUGGER_TAG", "hide");
+
+        mutex = new Semaphore(0);
 
         runOnUiThread(new Runnable() {
             @Override
@@ -457,13 +675,107 @@ public class QtActivity extends Activity
 
                  ringProgressDialog.dismiss();
 
+                 mutex.release();
              }});
 
+/*
+             // One way to wait for the runnable to be done...
+      try {
+             mutex.acquire();            // Cannot get mutex until runnable above exits.
+      } catch (InterruptedException e) {
+             e.printStackTrace();
+      }
 
-
+        this.getWindow().getDecorView().requestFocus();
+*/
         String ret = "";
         return ret;
     }
+
+
+
+
+
+
+    public String setRouteAnnunciator( final int viz){
+     //Log.i("DEBUGGER_TAG", "setRouteAnnunciator");
+
+     m_showRouteAnnunciator = (viz != 0);
+
+//    if( null != itemRouteAnnunciator)
+    {
+
+        runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+
+//                    itemRouteAnnunciator.setVisible(viz != 0);
+                    QtActivity.this.invalidateOptionsMenu();
+
+                 }});
+
+//        itemRouteAnnunciator.setVisible(viz != 0);
+//        this.invalidateOptionsMenu();
+        return "OK";
+     }
+//     else
+//        return "NO";
+    }
+
+    private boolean m_showAction = false;
+
+    public String setFollowIconState( final int isActive){
+        m_isFollowActive = (isActive != 0);
+
+        //if(isActive == 0)
+            //Log.i("DEBUGGER_TAG", "setFollowIconStateA");
+        //else
+            //Log.i("DEBUGGER_TAG", "setFollowIconStateB");
+
+           runOnUiThread(new Runnable() {
+                   @Override
+                   public void run() {
+
+
+                       QtActivity.this.invalidateOptionsMenu();
+
+                    }});
+
+           // testing playSound("/data/data/org.opencpn.opencpn/files/sounds/2bells.wav");
+
+           m_showAction = (isActive != 0);
+
+           return "OK";
+       }
+
+       public String setTrackIconState( final int isActive){
+           m_isTrackActive = (isActive != 0);
+
+           //if(isActive == 0)
+               //Log.i("DEBUGGER_TAG", "setTrackIconStateA");
+           //else
+               //Log.i("DEBUGGER_TAG", "setTrackIconStateB");
+
+              runOnUiThread(new Runnable() {
+                      @Override
+                      public void run() {
+
+
+                          QtActivity.this.invalidateOptionsMenu();
+
+                       }});
+
+              return "OK";
+          }
+
+
+
+       public String setBackButtonState( final int isActive){
+           //Log.i("DEBUGGER_TAG", "setBackButtonState");
+           m_backButtonEnable = (isActive != 0);
+           return "OK";
+          }
+
 
     public String queryGPSServer( final int parm ){
 
@@ -477,7 +789,7 @@ public class QtActivity extends Activity
 
 
         if(!m_GPSServiceStarted){
-            Log.i("DEBUGGER_TAG", "Start GPS Server");
+            //Log.i("DEBUGGER_TAG", "Start GPS Server");
             m_GPSServer = new GPSServer(getApplicationContext(), nativeLib, this);
             m_GPSServiceStarted = true;
         }
@@ -519,7 +831,7 @@ public class QtActivity extends Activity
     }
 
     public String stopBlueToothScan( final int parm ){
-        Log.i("DEBUGGER_TAG", "stopBlueToothScan");
+//        Log.i("DEBUGGER_TAG", "stopBlueToothScan");
 
         runOnUiThread(new Runnable() {
             @Override
@@ -527,9 +839,9 @@ public class QtActivity extends Activity
 
                 if(m_ScanHelperStarted){
                     scanHelper.doDiscovery();
+                    scanHelper.stopDiscovery();
                 }
 
-                scanHelper.stopDiscovery();
 
              }});
 
@@ -556,8 +868,8 @@ public class QtActivity extends Activity
         if(m_ScanHelperStarted)
             ret_str = scanHelper.getDiscoveredDevices();;
 
-        Log.i("DEBUGGER_TAG", "results");
-        Log.i("DEBUGGER_TAG", ret_str);
+//        Log.i("DEBUGGER_TAG", "results");
+//        Log.i("DEBUGGER_TAG", ret_str);
 
         return ret_str;
 
@@ -570,7 +882,7 @@ public class QtActivity extends Activity
     public String startBTService( final String address){
         Log.i("DEBUGGER_TAG", "startBTService");
         Log.i("DEBUGGER_TAG", address);
-        String ret_str = "";
+        m_BTStat = "Unknown";
 
         runOnUiThread(new Runnable() {
             @Override
@@ -578,37 +890,697 @@ public class QtActivity extends Activity
 
 ///
                 if(!m_BTServiceCreated){
-                    Log.i("DEBUGGER_TAG", "Bluetooth createBTService");
+//                    Log.i("DEBUGGER_TAG", "Bluetooth createBTService");
                     m_BTSPP = new BluetoothSPP(getApplicationContext());
-//                    m_BTSPP.cancelDiscovery();
-                    m_BTSPP.setupService();
-//                    m_BTSPP.startService(BluetoothState.DEVICE_ANDROID);
 
-                    m_BTServiceCreated = true;
+                    if(!m_BTSPP.isBluetoothAvailable() || !m_BTSPP.isBluetoothEnabled()) {
+ //                           Toast.makeText(getApplicationContext()
+ //                                           , "Bluetooth is not available"
+ //                                           , Toast.LENGTH_SHORT).show();
+                    }
+
+                    else {
+                        m_BTSPP.setupService();
+                        m_BTServiceCreated = true;
+                    }
                 }
 
 
-                Log.i("DEBUGGER_TAG", "Bluetooth startService");
-                m_BTSPP.startService(BluetoothState.DEVICE_OTHER);
-  //              m_BTSPP.setDeviceTarget(BluetoothState.DEVICE_OTHER);
+                m_BTSPP.setOnDataReceivedListener(new OnDataReceivedListener() {
+                    public void onDataReceived(byte[] data, String message) {
+//                        Log.i("DEBUGGER_TAG", message);
+                        // Do something when data incoming
+                        nativeLib.processBTNMEA( message );
 
-                Log.i("DEBUGGER_TAG", "Bluetooth connectA");
-                m_BTSPP.connect(address);
+                    }
+                });
 
-///
+                if(m_BTSPP.isServiceAvailable()){
+//                    Log.i("DEBUGGER_TAG", "Bluetooth startService");
+                    m_BTSPP.startService(BluetoothState.DEVICE_OTHER);
+
+//                    Log.i("DEBUGGER_TAG", "Bluetooth connectA");
+//                    m_BTSPP.connect(address);
+                    m_BTSPP.resetAutoConnect();
+                    m_BTSPP.autoConnectAddress(address);
+
+                }
+
+                if(!m_BTSPP.isBluetoothEnabled())
+                    m_BTStat = "NOK.BTNotEnabled";
+                else if(!m_BTSPP.isServiceAvailable())
+                    m_BTStat = "NOK.ServiceNotAvailable";
+                else
+                    m_BTStat = "OK";
+
+
 
              }});
 
-        ret_str = "NOK";
-        return ret_str;
+
+        Log.i("DEBUGGER_TAG", "startBTService return: " + m_BTStat);
+        return m_BTStat;
     }
 
 
+    public String stopBTService( final int parm){
+        Log.i("DEBUGGER_TAG", "stopBTService");
+        String ret_str = "";
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+
+                if(m_BTServiceCreated){
+                    Log.i("DEBUGGER_TAG", "Bluetooth stopService");
+                    m_BTSPP.stopService();
+                }
+
+
+             }});
+
+        ret_str = "OK";
+        return ret_str;
+    }
+
+    private Semaphore mutex = new Semaphore(0);
+    private Query m_query = new Query();
+
+    public String downloadFile( final String url, final String destination )
+    {
+        m_downloadRet = "";
+
+
+        if( downloadBCReceiver == null){
+          downloadBCReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String action = intent.getAction();
+                Log.i("DEBUGGER_TAG", "onReceive: " + action);
+
+                if (DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(action)) {
+                    long downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, 0);
+
+                    m_query = new Query();
+                    m_query.setFilterById(m_enqueue);
+                    Cursor c = m_dm.query(m_query);
+
+
+                    if (c.moveToFirst()) {
+                        String uriString = c.getString(c.getColumnIndex(DownloadManager.COLUMN_URI));
+
+                        int columnIndex = c.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                        if (DownloadManager.STATUS_SUCCESSFUL == c.getInt(columnIndex)) {
+                            Log.i("DEBUGGER_TAG", "Download successful");
+                        }
+
+                        nativeLib.setDownloadStatus( c.getInt(columnIndex), uriString);
+
+
+                    }
+                    c.close();
+                }
+            }
+          };
+        }
+
+        registerReceiver(downloadBCReceiver, new IntentFilter(
+                DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+
+
+        mutex = new Semaphore(0);
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                m_dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+
+                Request request = new Request( Uri.parse(url) );
+                request.setDestinationUri( Uri.parse(destination) );
+
+                Log.i("DEBUGGER_TAG", "enqueue");
+                m_downloadRet = "PENDING";
+                try{
+                     m_enqueue = m_dm.enqueue(request);
+                     String result = "OK;" + String.valueOf(m_enqueue);
+                     Log.i("DEBUGGER_TAG", result);
+                     m_downloadRet = result;
+                 }
+                 catch(Exception e){
+                     m_downloadRet = "NOK";
+                     Log.i("DEBUGGER_TAG", "exception");
+                 }
+
+
+                 mutex.release();
+
+
+             }});
+
+        // One way to wait for the runnable to be done...
+        try {
+            mutex.acquire();            // Cannot get mutex until runnable above exits.
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+
+        Log.i("DEBUGGER_TAG", "m_downloadRet " + m_downloadRet);
+        return m_downloadRet;
+    }
+
+    public String getDownloadStatus( final int ID )
+    {
+        Log.i("DEBUGGER_TAG", "getDownloadStatus "  + String.valueOf(ID));
+
+        String ret = "NOSTAT";
+        if(m_dm != null){
+            //Log.i("DEBUGGER_TAG", "mdm");
+
+            m_query.setFilterById(ID);
+            Cursor c = m_dm.query(m_query);
+
+            if (c.moveToFirst()) {
+                //Log.i("DEBUGGER_TAG", "cmtf");
+                int columnIndex = c.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                int stat = c.getInt(columnIndex);
+                String sstat = String.valueOf(stat);
+
+                String sofarBytes = c.getString(c.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR ));
+                String totalBytes = c.getString(c.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+
+                ret =  sstat + ";" + sofarBytes + ";" + totalBytes;
+
+            }
+            c.close();
+
+        }
+
+        Log.i("DEBUGGER_TAG", ret);
+        return ret;
+    }
+
+
+    public String cancelDownload( final int ID )
+    {
+        Log.i("DEBUGGER_TAG", "cancelDownload "  + String.valueOf(ID));
+        if(m_dm != null){
+            m_dm.remove( ID );
+        }
+
+        return "OK";
+    }
+
+
+    public String getGMAPILicense( )
+    {
+        String ret = "";
+
+        GoogleApiAvailability av = GoogleApiAvailability.getInstance();
+        if(av != null)
+            ret = av.getOpenSourceSoftwareLicenseInfo (this);
+
+        return ret;
+    }
+
+
+
+    /**
+     * it will play the given file, when it finishes, or fails, it will play the next from the list
+     *
+     * @param fileName: the file name to start playing from it
+     */
+    public String playSound(final String fileName) {
+        Log.i("DEBUGGER_TAG", "playSound " + fileName);
+        if (mediaPlayer == null) {
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+
+        }
+
+
+        if (mediaPlayer != null) {
+            //if (!mediaPlayer.isPlaying())
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        mediaPlayer.reset();
+                        mediaPlayer.setDataSource(fileName);
+                        mediaPlayer.prepare();
+                        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                            @Override
+                            public void onCompletion(MediaPlayer mp) {
+                                //playNextSoundTrack();
+                            }
+                        });
+                        //Log.i("DEBUGGER_TAG", "playSoundStart");
+                        mediaPlayer.start();
+                    } catch (Exception e) {
+                        // TODO: Remove this error checking before publishing
+                    }
+
+
+                 }});
+
+        }
+
+        return "OK";
+    }
+
+    public String FileChooserDialog(final String initialDir, final String Title, final String Suggestion, final String wildcard)
+    {
+        //Log.i("DEBUGGER_TAG", "FileChooserDialog");
+        //Log.i("DEBUGGER_TAG", initialDir);
+
+        m_FileChooserDone = false;
+
+        boolean buseDialog = true;
+        if(!buseDialog){
+            Intent intent = new Intent(this, FileChooserActivity.class);
+            intent.putExtra(FileChooserActivity.INPUT_START_FOLDER, initialDir);
+            intent.putExtra(FileChooserActivity.INPUT_FOLDER_MODE, false);
+            intent.putExtra(FileChooserActivity.INPUT_SHOW_FULL_PATH_IN_TITLE, true);
+            intent.putExtra(FileChooserActivity.INPUT_TITLE_STRING, Title);
+
+
+        //  Creating a file?
+            if(!Suggestion.isEmpty()){
+                //Log.i("DEBUGGER_TAG", "FileChooserDialog Creating");
+                intent.putExtra(FileChooserActivity.INPUT_CAN_CREATE_FILES, true);
+            }
+
+            this.startActivityForResult(intent, OCPN_AFILECHOOSER_REQUEST_CODE);
+        }
+
+        //Log.i("DEBUGGER_TAG", "FileChooserDialog create and show " + initialDir);
+
+        Thread thread = new Thread() {
+            @Override
+            public void run() {
+
+        // Block this thread for 20 msec.
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                }
+
+// After sleep finishes blocking, create a Runnable to run on the UI Thread.
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        FileChooserDialog dialog = new FileChooserDialog(m_activity, initialDir);
+
+                        dialog.setShowFullPath( true );
+                        dialog.setTitle( Title );
+
+                        dialog.addListener(new FileChooserDialog.OnFileSelectedListener() {
+                            public void onFileSelected(Dialog source, File file) {
+                                source.hide();
+                                //Toast toast = Toast.makeText(source.getContext(), "File selected: " + file.getName(), Toast.LENGTH_LONG);
+                                //toast.show();
+
+                                m_filechooserString = "file:" + file.getPath();
+                                m_FileChooserDone = true;
+
+                            }
+                            public void onFileSelected(Dialog source, File folder, String name) {
+                                source.hide();
+                                //Toast toast = Toast.makeText(source.getContext(), "File created: " + folder.getName() + "/" + name, Toast.LENGTH_LONG);
+                                //toast.show();
+
+                                m_filechooserString = "file:" + folder.getPath() + "/" + name;
+                                m_FileChooserDone = true;
+
+                            }
+                        });
+
+                        dialog.setOnCancelListener(new OnCancelListener() {
+                            public void onCancel(DialogInterface dialog) {
+                                //Log.i("DEBUGGER_TAG", "FileChooserDialog Cancel");
+                                m_filechooserString = "cancel:";
+                                m_FileChooserDone = true;
+                            }
+                        });
+
+
+                        dialog.setCanCreateFiles(true);
+                        dialog.show();
+
+                        //Log.i("DEBUGGER_TAG", "FileChooserDialog Back from show");
+
+                    }
+                });
+            }
+        };
+
+        // Don't forget to start the thread.
+        thread.start();
+
+        //Log.i("DEBUGGER_TAG", "FileChooserDialog Returning");
+
+        return "OK";
+   }
+
+   public String DirChooserDialog(final String initialDir, final String Title)
+   {
+       m_FileChooserDone = false;
+
+       boolean buseDialog = true;
+       if(!buseDialog){
+            Intent intent = new Intent(this, FileChooserActivity.class);
+            intent.putExtra(FileChooserActivity.INPUT_START_FOLDER, initialDir);
+            intent.putExtra(FileChooserActivity.INPUT_FOLDER_MODE, true);
+            this.startActivityForResult(intent, OCPN_AFILECHOOSER_REQUEST_CODE);
+        }
+
+        //Log.i("DEBUGGER_TAG", "DirChooserDialog create and show " + initialDir);
+
+        Thread thread = new Thread() {
+            @Override
+            public void run() {
+
+        // Block this thread for 20 msec.
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                }
+
+// After sleep finishes blocking, create a Runnable to run on the UI Thread.
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        FileChooserDialog dialog = new FileChooserDialog(m_activity, initialDir);
+
+                        dialog.setShowFullPath( true );
+                        dialog.setFolderMode( true );
+                        dialog.setCanCreateFiles( true );
+
+
+                        dialog.setTitle( Title );
+
+                        dialog.addListener(new FileChooserDialog.OnFileSelectedListener() {
+                            public void onFileSelected(Dialog source, File file) {
+                                source.hide();
+                                //Toast toast = Toast.makeText(source.getContext(), "File selected: " + file.getName(), Toast.LENGTH_LONG);
+                                //toast.show();
+
+                                m_filechooserString = "file:" + file.getPath();
+                                m_FileChooserDone = true;
+
+                            }
+                            public void onFileSelected(Dialog source, File folder, String name) {
+                                source.hide();
+                                m_FileChooserDone = true;
+                            }
+
+                        });
+
+                        dialog.setOnCancelListener(new OnCancelListener() {
+                            public void onCancel(DialogInterface dialog) {
+                                //Log.i("DEBUGGER_TAG", "DirChooserDialog Cancel");
+                                m_filechooserString = "cancel:";
+                                m_FileChooserDone = true;
+                            }
+                        });
+
+
+                        dialog.show();
+
+                        //Log.i("DEBUGGER_TAG", "DirChooserDialog Back from show");
+
+                    }
+                });
+            }
+        };
+
+        // Don't forget to start the thread.
+        thread.start();
+
+        //Log.i("DEBUGGER_TAG", "DirChooserDialog Returning");
+
+       return "OK";
+  }
+
+   public String isFileChooserFinished()
+   {
+       if(m_FileChooserDone){
+            return m_filechooserString;
+       }
+       else{
+           return "no";
+       }
+   }
+
+   // ActionBar Spinner navigation to select chart display type
+
+   //  Thread safe version, callable from another thread
+   public String configureNavSpinnerTS(final int flag, final int sel){
+       Thread thread = new Thread() {
+            @Override
+            public void run() {
+
+       // Block this thread for 20 msec.
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                }
+
+       // After sleep finished blocking, create a Runnable to run on the UI Thread.
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        configureNavSpinner(flag, sel);
+                    }
+                });
+            }
+       };
+
+       // Don't forget to start the thread.
+       thread.start();
+
+       return "OK";
+   }
+
+
+
+   public String configureNavSpinner(int flag, int sel){
+       //Log.i("DEBUGGER_TAG", "configureNavSpinner");
+       //String aa; aa = String.format("%d %d", flag, sel ); Log.i("DEBUGGER_TAG", aa);
+
+       navSpinner.clear();
+       int nbits = 0;
+       int n93 = -1;
+       int nraster = -1;
+       int nvector = -1;
+
+       if((flag & 1) == 1){
+           nraster = nbits;
+           navSpinner.add(spinnerItemRaster);
+           nbits++;
+       }
+       if((flag & 2) == 2){
+           nvector = nbits;
+           navSpinner.add(spinnerItemVector);
+           nbits++;
+       }
+       if((flag & 4) == 4){
+           n93 = nbits;
+           navSpinner.add(spinnerItemcm93);
+           nbits++;
+       }
+
+
+
+       // Select the proper item as directed
+       int to_sel = 0;
+       if(sel == 1)
+            to_sel = nraster;
+       else if(sel == 2)
+            to_sel = nvector;
+       else if(sel == 4)
+            to_sel = n93;
+
+       // Any bits set?
+       if(nbits > 1){
+           actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_LIST);
+           actionBar.setSelectedNavigationItem(to_sel);
+       }
+       else
+           actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_STANDARD);
+
+       return "OK";
+   }
+
+   public String getSystemDirs(){
+       String result = "";
+
+       ApplicationInfo ai = getApplicationInfo();
+       if((ai.flags & ApplicationInfo.FLAG_EXTERNAL_STORAGE) ==  ApplicationInfo.FLAG_EXTERNAL_STORAGE){
+           //Log.i("DEBUGGER_TAG", "External");
+           result = "EXTAPP;";
+       }
+       else{
+           //Log.i("DEBUGGER_TAG", "Internal");
+           result = "INTAPP;";
+       }
+
+
+
+       result = result.concat(getFilesDir().getPath() + ";");
+       result = result.concat(getCacheDir().getPath() + ";");
+       result = result.concat(getExternalFilesDir(null).getPath() + ";");
+       result = result.concat(getExternalCacheDir().getPath() + ";");
+       result = result.concat(Environment.getExternalStorageDirectory().getPath() + ";");
+
+       //Log.i("DEBUGGER_TAG", result);
+
+       return result;
+   }
+
+
+
+
+//   @Override
+//   public void onTabSelected(ActionBar.Tab tab,
+//       FragmentTransaction fragmentTransaction) {
+
+//   Log.i("DEBUGGER_TAG", "onTabSelected");
+//   Log.i("DEBUGGER_TAG", tab.getText().toString());
+
+     // When the given tab is selected, show the tab contents in the
+     // container view.
+//     Fragment fragment = new DummySectionFragment();
+//     Bundle args = new Bundle();
+//     args.putInt(DummySectionFragment.ARG_SECTION_NUMBER,
+//         tab.getPosition() + 1);
+//     fragment.setArguments(args);
+//     getFragmentManager().beginTransaction()
+//         .replace(R.id.container, fragment).commit();
+//   }
+
+//   @Override
+//   public void onTabUnselected(ActionBar.Tab tab,
+//       FragmentTransaction fragmentTransaction) {
+//   }
+
+//   @Override
+//   public void onTabReselected(ActionBar.Tab tab,
+//       FragmentTransaction fragmentTransaction) {
+//   }
+
+
+   //  ActionBar drop-down spinner navigation
+   @Override
+   public boolean onNavigationItemSelected(int itemPosition, long itemId) {
+   // Action to be taken after selecting a spinner item from action bar
+
+   //Log.i("DEBUGGER_TAG", "onNavigationItemSelected");
+   String aa;
+   aa = String.format("%d", itemPosition);
+   //Log.i("DEBUGGER_TAG", aa);
+
+        SpinnerNavItem item = navSpinner.get(itemPosition);
+        if(item.getTitle().equalsIgnoreCase("cm93")){
+            nativeLib.selectChartDisplay(CHART_TYPE_CM93COMP, -1);
+            return true;
+        }
+        else if(item.getTitle().equalsIgnoreCase("raster")){
+            nativeLib.selectChartDisplay(-1, CHART_FAMILY_RASTER);
+            //Log.i("DEBUGGER_TAG", "onNavigationItemSelectedA");
+            return true;
+        }
+        else if(item.getTitle().equalsIgnoreCase("vector")){
+            nativeLib.selectChartDisplay(-1, CHART_FAMILY_VECTOR);
+            return true;
+        }
+
+
+       return false;
+   }
+
+   private void relocateOCPNPlugins( )
+   {
+       // We need to relocate the PlugIns that have been included as "assets"
+
+       // Reason:  PlugIns can only load from the apps dataDir, which is like:
+       //          "/data/data/org.opencpn.opencpn"
+       //          This is due to some policy in the system loader....
+       //
+       //           There is no need to relocate any data files needed by the PlugIns
+       //           since they will have been added as assets and moved to the file system
+       //           by assetbridge elsewhere.
+       //
+       //          Since this method runs on every restart, it may be used to condition manually installed
+       //          PlugIns as well.  Just somehow install the PlugIn .so file into ".../files/plugins" dir,
+       //          and it will be moved to the proper load location on restart.
+
+       Log.i("DEBUGGER_TAG", "relocateOCPNPlugins");
+
+       // On Moto G
+       // This produces "/data/data/org.opencpn.opencpn/files"
+       //  Which is where the app files would be with default load
+       String iDir = getFilesDir().getPath();
+       Log.i("DEBUGGER_TAG", "iDir: " + iDir);
+
+       // This produces "/storage/emulated/0/Android/data/org.opencpn.opencpn/files"
+       //  Which is where the app files would be if the app were "moved to SDCARD"
+       String xDir = getExternalFilesDir(null).getPath();
+       Log.i("DEBUGGER_TAG", "xDir: " + xDir);
+
+
+       //   If the app is installed on external media, then that is where the assets have been stored...
+       String ssd = iDir + "/plugins";
+       ApplicationInfo ai = getApplicationInfo();
+       if((ai.flags & ApplicationInfo.FLAG_EXTERNAL_STORAGE) ==  ApplicationInfo.FLAG_EXTERNAL_STORAGE)
+            ssd = xDir + "/plugins/";
+
+
+       File sourceDir = new File( ssd );
+
+       // The PlugIn .so files are always relocated to here, which looks like:
+       // "/data/data/org.opencpn.opencpn"
+       String finalDestination = getApplicationInfo().dataDir;
+
+       File[] dirs = sourceDir.listFiles();
+       if (dirs != null) {
+           for (int j=0; j < dirs.length; j++){
+               File sfile = dirs[j];
+               Log.i("DEBUGGER_TAG", "sfile: " + sfile.getName());
+
+               if (sfile.isFile()){
+
+                              String source = sfile.getAbsolutePath();
+                              String dest = finalDestination + "/" + sfile.getName();
+
+
+                              try {
+                                  InputStream inputStream = new FileInputStream(source);
+                                  OutputStream outputStream = new FileOutputStream(dest);
+                                  copyFile(inputStream, outputStream);
+                                  inputStream.close();
+                                  outputStream.close();
+                                 Log.i("DEBUGGER_TAG", "copyFile OK: " + source + " to " + dest);
+                              }
+                              catch (Exception e) {
+                                  e.printStackTrace();
+                                  Log.i("DEBUGGER_TAG", "copyFile Exception");
+                              }
+              }
+          }
+      }
+   }
 
 
     // this function is used to load and start the loader
     private void loadApplication(Bundle loaderParams)
     {
+        Log.i("DEBUGGER_TAG", "LoadApplication");
+
+        relocateOCPNPlugins();
+
+
         try {
             final int errorCode = loaderParams.getInt(ERROR_CODE_KEY);
             if (errorCode != 0) {
@@ -634,6 +1606,16 @@ public class QtActivity extends Activity
             ArrayList<String> libs = new ArrayList<String>();
             if ( m_activityInfo.metaData.containsKey("android.app.bundled_libs_resource_id") )
                 libs.addAll(Arrays.asList(getResources().getStringArray(m_activityInfo.metaData.getInt("android.app.bundled_libs_resource_id"))));
+
+                //  We want the default OCPN plugins bundled into the APK and installed
+                //  into the proper app-lib.  So they are listed in ANDROID_EXTRA_LIBS.
+                //  But we do not want to pre-load them.  So take them out of the DexClassLoader list.
+
+//                libs.remove("dashboard_pi");
+//                libs.remove("grib_pi");
+
+
+
 
             String libName = null;
             if ( m_activityInfo.metaData.containsKey("android.app.lib_name") ) {
@@ -669,6 +1651,7 @@ public class QtActivity extends Activity
             Method startAppMethod=qtLoader.getClass().getMethod("startApplication");
             if (!(Boolean)startAppMethod.invoke(qtLoader))
                 throw new Exception("");
+
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -836,12 +1819,16 @@ public class QtActivity extends Activity
         outputStream.close();
     }
 
-    private boolean cleanCacheIfNecessary(String pluginsPrefix, long packageVersion)
+    private boolean cleanCacheIfNecessary(String prefix, long packageVersion, String cacheName)
     {
-        File versionFile = new File(pluginsPrefix + "cache.version");
+        Log.i("DEBUGGER_TAG", "cleanCacheIfNecessary " + prefix);
+        File versionFile = new File(prefix + cacheName);
+
+        Log.i("DEBUGGER_TAG", "version file: " + prefix + cacheName);
 
         long cacheVersion = 0;
         if (versionFile.exists() && versionFile.canRead()) {
+            Log.i("DEBUGGER_TAG", "version file exists ");
             try {
                 DataInputStream inputStream = new DataInputStream(new FileInputStream(versionFile));
                 cacheVersion = inputStream.readLong();
@@ -852,9 +1839,12 @@ public class QtActivity extends Activity
         }
 
         if (cacheVersion != packageVersion) {
-            deleteRecursively(new File(pluginsPrefix));
+            //deleteRecursively(new File(prefix));
+ //           Log.i("DEBUGGER_TAG", "cleanCacheIfNecessary return true");
             return true;
         } else {
+ //           Log.i("DEBUGGER_TAG", "cleanCacheIfNecessary return false");
+
             return false;
         }
     }
@@ -874,7 +1864,7 @@ public class QtActivity extends Activity
             e.printStackTrace();
         }
 
-        if (!cleanCacheIfNecessary(pluginsPrefix, packageVersion))
+        if (!cleanCacheIfNecessary(pluginsPrefix, packageVersion, "cache.version"))
             return;
 
         {
@@ -1121,6 +2111,7 @@ public class QtActivity extends Activity
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev)
     {
+        //Toast.makeText(getApplicationContext(), "dispatchTouchEvent",Toast.LENGTH_LONG).show();
 
         if( (ev.getAction() == MotionEvent.ACTION_MOVE) && (Math.abs(ev.getRawX() - lastX) < 1.0f) && (Math.abs(ev.getRawY() - lastY) < 1.0f))
             return true;
@@ -1162,7 +2153,7 @@ public class QtActivity extends Activity
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
-        Log.i("DEBUGGER_TAG", "onqtActivityResultA");
+//        Log.i("DEBUGGER_TAG", "onActivityResultA");
         if (requestCode == OCPN_SETTINGS_REQUEST_CODE) {
 //            Log.i("DEBUGGER_TAG", "onqtActivityResultC");
             // Make sure the request was successful
@@ -1170,7 +2161,124 @@ public class QtActivity extends Activity
             {
 //                Log.i("DEBUGGER_TAG", "onqtActivityResultD");
                 m_settingsReturn = data.getStringExtra("SettingsString");
+                nativeLib.invokeCmdEventCmdString( ID_CMD_NULL_REFRESH, m_settingsReturn);
+
+                // defer hte application of settings until the screen refreshes
+                Handler handler = new Handler();
+                handler.postDelayed(new Runnable() {
+                     public void run() {
+                          nativeLib.invokeCmdEventCmdString( ID_CMD_APPLY_SETTINGS, m_settingsReturn);
+                     }
+                }, 100);
 //                Log.i("DEBUGGER_TAG", m_settingsReturn);
+            }
+            else if (resultCode == RESULT_CANCELED){
+//                Log.i("DEBUGGER_TAG", "onqtActivityResultE");
+            }
+
+            super.onActivityResult(requestCode, resultCode, data);
+
+            return;
+        }
+
+        if (requestCode == OCPN_FILECHOOSER_REQUEST_CODE) {
+            //Log.i("DEBUGGER_TAG", "onqtActivityResultCf");
+            // Make sure the request was successful
+            if (resultCode == RESULT_OK)
+            {
+                 //Log.i("DEBUGGER_TAG", "onqtActivityResultDf");
+                 m_filechooserString = "file:" + data.getStringExtra("itemSelected");
+                 //Log.i("DEBUGGER_TAG", m_filechooserString);
+            }
+            else if (resultCode == RESULT_CANCELED){
+                //Log.i("DEBUGGER_TAG", "onqtActivityResultEf");
+                m_filechooserString = "cancel:";
+            }
+
+            m_FileChooserDone = true;
+
+            super.onActivityResult(requestCode, resultCode, data);
+
+            return;
+        }
+
+        if (requestCode == OCPN_AFILECHOOSER_REQUEST_CODE) {
+            //Log.i("DEBUGGER_TAG", "onqtActivityResultCa");
+            // Make sure the request was successful
+            if (resultCode == Activity.RESULT_OK) {
+                //Log.i("DEBUGGER_TAG", "onqtActivityResultDa");
+                boolean fileCreated = false;
+                String filePath = "";
+
+                Bundle bundle = data.getExtras();
+                if(bundle != null)
+                {
+                    if(bundle.containsKey(FileChooserActivity.OUTPUT_NEW_FILE_NAME)) {
+                            fileCreated = true;
+                            File folder = (File) bundle.get(FileChooserActivity.OUTPUT_FILE_OBJECT);
+                            String name = bundle.getString(FileChooserActivity.OUTPUT_NEW_FILE_NAME);
+                            filePath = folder.getAbsolutePath() + "/" + name;
+                    } else {
+                            fileCreated = false;
+                            File file = (File) bundle.get(FileChooserActivity.OUTPUT_FILE_OBJECT);
+                            filePath = file.getAbsolutePath();
+                    }
+
+                    m_filechooserString = "file:" + filePath;
+
+                }
+            }
+            else if (resultCode == Activity.RESULT_CANCELED){
+                //Log.i("DEBUGGER_TAG", "onqtActivityResultEa");
+                m_filechooserString = "cancel:";
+            }
+
+            m_FileChooserDone = true;
+
+            super.onActivityResult(requestCode, resultCode, data);
+
+            return;
+        }
+
+        if (requestCode == OCPN_GOOGLEMAPS_REQUEST_CODE) {
+            // Make sure the request was successful
+            if (resultCode == RESULT_OK)
+            {
+                String finalPosition = data.getStringExtra("finalPosition");
+//                Log.i("DEBUGGER_TAG", "finalPositionFromMaps " + finalPosition);
+
+                StringTokenizer tkz = new StringTokenizer(finalPosition, ";");
+
+                String finalLat = finalPosition.valueOf(m_gminitialLat);
+                String finalLon = finalPosition.valueOf(m_gminitialLon);
+                String finalZoom = finalPosition.valueOf(m_gminitialZoom);
+                String zoomFactor = "1.0";
+
+                if(tkz.hasMoreTokens()){
+                    finalLat = tkz.nextToken();
+                    finalLon = tkz.nextToken();
+                    finalZoom = tkz.nextToken();
+                    zoomFactor = tkz.nextToken();
+                }
+
+                double zoomF = Double.parseDouble(zoomFactor);
+                finalZoom = String.valueOf(m_gminitialZoom * zoomF);
+
+
+                String vpSet = "";
+
+                vpSet = vpSet.concat(finalLat);
+                vpSet = vpSet.concat(";");
+                vpSet = vpSet.concat(finalLon);
+                vpSet = vpSet.concat(";");
+                vpSet = vpSet.concat(finalZoom);
+                vpSet = vpSet.concat(";");
+
+
+                Log.i("DEBUGGER_TAG", "finalPositionString " + vpSet);
+
+                nativeLib.invokeCmdEventCmdString( ID_CMD_SETVP, vpSet);
+
             }
             else if (resultCode == RESULT_CANCELED){
 //                Log.i("DEBUGGER_TAG", "onqtActivityResultE");
@@ -1185,7 +2293,7 @@ public class QtActivity extends Activity
             QtApplication.invokeDelegateMethod(QtApplication.onActivityResult, requestCode, resultCode, data);
             return;
         }
-        Log.i("DEBUGGER_TAG", "onqtActivityResultB");
+        //Log.i("DEBUGGER_TAG", "onqtActivityResultB");
         if (requestCode == MINISTRO_INSTALL_REQUEST_CODE)
             startApp(false);
 
@@ -1225,12 +2333,9 @@ public class QtActivity extends Activity
     @Override
     public void onConfigurationChanged(Configuration newConfig)
     {
-        Log.i("DEBUGGER_TAG", "onConfigurationChanged");
+        //Log.i("DEBUGGER_TAG", "onConfigurationChanged");
 
         int i = nativeLib.onConfigChange();
-        String aa;
-        aa = String.format("%d", i);
-        Log.i("DEBUGGER_TAG", aa);
 
         if (!QtApplication.invokeDelegate(newConfig).invoked)
             super.onConfigurationChanged(newConfig);
@@ -1280,12 +2385,24 @@ public class QtActivity extends Activity
     }
     //---------------------------------------------------------------------------
 
+    private ListView mDrawerList;
+    private ArrayAdapter<String> mAdapter;
+
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
+//        Log.i("DEBUGGER_TAG", "onCreate");
+        //Toast.makeText(getApplicationContext(), "onCreate",Toast.LENGTH_LONG).show();
+
         super.onCreate(savedInstanceState);
 
-        nativeLib = new OCPNNativeLib();
+        //  Bug fix, see http://code.google.com/p/android/issues/detail?id=26658
+        if(!isTaskRoot()) {
+            finish();
+            return;
+        }
+
+//        setContentView(R.layout.activity_main);
 
         try {
             m_activityInfo = getPackageManager().getActivityInfo(getComponentName(), PackageManager.GET_META_DATA);
@@ -1309,7 +2426,7 @@ public class QtActivity extends Activity
 
         if (Build.VERSION.SDK_INT > 10) {
             try {
-                requestWindowFeature(Window.class.getField("FEATURE_ACTION_BAR").getInt(null));
+//                requestWindowFeature(Window.class.getField("FEATURE_ACTION_BAR").getInt(null));
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -1317,22 +2434,100 @@ public class QtActivity extends Activity
             requestWindowFeature(Window.FEATURE_NO_TITLE);
         }
 
+        nativeLib = new OCPNNativeLib();
+
+
         if (QtApplication.m_delegateObject != null && QtApplication.onCreate != null) {
             QtApplication.invokeDelegateMethod(QtApplication.onCreate, savedInstanceState);
             return;
         }
 
+
+ //----------------------------------------------------------------------------
+        // Set up ActionBar spinner navigation
+        actionBar = getActionBar();
+
+        // Setup Spinner title navigation data
+        navSpinner = new ArrayList<SpinnerNavItem>();
+
+        spinnerItemRaster = new SpinnerNavItem("Raster", R.drawable.ic_action_map);
+        spinnerItemVector = new SpinnerNavItem("Vector", R.drawable.ic_action_map);
+        spinnerItemcm93 = new SpinnerNavItem("cm93", R.drawable.ic_action_map);
+
+        // title drop down adapter
+        adapter = new TitleNavigationAdapter(getApplicationContext(), navSpinner);
+        // assigning the spinner navigation
+        actionBar.setListNavigationCallbacks(adapter, this);
+
+        configureNavSpinner(7, 0);
+
+//----------------------------------------------------------------------------
+
         ENVIRONMENT_VARIABLES += "\tQT_ANDROID_THEME=" + QT_ANDROID_DEFAULT_THEME
                               + "/\tQT_ANDROID_THEME_DISPLAY_DPI=" + getResources().getDisplayMetrics().densityDpi + "\t";
+
+    //Log.i("DEBUGGER_TAG", "splash Screen??");
 
         if (null == getLastNonConfigurationInstance()) {
             // if splash screen is defined, then show it
             if (m_activityInfo.metaData.containsKey("android.app.splash_screen") )
                 setContentView(m_activityInfo.metaData.getInt("android.app.splash_screen"));
 
-  Log.i("DEBUGGER_TAG", "asset bridge start unpack");
-  Assetbridge.unpack(this);
-  Log.i("DEBUGGER_TAG", "asset bridge finish unpack");
+    String tmpdir = "";
+    ApplicationInfo ai = getApplicationInfo();
+    if((ai.flags & ApplicationInfo.FLAG_EXTERNAL_STORAGE) ==  ApplicationInfo.FLAG_EXTERNAL_STORAGE)
+        tmpdir = getExternalFilesDir(null).getPath();
+    else
+        tmpdir = getFilesDir().getPath();
+
+
+        long packageVersion = -1;
+        try {
+            PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            packageVersion = packageInfo.lastUpdateTime;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        boolean b_needcopy = false;
+        if (cleanCacheIfNecessary(tmpdir + "/", packageVersion, "OCPNcache.version"))
+            b_needcopy = true;
+
+
+        try{
+            File versionFile = new File(tmpdir + "/OCPNcache.version");
+
+            File parentDirectory = versionFile.getParentFile();
+            if (!parentDirectory.exists())
+                parentDirectory.mkdirs();
+
+            versionFile.createNewFile();
+
+            DataOutputStream outputStream = new DataOutputStream(new FileOutputStream(versionFile));
+            outputStream.writeLong(packageVersion);
+            outputStream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+        if(b_needcopy){
+            Log.i("DEBUGGER_TAG", "b_needcopy true");
+        }
+        else{
+            Log.i("DEBUGGER_TAG", "b_needcopy false");
+        }
+
+
+
+
+    if (b_needcopy){
+      Log.i("DEBUGGER_TAG", "asset bridge start unpack");
+      Assetbridge.unpack(this);
+      Log.i("DEBUGGER_TAG", "asset bridge finish unpack");
+    }
+
+
 
 
    /* Turn off multicast filter */
@@ -1344,9 +2539,13 @@ public class QtActivity extends Activity
 
 
             startApp(true);
+
+
+
         }
     }
     //---------------------------------------------------------------------------
+
 
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo)
@@ -1393,11 +2592,58 @@ public class QtActivity extends Activity
     @Override
     public boolean onCreateOptionsMenu(Menu menu)
     {
-        QtApplication.InvokeResult res = QtApplication.invokeDelegate(menu);
-        if (res.invoked)
-            return (Boolean)res.methodReturns;
-        else
-            return super.onCreateOptionsMenu(menu);
+        //Log.i("DEBUGGER_TAG", "onCreateOptionsMenu");
+
+//      We don't use Qt menu system, since it does not support ActionBar.
+//      We handle ActionBar here, in standard Android manner
+//
+//        QtApplication.InvokeResult res = QtApplication.invokeDelegate(menu);
+//        if (res.invoked)
+//            return (Boolean)res.methodReturns;
+//        else
+//            return super.onCreateOptionsMenu(menu);
+
+
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.activity_main_actions, menu);
+
+        itemRouteAnnunciator = menu.findItem(R.id.ocpn_route_create_active);
+        if( null != itemRouteAnnunciator) {
+            itemRouteAnnunciator.setVisible(m_showRouteAnnunciator);
+        }
+
+         itemRouteMenuItem = menu.findItem(R.id.ocpn_action_createroute);
+         if( null != itemRouteMenuItem) {
+             itemRouteMenuItem.setVisible(!m_showRouteAnnunciator);
+         }
+
+
+        // Auto follow icon
+         itemFollowActive = menu.findItem(R.id.ocpn_action_follow_active);
+         if( null != itemFollowActive) {
+             itemFollowActive.setVisible(m_isFollowActive);
+
+          }
+         itemFollowInActive = menu.findItem(R.id.ocpn_action_follow);
+         if( null != itemFollowInActive) {
+              itemFollowInActive.setVisible(!m_isFollowActive);
+           }
+
+         // Track icon
+         itemTrackActive = menu.findItem(R.id.ocpn_action_track_toggle_ison);
+         if( null != itemTrackActive) {
+             itemTrackActive.setVisible(m_isTrackActive);
+         }
+         itemTrackInActive = menu.findItem(R.id.ocpn_action_track_toggle_isoff);
+         if( null != itemTrackInActive) {
+             itemTrackInActive.setVisible(!m_isTrackActive);
+         }
+
+
+
+        return super.onCreateOptionsMenu(menu);
+
+
     }
     public boolean super_onCreateOptionsMenu(Menu menu)
     {
@@ -1454,6 +2700,8 @@ public class QtActivity extends Activity
     @Override
     public View onCreateView(String name, Context context, AttributeSet attrs)
     {
+//        Toast.makeText(getApplicationContext(), "onCreateView " + name,Toast.LENGTH_LONG).show();
+
         QtApplication.InvokeResult res = QtApplication.invokeDelegate(name, context, attrs);
         if (res.invoked)
             return (View)res.methodReturns;
@@ -1469,6 +2717,8 @@ public class QtActivity extends Activity
     @Override
     protected void onDestroy()
     {
+        //Toast.makeText(getApplicationContext(), "onDestroy",Toast.LENGTH_LONG).show();
+
         super.onDestroy();
         QtApplication.invokeDelegate();
     }
@@ -1478,16 +2728,26 @@ public class QtActivity extends Activity
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event)
     {
-        Log.i("DEBUGGER_TAG", "onKeyDown");
 
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        audioManager.playSoundEffect(AudioManager.FX_KEY_CLICK);
+
+
+        if(keyCode==KeyEvent.KEYCODE_BACK){
+            //Toast.makeText(getApplicationContext(), "back press",Toast.LENGTH_LONG).show();
+            if(!m_backButtonEnable)
+                return false;
+        }
+
+/*
         if (keyCode == KeyEvent.KEYCODE_MENU) {
-            Log.i("DEBUGGER_TAG", "KEYCODE_MENU");
+            //Log.i("DEBUGGER_TAG", "KEYCODE_MENU");
 
             int i = nativeLib.onMenuKey();
 
             return true;
         }
-
+*/
 
         if (QtApplication.m_delegateObject != null && QtApplication.onKeyDown != null)
             return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onKeyDown, keyCode, event);
@@ -1582,11 +2842,76 @@ public class QtActivity extends Activity
     @Override
     public boolean onOptionsItemSelected(MenuItem item)
     {
-        QtApplication.InvokeResult res = QtApplication.invokeDelegate(item);
-        if (res.invoked)
-            return (Boolean)res.methodReturns;
-        else
-            return super.onOptionsItemSelected(item);
+//        QtApplication.InvokeResult res = QtApplication.invokeDelegate(item);
+//        if (res.invoked)
+//            return (Boolean)res.methodReturns;
+//        else
+//            return super.onOptionsItemSelected(item);
+
+        // Take appropriate action for each action item click
+        switch (item.getItemId()) {
+            case R.id.ocpn_action_follow:
+                //Log.i("DEBUGGER_TAG", "Invoke OCPN_ACTION_FOLLOW while in-active");
+                nativeLib.invokeMenuItem(OCPN_ACTION_FOLLOW);
+                return true;
+
+                case R.id.ocpn_action_follow_active:
+                    //Log.i("DEBUGGER_TAG", "Invoke OCPN_ACTION_FOLLOW while active");
+                    nativeLib.invokeMenuItem(OCPN_ACTION_FOLLOW);
+                    return true;
+
+                case R.id.ocpn_action_settings_basic:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_SETTINGS_BASIC);
+                    return true;
+
+                case R.id.ocpn_action_routemanager:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_RMD);
+                    return true;
+
+                case R.id.ocpn_action_track_toggle_ison:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_TRACK_TOGGLE);
+                    return true;
+
+                case R.id.ocpn_action_track_toggle_isoff:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_TRACK_TOGGLE);
+                    return true;
+
+                case R.id.ocpn_action_createroute:              // entering Route Create Mode
+                    nativeLib.invokeMenuItem(OCPN_ACTION_ROUTE);
+                    return true;
+
+                case R.id.ocpn_route_create_active:             // exiting Route Create mode
+                    nativeLib.invokeMenuItem(OCPN_ACTION_ROUTE);
+                    return true;
+
+                case R.id.ocpn_action_mob:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_MOB);
+                    return true;
+
+                case R.id.ocpn_action_tides:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_TIDES_TOGGLE);
+                    return true;
+
+                case R.id.ocpn_action_currents:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_CURRENTS_TOGGLE);
+                    return true;
+
+                case R.id.ocpn_action_encText:
+                    nativeLib.invokeMenuItem(OCPN_ACTION_ENCTEXT_TOGGLE);
+                    return true;
+
+                case R.id.ocpn_action_googlemaps:
+                        invokeGoogleMaps();
+                        return true;
+
+                case R.id.ocpn_action_toggle_fullscreen:
+                        toggleFullscreen();
+                        return true;
+
+            default:
+                return super.onOptionsItemSelected(item);
+            }
+
     }
     public boolean super_onOptionsItemSelected(MenuItem item)
     {
@@ -1621,6 +2946,13 @@ public class QtActivity extends Activity
     @Override
     protected void onPause()
     {
+        //Log.i("DEBUGGER_TAG", "onPause");
+
+        int i = nativeLib.onPause();
+        String aa;
+        aa = String.format("%d", i);
+        //Log.i("DEBUGGER_TAG", aa);
+
         super.onPause();
         QtApplication.invokeDelegate();
     }
@@ -1657,11 +2989,33 @@ public class QtActivity extends Activity
     @Override
     public boolean onPrepareOptionsMenu(Menu menu)
     {
-        QtApplication.InvokeResult res = QtApplication.invokeDelegate(menu);
-        if (res.invoked)
-            return (Boolean)res.methodReturns;
-        else
-            return super.onPrepareOptionsMenu(menu);
+        //Log.i("DEBUGGER_TAG", "onPrepareOptionsMenu");
+
+
+// Use native instead og Qt
+//        QtApplication.InvokeResult res = QtApplication.invokeDelegate(menu);
+//        if (res.invoked)
+//            return (Boolean)res.methodReturns;
+//        else
+//            return super.onPrepareOptionsMenu(menu);
+        ActionBar actionBar = getActionBar();
+        if(actionBar != null){
+            // set the icon
+            //actionBar.setIcon(R.drawable.opencpn_mobile);
+            actionBar.setLogo(R.drawable.opencpn_mobile);
+            actionBar.setDisplayUseLogoEnabled(true);
+
+            //  Use transparent ActionBar background?
+            //getWindow().requestFeature(Window.FEATURE_ACTION_BAR_OVERLAY);//or add in style.xml
+            //ColorDrawable newColor = new ColorDrawable(getResources().getColor(R.color.action_bar_color));//your color from res
+            //newColor.setAlpha(0);//from 0(0%) to 256(100%)
+            //getActionBar().setBackgroundDrawable(newColor);
+
+            actionBar.show();
+        }
+
+
+        return super.onPrepareOptionsMenu(menu);
     }
     public boolean super_onPrepareOptionsMenu(Menu menu)
     {
@@ -1687,6 +3041,7 @@ public class QtActivity extends Activity
     @Override
     protected void onRestart()
     {
+        //Log.i("DEBUGGER_TAG", "onRestart");
         super.onRestart();
         QtApplication.invokeDelegate();
     }
@@ -1707,6 +3062,11 @@ public class QtActivity extends Activity
     @Override
     protected void onResume()
     {
+        //Log.i("DEBUGGER_TAG", "onResume");
+
+        if(null != nativeLib)
+            nativeLib.onResume();
+
         super.onResume();
         QtApplication.invokeDelegate();
     }
@@ -1758,6 +3118,13 @@ public class QtActivity extends Activity
     @Override
     protected void onStart()
     {
+        Log.i("DEBUGGER_TAG", "onStart");
+
+//        int i = nativeLib.onStart();
+//        String aa;
+//        aa = String.format("%d", i);
+//        Log.i("DEBUGGER_TAG", aa);
+
         super.onStart();
         QtApplication.invokeDelegate();
     }
@@ -1766,6 +3133,13 @@ public class QtActivity extends Activity
     @Override
     protected void onStop()
     {
+        //Log.i("DEBUGGER_TAG", "onStop");
+
+        int i = nativeLib.onStop();
+        String aa;
+        aa = String.format("%d", i);
+        //Log.i("DEBUGGER_TAG", aa);
+
         super.onStop();
         QtApplication.invokeDelegate();
     }
@@ -1852,6 +3226,39 @@ public class QtActivity extends Activity
     {
         if (!QtApplication.invokeDelegate(hasFocus).invoked)
             super.onWindowFocusChanged(hasFocus);
+
+        if (hasFocus) {
+            if(m_fullScreen){
+/*
+                 getWindow ().getDecorView().setSystemUiVisibility(
+                         View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                         | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                         | View.SYSTEM_UI_FLAG_FULLSCREEN
+                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+*/
+                int flags =  View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+
+
+//                if(!m_showAction){
+//                    flags |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+//                }
+
+                getWindow ().getDecorView().setSystemUiVisibility( flags );
+
+
+
+
+                     }
+ //           else{
+ //               getWindow ().getDecorView().setSystemUiVisibility(0);
+ //           }
+        }
+
     }
     public void super_onWindowFocusChanged(boolean hasFocus)
     {
@@ -1860,7 +3267,7 @@ public class QtActivity extends Activity
     //---------------------------------------------------------------------------
 
     //////////////// Activity API 5 /////////////
-//@ANDROID-5
+//ANDROID-5
     @Override
     public void onAttachedToWindow()
     {
@@ -1911,10 +3318,10 @@ public class QtActivity extends Activity
         return super.onKeyLongPress(keyCode, event);
     }
     //---------------------------------------------------------------------------
-//@ANDROID-5
+//ANDROID-5
 
 //////////////// Activity API 8 /////////////
-//@ANDROID-8
+//ANDROID-8
 @Override
     protected Dialog onCreateDialog(int id, Bundle args)
     {
@@ -1941,10 +3348,10 @@ public class QtActivity extends Activity
         super.onPrepareDialog(id, dialog, args);
     }
     //---------------------------------------------------------------------------
-//@ANDROID-8
+//ANDROID-8
     //////////////// Activity API 11 /////////////
 
-//@ANDROID-11
+//ANDROID-11
     @Override
     public boolean dispatchKeyShortcutEvent(KeyEvent event)
     {
@@ -2038,13 +3445,15 @@ public class QtActivity extends Activity
         return super.onWindowStartingActionMode(callback);
     }
     //---------------------------------------------------------------------------
-//@ANDROID-11
+//ANDROID-11
     //////////////// Activity API 12 /////////////
 
-//@ANDROID-12
+//ANDROID-12
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent ev)
     {
+        //Toast.makeText(getApplicationContext(), "dispatchGenericMotionEvent",Toast.LENGTH_LONG).show();
+
         if (QtApplication.m_delegateObject != null  && QtApplication.dispatchGenericMotionEvent != null)
             return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.dispatchGenericMotionEvent, ev);
         else
@@ -2059,6 +3468,23 @@ public class QtActivity extends Activity
     @Override
     public boolean onGenericMotionEvent(MotionEvent event)
     {
+//        Log.i("DEBUGGER_TAG", "onGenericMotionEvent");
+//        Toast.makeText(getApplicationContext(), "onGenericMotionEvent",Toast.LENGTH_LONG).show();
+
+        if (0 != (event.getSource() & InputDevice.SOURCE_CLASS_POINTER)) {
+            switch (event.getAction()) {
+              case MotionEvent.ACTION_SCROLL:
+              if (event.getAxisValue(MotionEvent.AXIS_VSCROLL) < 0.0f){
+                  Log.i("DEBUGGER_TAG", "Scroll Up");
+                  nativeLib.onMouseWheel(-1);
+              }
+              else{
+                  Log.i("DEBUGGER_TAG", "Scroll Down");
+                  nativeLib.onMouseWheel(1);
+              }
+            }
+          }
+
         if (QtApplication.m_delegateObject != null  && QtApplication.onGenericMotionEvent != null)
             return (Boolean) QtApplication.invokeDelegateMethod(QtApplication.onGenericMotionEvent, event);
         else
@@ -2069,6 +3495,9 @@ public class QtActivity extends Activity
         return super.onGenericMotionEvent(event);
     }
     //---------------------------------------------------------------------------
-//@ANDROID-12
+//ANDROID-12
+
+
+
 
 }

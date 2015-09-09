@@ -24,6 +24,11 @@
 
 #include "OCPN_Sound.h"
 #include <wx/file.h>
+#ifdef __OCPN__ANDROID__
+#include "androidUTIL.h"
+#endif
+
+int                       g_iSoundDeviceIndex;
 
 #ifdef OCPN_USE_PORTAUDIO
 
@@ -92,20 +97,33 @@ OCPN_Sound::~OCPN_Sound()
     FreeMem();
 }
 
+static void Initialize()
+{
+    if(portaudio_initialized)
+        return;
+
+    PaError err = Pa_Initialize();
+    if( err != paNoError )
+        printf( "PortAudio CTOR error: %s\n", Pa_GetErrorText( err ) );
+
+    portaudio_initialized = true;
+}
+
+int OCPN_Sound::DeviceCount()
+{
+    Initialize();
+
+    return Pa_GetDeviceCount();
+}
+
 bool OCPN_Sound::IsOk() const
 {
     return m_OK;
 }
 
-bool OCPN_Sound::Create(const wxString& fileName, bool isResource)
+bool OCPN_Sound::Create(const wxString& fileName, int deviceIndex, bool isResource)
 {
-    if(!portaudio_initialized) {
-        PaError err = Pa_Initialize();
-        if( err != paNoError ) {
-            printf( "PortAudio CTOR error: %s\n", Pa_GetErrorText( err ) );
-        }
-        portaudio_initialized = true;
-    }
+    Initialize();
 
     m_OK = false;
 
@@ -144,23 +162,36 @@ bool OCPN_Sound::Create(const wxString& fileName, bool isResource)
  
     PaError err;
     m_stream = NULL;
+
+    if(g_iSoundDeviceIndex == -1)
+        g_iSoundDeviceIndex = Pa_GetDefaultOutputDevice();
+
+    if(deviceIndex == -1)
+        deviceIndex = g_iSoundDeviceIndex;
+
+    PaStreamParameters outputParameters;
+    outputParameters.device = deviceIndex;
+    outputParameters.channelCount = m_osdata->m_channels;
+    outputParameters.sampleFormat = paInt16;
+    outputParameters.suggestedLatency = 0;
+    outputParameters.hostApiSpecificStreamInfo = NULL;
     
     /* Open an audio I/O stream. */
-    err = Pa_OpenDefaultStream( &m_stream,
-                                0, /* no input channels */
-                                m_osdata->m_channels, 
-                                paInt16, 
-                                m_osdata->m_samplingRate,
-                                256, /* frames per buffer, i.e. the number
-                                of sample frames that PortAudio will
-                                request from the callback. Many apps
-                                may want to use
-                                paFramesPerBufferUnspecified, which
-                                tells PortAudio to pick the best,
-                                possibly changing, buffer size.*/
-                                OCPNSoundCallback, /* this is your callback function */
-                                sdata ); /*This is a pointer that will be passed to
-                                your callback*/
+    err = Pa_OpenStream( &m_stream,
+                         NULL, /* no input channels */
+                         &outputParameters,
+                         m_osdata->m_samplingRate,
+                         256, /* frames per buffer, i.e. the number
+                                 of sample frames that PortAudio will
+                                 request from the callback. Many apps
+                                 may want to use
+                                 paFramesPerBufferUnspecified, which
+                                 tells PortAudio to pick the best,
+                                 possibly changing, buffer size.*/
+                         paNoFlag, // flags
+                         OCPNSoundCallback, /* this is your callback function */
+                         sdata ); /*This is a pointer that will be passed to
+                                    your callback*/
     if( err != paNoError )
         printf( "PortAudio Create() error: %s\n", Pa_GetErrorText( err ) );
 
@@ -345,9 +376,10 @@ void OCPN_Sound::FreeMem(void)
 }
 
 #else  //OCPN_USE_PORTAUDIO
+
+#ifndef __OCPN__ANDROID__
 OCPN_Sound::OCPN_Sound()
 {
-//    wxSound::wxSound();
     m_OK = false;
 }
 
@@ -356,12 +388,17 @@ OCPN_Sound::~OCPN_Sound()
     Stop();
 }
 
+int OCPN_Sound::DeviceCount()
+{
+    return 1;
+}
+
 bool OCPN_Sound::IsOk() const
 {
     return m_OK;
 }
 
-bool OCPN_Sound::Create(const wxString& fileName, bool isResource)
+bool OCPN_Sound::Create(const wxString& fileName, int deviceIndex, bool isResource)
 {
     m_OK = wxSound::Create(fileName, isResource);
     return m_OK;
@@ -392,6 +429,55 @@ void OCPN_Sound::Stop()
 {
     wxSound::Stop();
 }
+#else           // __OCPN__ANDROID__
+OCPN_Sound::OCPN_Sound()
+{
+    m_OK = false;
+}
+
+OCPN_Sound::~OCPN_Sound()
+{
+    Stop();
+}
+
+int OCPN_Sound::DeviceCount()
+{
+    return 1;
+}
+
+bool OCPN_Sound::IsOk() const
+{
+    return m_OK;
+}
+
+bool OCPN_Sound::Create(const wxString& fileName, int deviceIndex, bool isResource)
+{
+    m_soundfile = fileName;
+    m_OK = true;
+    return true;
+}
+
+void OCPN_Sound::UnLoad(void)
+{
+    Stop();
+    m_OK = false;
+    
+}
+
+bool OCPN_Sound::Play(unsigned flags) const
+{
+    return androidPlaySound( m_soundfile );
+}
+
+bool OCPN_Sound::IsPlaying() const
+{
+    return false;
+}
+
+void OCPN_Sound::Stop()
+{
+}
+#endif                  // __OCPN__ANDROID__
 
 #endif  //OCPN_USE_PORTAUDIO
 

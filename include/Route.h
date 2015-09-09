@@ -26,11 +26,12 @@
 
 #include <wx/object.h>
 #include <wx/list.h>
+#include "wx28compat.h"
 
 #include "viewport.h"
 #include "RoutePoint.h"
 
-#define STYLE_UNDEFINED -1
+#define WIDTH_UNDEFINED -1
 
 #define ROUTE_DEFAULT_SPEED 5.0
 #define RTE_TIME_DISP_UTC _T("UTC")
@@ -85,7 +86,7 @@ public:
       void CloneAddedRoutePoint(RoutePoint *ptargetpoint, RoutePoint *psourcepoint);
       void ClearHighlights(void);
       void RenderSegment(ocpnDC& dc, int xa, int ya, int xb, int yb, ViewPort &VP, bool bdraw_arrow, int hilite_width = 0);
-      void RenderSegmentArrowsGL( int xa, int ya, int xb, int yb, ViewPort &VP);
+      void RenderSegmentArrowsGL( float xa, float ya, float xb, float yb, ViewPort &VP);
 
       bool CrossesIDL(){ return m_bcrosses_idl; }
       void SetVisible(bool visible = true, bool includeWpts = true);
@@ -120,7 +121,7 @@ public:
       bool        m_bIsInLayer;
       int         m_LayerID;
       int         m_width;
-      int         m_style;
+      wxPenStyle  m_style;
       int         m_lastMousePointIndex;
       bool        m_NextLegGreatCircle;
       double      m_PlannedSpeed;
@@ -137,6 +138,8 @@ public:
       int         m_hiliteWidth;
 
 private:
+      void DrawGLLines( ViewPort &VP, ocpnDC *dc = NULL );
+
       bool m_bNeedsUpdateBBox;
       wxBoundingBox     RBBox;
 

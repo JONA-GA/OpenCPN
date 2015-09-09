@@ -26,7 +26,7 @@
 #define __GLTEXTCACHE_H__
 
 #include <wx/glcanvas.h>
-#include <wx/file.h>
+#include <wx/ffile.h>
 #include <wx/timer.h>
 #include <stdint.h>
 
@@ -71,7 +71,7 @@ public:
     uint32_t    compressed_size;
 };
 
-WX_DECLARE_OBJARRAY(CatalogEntry*, ArrayOfCatalogEntries);
+WX_DEFINE_ARRAY(CatalogEntry*, ArrayOfCatalogEntries);
 
 
 class glTexFactory : public wxEvtHandler
@@ -92,6 +92,7 @@ public:
     void DeleteAllTextures( void );
     void DeleteSomeTextures( long target );
     void DeleteAllDescriptors( void );
+    bool BackgroundCompressionAsJob() const;
     void PurgeBackgroundCompressionPool();
     void OnTimer(wxTimerEvent &event);
     void SetLRUTime(wxDateTime time) { m_LRUtime = time; }
@@ -106,13 +107,15 @@ private:
     bool LoadCatalog(void);
     bool LoadHeader(void);
     bool WriteCatalogAndHeader();
-    
+
+    CatalogEntry *GetCacheEntry(int level, int x, int y, ColorScheme color_scheme);
     bool UpdateCache(unsigned char *data, int data_size, glTextureDescriptor *ptd, int level,
                                    ColorScheme color_scheme);
     bool UpdateCachePrecomp(unsigned char *data, int data_size, glTextureDescriptor *ptd, int level,
                                           ColorScheme color_scheme);
     
     void DeleteSingleTexture( glTextureDescriptor *ptd );
+    int  ArrayIndex(int x, int y) const { return ((y / m_tex_dim) * m_stride) + (x / m_tex_dim); } 
     
     int         n_catalog_entries;
     ArrayOfCatalogEntries       m_catalog;
@@ -123,7 +126,7 @@ private:
     int         m_catalog_offset;
     bool        m_hdrOK;
     bool        m_catalogOK;
-    wxFile      *m_fs;
+    wxFFile     *m_fs;
     uint32_t    m_chart_date_binary;
     
     int         m_stride;
@@ -179,10 +182,10 @@ public:
                       bool b_throttle_thread, bool b_immediate, bool b_postZip);
     void OnEvtThread( OCPN_CompressionThreadEvent & event );
     int GetRunningJobCount(){ return m_njobs_running; }
+    bool AsJob( wxString const &chart_path ) const;
     void PurgeJobList( wxString chart_path = wxEmptyString );
     
     unsigned int m_raster_format;
-    JobList             running_list;
     
 private:
     
@@ -190,6 +193,7 @@ private:
     bool DoThreadJob(JobTicket* pticket);
     bool StartTopJob();
     
+    JobList             running_list;
     JobList             todo_list;
     int                 m_njobs_running;
     int                 m_max_jobs;

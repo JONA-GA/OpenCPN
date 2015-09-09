@@ -31,6 +31,18 @@
 
 #include "TexFont.h"
 
+TexFont::TexFont( )
+{
+    texobj = 0;
+    m_blur = false;
+    m_built = false;
+}
+
+TexFont::~TexFont( )
+{
+}
+
+
 void TexFont::Build( wxFont &font, bool blur )
 {
     /* avoid rebuilding if the parameters are the same */
@@ -159,6 +171,8 @@ void TexFont::Build( wxFont &font, bool blur )
 
         free(teximage);
     }
+    
+    m_built = true;
 }
 
 void TexFont::Delete( )

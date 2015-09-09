@@ -1,4 +1,4 @@
-/******************************************************************************
+ /******************************************************************************
  *
  * Project:  OpenCPN
  * Purpose:  GRIB Object
@@ -37,6 +37,8 @@
 
 #include "GribUIDialog.h"
 #include "GribOverlayFactory.h"
+
+extern int m_Altitude;
 
 enum GRIB_OVERLAP { _GIN, _GON, _GOUT };
 
@@ -215,7 +217,7 @@ static const int windArrowSize = 26;   //set arrow size
 //----------------------------------------------------------------------------------------------------------
 //    Grib Overlay Factory Implementation
 //----------------------------------------------------------------------------------------------------------
-GRIBOverlayFactory::GRIBOverlayFactory( GRIBUIDialog &dlg )
+GRIBOverlayFactory::GRIBOverlayFactory( GRIBUICtrlBar &dlg )
     : m_dlg(dlg), m_Settings(dlg.m_OverlaySettings)
 {
     m_dFont_map = new wxFont( 10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL );
@@ -224,6 +226,7 @@ GRIBOverlayFactory::GRIBOverlayFactory( GRIBUIDialog &dlg )
     m_pGribTimelineRecordSet = NULL;
     m_last_vp_scale = 0.;
 
+    InitColorsTable();
     for(int i=0; i<GribOverlaySettings::SETTINGS_COUNT; i++)
         m_pOverlay[i] = NULL;
 
@@ -300,7 +303,7 @@ GRIBOverlayFactory::GRIBOverlayFactory( GRIBUIDialog &dlg )
 
     for(i=0; i<14; i++)
         m_WindArrowCache[i].Finalize();
-    
+
     // Generate Single and Double arrow caches
     for(int i = 0; i<2; i++) {
         int arrowSize;
@@ -381,23 +384,23 @@ void GRIBOverlayFactory::SettingsIdToGribId(int i, int &idx, int &idy, bool &pol
     case GribOverlaySettings::WIND:
         idx = Idx_WIND_VX + m_Altitude, idy = Idx_WIND_VY + m_Altitude; break;
     case GribOverlaySettings::WIND_GUST:
-        idx = Idx_WIND_GUST; break;
+        if( !m_Altitude ) idx = Idx_WIND_GUST; break;
     case GribOverlaySettings::PRESSURE:
-        idx = Idx_PRESSURE; break;
+        if( !m_Altitude ) idx = Idx_PRESSURE; break;
     case GribOverlaySettings::WAVE:
-        idx = Idx_HTSIGW, idy = Idx_WVDIR; polar = true; break;
+        if( !m_Altitude ) { idx = Idx_HTSIGW, idy = Idx_WVDIR, polar = true; } break;
     case GribOverlaySettings::CURRENT:
-        idx = Idx_SEACURRENT_VX, idy = Idx_SEACURRENT_VY; break;
+        if( !m_Altitude ) {  idx = Idx_SEACURRENT_VX, idy = Idx_SEACURRENT_VY; } break;
     case GribOverlaySettings::PRECIPITATION:
-        idx = Idx_PRECIP_TOT; break;
+        if( !m_Altitude ) idx = Idx_PRECIP_TOT; break;
     case GribOverlaySettings::CLOUD:
-        idx = Idx_CLOUD_TOT; break;
+        if( !m_Altitude ) idx = Idx_CLOUD_TOT; break;
     case GribOverlaySettings::AIR_TEMPERATURE:
-        idx = Idx_AIR_TEMP; break;
+        if( !m_Altitude ) idx = Idx_AIR_TEMP; break;
     case GribOverlaySettings::SEA_TEMPERATURE:
-        idx = Idx_SEA_TEMP; break;
+        if( !m_Altitude ) idx = Idx_SEA_TEMP; break;
     case GribOverlaySettings::CAPE:
-        idx = Idx_CAPE; break;
+        if( !m_Altitude ) idx = Idx_CAPE; break;
     }
 }
 
@@ -426,13 +429,13 @@ bool GRIBOverlayFactory::DoRenderGribOverlay( PlugIn_ViewPort *vp )
     GribRecord **pGR = m_pGribTimelineRecordSet->m_GribRecordPtrArray;
     wxArrayPtrVoid **pIA = m_pGribTimelineRecordSet->m_IsobarArray;
 
-    for(int overlay = 1; overlay >= 0; overlay--)
+    for(int overlay = 1; overlay >= 0; overlay--) {
         for(int i=0; i<GribOverlaySettings::SETTINGS_COUNT; i++) {
             if(i == GribOverlaySettings::WIND ) {
                 if(overlay) {   /* render overlays first */
-                    if(m_dlg.m_cbWind->GetValue()) RenderGribOverlayMap( i, pGR, vp );
+                    if(m_dlg.m_bDataPlot[i]) RenderGribOverlayMap( i, pGR, vp );
                 } else {
-                    if(m_dlg.m_cbWind->GetValue()){
+                    if(m_dlg.m_bDataPlot[i]){
                         RenderGribBarbedArrows( i, pGR, vp );
                         RenderGribIsobar( i, pGR, pIA, vp );
                         RenderGribNumbers( i, pGR, vp );
@@ -445,7 +448,7 @@ bool GRIBOverlayFactory::DoRenderGribOverlay( PlugIn_ViewPort *vp )
             }
             if(i == GribOverlaySettings::PRESSURE ) {
                 if(!overlay) {   /*no overalay for pressure*/
-                    if( m_dlg.m_cbPressure->GetValue() ) {
+                    if( m_dlg.m_bDataPlot[i] ) {
                         RenderGribIsobar( i, pGR, pIA, vp );
                         RenderGribNumbers( i, pGR, vp );
                     } else {
@@ -454,35 +457,30 @@ bool GRIBOverlayFactory::DoRenderGribOverlay( PlugIn_ViewPort *vp )
                 }
                 continue;
             }
-        if((i == GribOverlaySettings::WIND_GUST       && !m_dlg.m_cbWindGust->GetValue()) ||
-           (i == GribOverlaySettings::WAVE            && !m_dlg.m_cbWave->GetValue()) ||
-           (i == GribOverlaySettings::CURRENT         && !m_dlg.m_cbCurrent->GetValue()) ||
-           (i == GribOverlaySettings::PRECIPITATION   && !m_dlg.m_cbPrecipitation->GetValue()) ||
-           (i == GribOverlaySettings::CLOUD           && !m_dlg.m_cbCloud->GetValue()) ||
-           (i == GribOverlaySettings::AIR_TEMPERATURE && !m_dlg.m_cbAirTemperature->GetValue()) ||
-           (i == GribOverlaySettings::SEA_TEMPERATURE && !m_dlg.m_cbSeaTemperature->GetValue()) ||
-           (i == GribOverlaySettings::CAPE            && !m_dlg.m_cbCAPE->GetValue()))
-            continue;
+            if( m_dlg.InDataPlot(i) && !m_dlg.m_bDataPlot[i] )
+                continue;
 
-        if(overlay) /* render overlays first */
-            RenderGribOverlayMap( i, pGR, vp );
-        else {
-            RenderGribBarbedArrows( i, pGR, vp );
-            RenderGribIsobar( i, pGR, pIA, vp );
-            RenderGribDirectionArrows( i, pGR, vp );
-            RenderGribNumbers( i, pGR, vp );
-            RenderGribParticles( i, pGR, vp );
+            if(overlay) /* render overlays first */
+                RenderGribOverlayMap( i, pGR, vp );
+            else {
+                RenderGribBarbedArrows( i, pGR, vp );
+                RenderGribIsobar( i, pGR, pIA, vp );
+                RenderGribDirectionArrows( i, pGR, vp );
+                RenderGribNumbers( i, pGR, vp );
+                RenderGribParticles( i, pGR, vp );
+            }
         }
     }
     if( m_Altitude ) {
-        if( !m_Message_Hiden.IsEmpty() ) m_Message_Hiden.Append(_T("   "));
-        m_Message_Hiden.Append(_("WIND data at")).Append(_T(" "))
+        if( ! m_Message_Hiden.IsEmpty() ) m_Message_Hiden.Append(_T("\n"));
+		m_Message_Hiden.Append(_("Warning : Data at")).Append(_T(" "))
             .Append(m_Settings.GetAltitudeFromIndex(m_Altitude, m_Settings.Settings[GribOverlaySettings::PRESSURE].m_Units)).Append(_T(" "))
             .Append(m_Settings.GetUnitSymbol(GribOverlaySettings::PRESSURE))
-            .Append(_T(" !"));
+            .Append(_T(" ! "));
     }
-    if( !m_Message_Hiden.IsEmpty() )
-        DrawMessageWindow( m_Message_Hiden , vp->pix_width, vp->pix_height, m_dFont_map );
+    if( !m_Message_Hiden.IsEmpty() ) m_Message_Hiden.Append( _T("\n") );
+	m_Message_Hiden.Append( m_Message );
+    DrawMessageWindow( m_Message_Hiden , vp->pix_width, vp->pix_height, m_dFont_map );
     return true;
 }
 
@@ -636,16 +634,19 @@ wxImage GRIBOverlayFactory::CreateGribImage( int settings, GribRecord *pGR,
 struct ColorMap {
     double val;
     wxString text;
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
 };
 
-ColorMap CurrentMap[] =
+static ColorMap CurrentMap[] =
 {{0,  _T("#d90000")},  {1, _T("#d92a00")},  {2, _T("#d96e00")},  {3, _T("#d9b200")},
  {4,  _T("#d4d404")},  {5, _T("#a6d906")},  {7, _T("#06d9a0")},  {9, _T("#00d9b0")},
  {12, _T("#00d9c0")}, {15, _T("#00aed0")}, {18, _T("#0083e0")}, {21, _T("#0057e0")},
  {24, _T("#0000f0")}, {27, _T("#0400f0")}, {30, _T("#1c00f0")}, {36, _T("#4800f0")},
  {42, _T("#6900f0")}, {48, _T("#a000f0")}, {56, _T("#f000f0")}};
 
-ColorMap GenericMap[] =
+static ColorMap GenericMap[] =
 {{0, _T("#00d900")},  {1, _T("#2ad900")},  {2, _T("#6ed900")},  {3, _T("#b2d900")},
  {4, _T("#d4d400")},  {5, _T("#d9a600")},  {7, _T("#d90000")},  {9, _T("#d90040")},
  {12, _T("#d90060")}, {15, _T("#ae0080")}, {18, _T("#8300a0")}, {21, _T("#5700c0")},
@@ -653,7 +654,7 @@ ColorMap GenericMap[] =
  {42, _T("#c004c0")}, {48, _T("#c008a0")}, {56, _T("#c0a008")}};
 
 //    HTML colors taken from zygrib representation
-ColorMap WindMap[] =
+static ColorMap WindMap[] =
 {{0, _T("#288CFF")},{3, _T("#00AFFF")},{6, _T("#00DCE1")},{9, _T("#00F7B0")},{12, _T("#00EA9C")},
 {15, _T("#82F059")},{18, _T("#F0F503")},{21, _T("#FFED00")},{24, _T("#FFDB00")},{27, _T("#FFC700")},
 {30, _T("#FFB400")},{33, _T("#FF9800")},{36, _T("#FF7E00")},{39, _T("#F77800")},{42, _T("#EC7814")},
@@ -661,7 +662,7 @@ ColorMap WindMap[] =
 {60, _T("#BE2C50")},{63, _T("#B41A5A")},{66, _T("#AA1464")},{70, _T("#962878")},{75, _T("#8C328C")}};
 
 //    HTML colors taken from zygrib representation
-ColorMap AirTempMap[] =
+static ColorMap AirTempMap[] =
 {{0, _T("#283282")}, {5, _T("#273c8c")}, {10, _T("#264696")}, {14, _T("#2350a0")},
  {18, _T("#1f5aaa")}, {22, _T("#1a64b4")}, {26, _T("#136ec8")}, {29, _T("#0c78e1")},
  {32, _T("#0382e6")}, {35, _T("#0091e6")}, {38, _T("#009ee1")}, {41 , _T("#00a6dc")},
@@ -671,7 +672,7 @@ ColorMap AirTempMap[] =
  {82 , _T("#ff8100")}, { 86, _T("#f1780c")}, {90 , _T("#e26a23")}, {95 , _T("#d5453c")},
  {100 , _T("#b53c59")}};
 
-ColorMap SeaTempMap[] =
+static ColorMap SeaTempMap[] =
 {{0, _T("#0000d9")},  {1, _T("#002ad9")},  {2, _T("#006ed9")},  {3, _T("#00b2d9")},
  {4, _T("#00d4d4")},  {5, _T("#00d9a6")},  {7, _T("#00d900")},  {9, _T("#95d900")},
  {12, _T("#d9d900")}, {15, _T("#d9ae00")}, {18, _T("#d98300")}, {21, _T("#d95700")},
@@ -679,24 +680,48 @@ ColorMap SeaTempMap[] =
  {42, _T("#690000")}, {48, _T("#550000")}, {56, _T("#410000")}};
 
     //    HTML colors taken from ZyGrib representation
-ColorMap PrecipitationMap[] =
+static ColorMap PrecipitationMap[] =
 {{0,   _T("#ffffff")}, {.01, _T("#c8f0ff")}, {.02, _T("#b4e6ff")}, {.05, _T("#8cd3ff")},
  {.07, _T("#78caff")}, {.1 , _T("#6ec1ff")}, {.2 , _T("#64b8ff")}, {.5 , _T("#50a6ff")},
  {.7 , _T("#469eff")}, {1.0, _T("#3c96ff")}, {2.0, _T("#328eff")}, {5.0, _T("#1e7eff")},
  {7.0, _T("#1476f0")}, {10 , _T("#0a6edc")}, {20 , _T("#0064c8")}, {50, _T("#0052aa")}};
 
     //    HTML colors taken from ZyGrib representation
-ColorMap CloudMap[] =
+static ColorMap CloudMap[] =
 {{0,  _T("#ffffff")}, {1,  _T("#f0f0e6")}, {10, _T("#e6e6dc")}, {20, _T("#dcdcd2")},
  {30, _T("#c8c8b4")}, {40, _T("#aaaa8c")}, {50, _T("#969678")}, {60, _T("#787864")},
  {70, _T("#646450")}, {80, _T("#5a5a46")}, {90, _T("#505036")}};
 
-ColorMap *ColorMaps[] = {CurrentMap, GenericMap, WindMap, AirTempMap, SeaTempMap, PrecipitationMap, CloudMap};
+#if 0
+static ColorMap *ColorMaps[] = {CurrentMap, GenericMap, WindMap, AirTempMap, SeaTempMap, PrecipitationMap, CloudMap};
+#endif
 
 enum {
     GENERIC_GRAPHIC_INDEX, WIND_GRAPHIC_INDEX, AIRTEMP__GRAPHIC_INDEX, SEATEMP_GRAPHIC_INDEX,
     PRECIPITATION_GRAPHIC_INDEX, CLOUD_GRAPHIC_INDEX, CURRENT_GRAPHIC_INDEX
 };
+
+static void InitColor(ColorMap *map, size_t maplen)
+{
+    wxColour c;
+    for (size_t i = 0; i < maplen; i++) {
+        c.Set(map[i].text);
+        map[i].r = c.Red();
+        map[i].g = c.Green();
+        map[i].b = c.Blue();
+    }
+}
+
+void GRIBOverlayFactory::InitColorsTable( )
+{
+    InitColor(CurrentMap, (sizeof CurrentMap) / (sizeof *CurrentMap));
+    InitColor(GenericMap, (sizeof GenericMap) / (sizeof *GenericMap));
+    InitColor(WindMap, (sizeof WindMap) / (sizeof *WindMap));
+    InitColor(AirTempMap, (sizeof AirTempMap) / (sizeof *AirTempMap));
+    InitColor(SeaTempMap, (sizeof SeaTempMap) / (sizeof *SeaTempMap));
+    InitColor(PrecipitationMap, (sizeof PrecipitationMap) / (sizeof *PrecipitationMap));
+    InitColor(CloudMap, (sizeof CloudMap) / (sizeof *CloudMap));
+}
 
 wxColour GRIBOverlayFactory::GetGraphicColor(int settings, double val_in)
 {
@@ -750,15 +775,16 @@ wxColour GRIBOverlayFactory::GetGraphicColor(int settings, double val_in)
         double nmapvala = map[i-1].val/cmax;
         double nmapvalb = map[i].val/cmax;
         if(nmapvalb > val_in || i==maplen-1) {
-            wxColour b, c;
-            c.Set(map[i].text);
+            wxColour c;
             if(m_bGradualColors) {
-                b.Set(map[i-1].text);
                 double d = (val_in-nmapvala)/(nmapvalb-nmapvala);
-                c.Set((1-d)*b.Red()   + d*c.Red(),
-                      (1-d)*b.Green() + d*c.Green(),
-                      (1-d)*b.Blue()  + d*c.Blue());
+                c.Set((1-d)* map[i -1].r  + d* map[i].r,
+                      (1-d)* map[i -1].g + d* map[i].g,
+                      (1-d)* map[i -1].b  + d* map[i].b);
             }
+            else
+                c.Set(map[i].r, map[i].g, map[i].b);
+            
             return c;
         }
     }
@@ -1463,37 +1489,39 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
     if(!m_ParticleMap)
         m_ParticleMap = new ParticleMap(settings);
 
-    std::list<Particle> &particles = m_ParticleMap->m_Particles;
+    std::vector<Particle> &particles = m_ParticleMap->m_Particles;
 
     const int max_duration = 50;
     const int run_count = 6;
-    int history_size = 24 / sqrt(m_Settings.Settings[settings].m_dParticleDensity);
+
+    double density = m_Settings.Settings[settings].m_dParticleDensity;
+//    density = density * sqrt(vp.view_scale_ppm);
+
+    int history_size = 27 / sqrt(density);
     history_size = wxMin(history_size, MAX_PARTICLE_HISTORY);
 
-    std::list<Particle>::iterator it;
+    std::vector<Particle>::iterator it;
     // if the history size changed
     if(m_ParticleMap->history_size != history_size) {
-        it = particles.begin();
-
-        while(it != particles.end()) {
-            if(m_ParticleMap->history_size > history_size) {
-                if(it->m_HistoryPos >= history_size) {
-                    it = particles.erase(it);
-                    continue;
-                }
+        for(unsigned int i = 0; i < particles.size(); i++) {
+            Particle &it = particles[i];
+            if(m_ParticleMap->history_size > history_size &&
+               it.m_HistoryPos >= history_size) {
+                it = particles[particles.size() - 1];
+                particles.pop_back();
+                i--;
+                continue;
             }
 
-            it->m_HistorySize = it->m_HistoryPos+1;
-            it++;
+            it.m_HistorySize = it.m_HistoryPos+1;
         }
-
         m_ParticleMap->history_size = history_size;
     }
 
     // Did the viewport change?  update cached screen coordinates
     // we could use normalized coordinates in opengl and avoid this
     PlugIn_ViewPort &lvp = m_ParticleMap->last_viewport;
-    if(vp->view_scale_ppm != lvp.view_scale_ppm
+    if(lvp.bValid == false || vp->view_scale_ppm != lvp.view_scale_ppm
         || vp->skew != lvp.skew || vp->rotation != lvp.rotation) {
         for(it = particles.begin(); it != particles.end(); it++)
             for(int i=0; i<it->m_HistorySize; i++) {
@@ -1530,37 +1558,45 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
             lvp = *vp;
         }
 
+    double mtime = 0, ptime = 0, ctime = 0, ttime = 0;
+
     // update particle map
     if(m_bUpdateParticles) {
-        for(it = particles.begin(); it != particles.end(); it++) {
+        for(unsigned int i = 0; i < particles.size(); i++) {
+            Particle &it = particles[i];
+
             // Update the interpolation factor
-            if(++it->m_Run < run_count)
+            if(++it.m_Run < run_count)
                 continue;
-            it->m_Run = 0;
+            it.m_Run = 0;
 
             // don't allow particle to live too long
-            if(it->m_Duration > max_duration) {
-                it = particles.erase(it);
+            if(it.m_Duration > max_duration) {
+                it = particles[particles.size() - 1];
+                particles.pop_back();
+                i--;
                 continue;
             }
 
-            it->m_Duration++;
+            it.m_Duration++;
 
-            float (&pp)[2] = it->m_History[it->m_HistoryPos].m_Pos;
+            float (&pp)[2] = it.m_History[it.m_HistoryPos].m_Pos;
 
             // maximum history size
-            if(++it->m_HistorySize > history_size)
-                it->m_HistorySize = history_size;
+            if(++it.m_HistorySize > history_size)
+                it.m_HistorySize = history_size;
 
-            if(++it->m_HistoryPos >= history_size)
-                it->m_HistoryPos = 0;
+            if(++it.m_HistoryPos >= history_size)
+                it.m_HistoryPos = 0;
 
-            Particle::ParticleNode &n = it->m_History[it->m_HistoryPos];
+            Particle::ParticleNode &n = it.m_History[it.m_HistoryPos];
             float (&p)[2] = n.m_Pos;
             double vkn=0, ang;
-            if(it->m_Duration < max_duration - history_size &&
+
+            if(it.m_Duration < max_duration - history_size &&
                GribRecord::getInterpolatedValues(vkn, ang, pGRX, pGRY, pp[0], pp[1]) &&
                vkn > 0 && vkn < 100 ) {
+
                 vkn = m_Settings.CalibrateValue(settings, vkn);
                 double d;
                 if(settings == GribOverlaySettings::CURRENT)
@@ -1569,9 +1605,13 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
                     d = vkn*run_count/4;
 
                 ang += 180;
+
 #if 0 // elliptical very accurate but incredibly slow
-                PositionBearingDistanceMercator_Plugin(pp.m_y, pp.m_x, ang,
-                                                       d, &p.m_y, &p.m_x);
+                double dp[2];
+                PositionBearingDistanceMercator_Plugin(pp[1], pp[0], ang,
+                                                       d, &dp[1], &dp[0]);
+                p[0] = dp[0];
+                p[1] = dp[1];
 #elif 0 // really fast rectangular.. not really good at high latitudes
 
                 float angr = ang/180*M_PI;
@@ -1589,7 +1629,6 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
                 p[1] = asinf(sy*cD + cy*sD*ca) * 180/M_PI;
 #endif
                 wxPoint ps;
-
                 GetCanvasPixLL( vp, &ps, p[1], p[0] );
 
                 n.m_Screen[0] = ps.x;
@@ -1602,25 +1641,25 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
                 n.m_Color[2] = c.Blue();
             } else
                 p[0] = -10000;
+            ptime += sw.Time();
         }
     }
-
     m_bUpdateParticles = false;
 
-    int total_particles = m_Settings.Settings[settings].m_dParticleDensity * pGRX->getNi() * pGRX->getNj();
+    int total_particles = density * pGRX->getNi() * pGRX->getNj();
 
     // set max cap to avoid locking the program up
     if(total_particles > 60000)
         total_particles = 60000;
 
     // remove particles if needed;
-    int remove_particles = (particles.size() - total_particles) / 16;
+    int remove_particles = ((int)particles.size() - total_particles) / 16;
     for(int i = 0; i<remove_particles; i++)
         particles.pop_back();
 
     // add new particles as needed
     int run = 0;
-    int new_particles = (total_particles - particles.size()) / 64;
+    int new_particles = (total_particles - (int)particles.size()) / 64;
 
     for(int npi=0; npi<new_particles; npi++) {
         float p[2];
@@ -1656,8 +1695,7 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
         np.m_History[np.m_HistoryPos].m_Screen[0] = ps.x;
         np.m_History[np.m_HistoryPos].m_Screen[1] = ps.y;
 
-        wxColour c;
-        c = GetGraphicColor(settings, vkn);
+        wxColour c = GetGraphicColor(settings, vkn);
         np.m_History[np.m_HistoryPos].m_Color[0] = c.Red();
         np.m_History[np.m_HistoryPos].m_Color[1] = c.Green();
         np.m_History[np.m_HistoryPos].m_Color[2] = c.Blue();
@@ -1680,15 +1718,15 @@ void GRIBOverlayFactory::RenderGribParticles( int settings, GribRecord **pGR,
     float *&va = m_ParticleMap->vertex_array;
 
     if(m_ParticleMap->array_size < particles.size() && !m_pdc) {
+        m_ParticleMap->array_size = 2*particles.size();
         delete [] ca;
         delete [] va;
-        ca = new unsigned char[particles.size() * MAX_PARTICLE_HISTORY * 8];
-        va = new float[particles.size() * MAX_PARTICLE_HISTORY * 4];
-        m_ParticleMap->array_size = particles.size();
+        ca = new unsigned char[m_ParticleMap->array_size * MAX_PARTICLE_HISTORY * 8];
+        va = new float[m_ParticleMap->array_size * MAX_PARTICLE_HISTORY * 4];
     }
 
     // draw particles
-    for(std::list<Particle>::iterator it = particles.begin();
+    for(std::vector<Particle>::iterator it = particles.begin();
         it != particles.end(); it++) {
 
         wxUint8 alpha = 250;
@@ -1881,8 +1919,10 @@ void GRIBOverlayFactory::drawWindArrowWithBarbs( int settings, int x, int y, dou
         m_pdc->SetPen( pen );
         m_pdc->SetBrush( *wxTRANSPARENT_BRUSH);
 
+#if wxUSE_GRAPHICS_CONTEXT
         if( m_hiDefGraphics && m_gdc )
             m_gdc->SetPen( pen );
+#endif
     }
 #ifdef ocpnUSE_GL
     else
@@ -1918,7 +1958,7 @@ void GRIBOverlayFactory::drawLineBuffer(LineBuffer &buffer, int x, int y, double
 
     float vertexes[40];
 
-    wxASSERT(sizeof vertexes / sizeof *vertexes >= buffer.count*4);
+    wxASSERT(sizeof vertexes / sizeof *vertexes >= (unsigned)buffer.count*4);
     for(int i=0; i < 2*buffer.count; i++) {
         float *k = buffer.lines + 2*i;
         vertexes[2*i+0] = k[0]*cox + k[1]*siy + x;

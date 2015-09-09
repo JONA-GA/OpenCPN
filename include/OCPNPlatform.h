@@ -37,6 +37,18 @@
 
 #include <stdio.h>
 
+class MyConfig;
+
+//--------------------------------------------------------------------------
+//      Per-Platform Utility support
+//--------------------------------------------------------------------------
+
+#ifdef __WXQT__
+extern bool LoadQtStyleSheet(wxString &sheet_file);
+extern QString getQtStyleSheet( void );
+#endif
+
+
 class OCPNPlatform
 {
 public:    
@@ -68,16 +80,28 @@ public:
     
 
     void SetDefaultOptions( void );
+
+    void applyExpertMode(bool mode);
     
 //--------------------------------------------------------------------------
 //      Platform Display Support
 //--------------------------------------------------------------------------
-    void ShowBusySpinner( void );
-    void HideBusySpinner( void );
+    static void ShowBusySpinner( void );
+    static void HideBusySpinner( void );
     double getFontPointsperPixel( void );
     wxSize getDisplaySize();
     double GetDisplaySizeMM();
+    double GetDisplayDPmm();
+    double GetToolbarScaleFactor( int GUIScaleFactor );
+    double GetCompassScaleFactor( int GUIScaleFactor );
+    void onStagedResizeFinal();
     
+    wxFileDialog *AdjustFileDialogFont(wxWindow *container, wxFileDialog *dlg);
+    wxDirDialog  *AdjustDirDialogFont(wxWindow *container,  wxDirDialog *dlg);
+
+    void PositionAISAlert( wxWindow *alert_window);
+    float getChartScaleFactorExp( float scale_linear );
+    int GetStatusBarFieldCount();
     
 //--------------------------------------------------------------------------
 //      Per-Platform file/directory support
@@ -88,16 +112,31 @@ public:
     wxString &GetExePath();
     wxString &GetSharedDataDir();
     wxString &GetPrivateDataDir();
+    wxString GetWritableDocumentsDir();
     wxString &GetPluginDir();
     wxString &GetConfigFileName();
     wxString *GetPluginDirPtr();
     wxString *GetSharedDataDirPtr();
     wxString *GetPrivateDataDirPtr();
+    wxString &GetLogFileName(){ return mlog_file; }
+    MyConfig *GetConfigObject();
+    wxString GetSupplementalLicenseString();
+    
+    int DoFileSelectorDialog( wxWindow *parent, wxString *file_spec, wxString Title, wxString initDir,
+                                wxString suggestedName, wxString wildcard);
+    int DoDirSelectorDialog( wxWindow *parent, wxString *file_spec, wxString Title, wxString initDir);
     
     bool InitializeLogFile( void );
     void CloseLogFile( void );
     wxString    &GetLargeLogMessage( void ){ return large_log_message; }
     FILE        *GetLogFilePtr(){ return flog; }
+
+    
+    
+//--------------------------------------------------------------------------
+//      Per-Platform Utility support
+//--------------------------------------------------------------------------
+    void setChartTypeMaskSel(int mask, wxString &indicator);
 
 private:
     wxString    m_homeDir;

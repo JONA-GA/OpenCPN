@@ -103,6 +103,16 @@ OCPNRegion &QuiltCandidate::GetCandidateVPRegion( ViewPort &vp )
         return candidate_region;
     }
     
+    // Special case:
+    // A skewed chart at high magnification will produce an OCPNregion that is very complex and expensive to process.
+    // And there is really no useful visual information to be gotten from the chart, anyway.
+    //  So, we simply "eclipse" these quilt candidates under these conditions as a p[erformance optimization.
+    
+    if( (vp.chart_scale < cte.GetScale() / 10) && (cte.GetChartSkew() > 1.0) ){
+        candidate_region.Clear();
+        return candidate_region;
+    }
+    
     
     //    If the chart has an aux ply table, use it for finer region precision
     int nAuxPlyEntries = cte.GetnAuxPlyEntries();
@@ -202,6 +212,7 @@ Quilt::Quilt()
     m_refchart_dbIndex = -1;
     m_reference_type = CHART_TYPE_UNKNOWN;
     m_reference_family = CHART_FAMILY_UNKNOWN;
+    m_quilt_proj = PROJECTION_UNKNOWN;
 
     m_lost_refchart_dbIndex = -1;
     
@@ -991,8 +1002,14 @@ int Quilt::AdjustRefOnZoomOut( double proposed_scale_onscreen )
     m_lost_refchart_dbIndex = -1;
     
     int current_db_index = m_refchart_dbIndex;
-    int current_family = m_reference_family;
-    ChartTypeEnum current_type = (ChartTypeEnum) m_reference_type;
+    int current_family =   m_reference_family;
+    ChartTypeEnum current_type = (ChartTypeEnum)m_reference_type;
+    
+    if(m_refchart_dbIndex >= 0){
+        const ChartTableEntry &cte = ChartData->GetChartTableEntry( m_refchart_dbIndex );
+        current_family =  cte.GetChartFamily();
+        current_type = (ChartTypeEnum) cte.GetChartType(); 
+    }
  
     if( current_type == CHART_TYPE_CM93COMP )
             return current_db_index;
@@ -1130,8 +1147,6 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
         quilt_proj = ChartData->GetDBChartProj( ref_db_index );
         reference_family = cte_ref.GetChartFamily();
     }
-    else
-        return false;
 
     bool b_need_resort = false;
 
@@ -1554,15 +1569,18 @@ bool Quilt::Compose( const ViewPort &vp_in )
 
         OCPNRegion chart_region = pqc_ref->GetCandidateVPRegion( vp_local );
 
-        if( !chart_region.Empty() )
+        if( !chart_region.Empty() ){
             vpu_region.Intersect( chart_region );
 
-        if( vpu_region.IsEmpty() )
-            pqc_ref->b_include = false;   // skip this chart, no true overlap
-        else {
-            pqc_ref->b_include = true;
-            vp_region.Subtract( chart_region );          // adding this chart
+            if( vpu_region.IsEmpty() )
+                pqc_ref->b_include = false;   // skip this chart, no true overlap
+            else {
+                pqc_ref->b_include = true;
+                vp_region.Subtract( chart_region );          // adding this chart
+            }
         }
+        else
+            pqc_ref->b_include = false;   // skip this chart, empty region
     }
     
     //    Now the rest of the candidates
@@ -1601,15 +1619,18 @@ bool Quilt::Compose( const ViewPort &vp_in )
                     OCPNRegion vpu_region( vp_local.rv_rect );
 
                     OCPNRegion chart_region = pqc->GetCandidateVPRegion( vp_local );  //quilt_region;
-                    if( !chart_region.Empty() )
+                    if( !chart_region.Empty() ){
                         vpu_region.Intersect( chart_region );
 
-                    if( vpu_region.IsEmpty() )
-                        pqc->b_include = false; // skip this chart, no true overlap
-                    else {
-                        pqc->b_include = true;
-                        vp_region.Subtract( chart_region );          // adding this chart
+                        if( vpu_region.IsEmpty() )
+                            pqc->b_include = false; // skip this chart, no true overlap
+                        else {
+                            pqc->b_include = true;
+                            vp_region.Subtract( chart_region );          // adding this chart
+                        }
                     }
+                    else
+                        pqc->b_include = false;   // skip this chart, empty region
                 } else {
                     pqc->b_include = true;
                 }

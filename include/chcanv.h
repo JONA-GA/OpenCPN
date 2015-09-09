@@ -40,11 +40,9 @@
 #include "undo.h"
 
 #include "ocpCursor.h"
-#include "S57QueryDialog.h"
 #include "GoToPositionDialog.h"
 #include "CM93DSlide.h"
 #include "RolloverWin.h"
-#include "AISTargetQueryDialog.h"
 #include "timers.h"
 #include "emboss_data.h"
 #include "S57Sector.h"
@@ -164,6 +162,7 @@ public:
       void PaintCleanup();
       void Scroll(int dx, int dy);
 
+      bool MouseEventChartBar( wxMouseEvent& event );
       bool MouseEventSetup( wxMouseEvent& event, bool b_handle_dclick = true );
       bool MouseEventProcessObjects( wxMouseEvent& event );
       bool MouseEventProcessCanvas( wxMouseEvent& event );
@@ -186,6 +185,8 @@ public:
                         bool b_adjust = true, bool b_refresh = true);
       bool SetVPScale(double sc, bool b_refresh = true);
       bool SetViewPoint ( double lat, double lon);
+      bool SetViewPointByCorners( double latSW, double lonSW, double latNE, double lonNE );
+      
       void ReloadVP ( bool b_adjust = true );
       void LoadVP ( ViewPort &vp, bool b_adjust = true );
 
@@ -205,6 +206,8 @@ public:
       void UpdateAIS();
       void UpdateAlerts();                          // pjotrc 2010.02.22
 
+      wxBitmap &GetTideBitmap(){ return m_cTideBitmap; }
+      
       void SetQuiltMode(bool b_quilt);
       bool GetQuiltMode(void);
       ArrayOfInts GetQuiltIndexArray(void);
@@ -215,6 +218,8 @@ public:
       
       int GetNextContextMenuId();
 
+      TCWin *getTCWin(){ return pCwin; }
+      
       bool StartTimedMovement( bool stoptimer=true );
       void DoTimedMovement( );
       void DoMovement( long dt );
@@ -296,7 +301,7 @@ public:
       
       wxColour GetFogColor(){ return m_fog_color; }      
       
-      void ShowChartInfoWindow(int x, int y, int dbIndex);
+      void ShowChartInfoWindow(int x, int dbIndex);
       void HideChartInfoWindow(void);
     
       void StartMeasureRoute();
@@ -308,8 +313,10 @@ public:
       wxCursor    *pCursorPencil;
       wxCursor    *pCursorArrow;
       wxCursor    *pCursorCross;
+      wxCursor    *pPlugIn_Cursor;
       TCWin       *pCwin;
       wxBitmap    *pscratch_bm;
+      bool        m_brepaint_piano;
       double      m_cursor_lon, m_cursor_lat;
       Undo        *undo;
       wxPoint     r_rband;
@@ -333,6 +340,8 @@ public:
 
       void OnEvtCompressProgress( OCPN_CompressProgressEvent & event );
       void JaggyCircle(ocpnDC &dc, wxPen pen, int x, int y, int radius);
+      
+      bool CheckEdgePan( int x, int y, bool bdragging, int margin, int delta );
 
       Route       *m_pMouseRoute;
       bool        m_bMeasure_Active;
@@ -380,6 +389,7 @@ private:
       bool        m_bDrawingRoute;
       bool        m_bRouteEditing;
       bool        m_bMarkEditing;
+	  bool		  m_bRoutePoinDragging;
       bool        m_bIsInRadius;
       bool        m_bMayToggleMenuBar;
 
@@ -443,7 +453,6 @@ private:
       void PanTimerEvent(wxTimerEvent& event);
       void MovementTimerEvent(wxTimerEvent& );
       void MovementStopTimerEvent( wxTimerEvent& );
-      bool CheckEdgePan( int x, int y, bool bdragging, int margin, int delta );
       void OnCursorTrackTimerEvent(wxTimerEvent& event);
 
       void DrawAllRoutesInBBox(ocpnDC& dc, LLBBox& BltBBox, const wxRegion& clipregion);
@@ -558,7 +567,9 @@ private:
       wxBitmap    m_bmCurrentDay;
       wxBitmap    m_bmCurrentDusk;
       wxBitmap    m_bmCurrentNight;
-
+      wxBitmap    m_cTideBitmap;
+      wxBitmap    m_cCurrentBitmap;
+      
       RolloverWin *m_pRouteRolloverWin;
       RolloverWin *m_pAISRolloverWin;
       

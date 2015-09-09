@@ -80,7 +80,7 @@ class M_COVR_Desc
 };
 
 WX_DECLARE_OBJARRAY(M_COVR_Desc, Array_Of_M_COVR_Desc);
-WX_DECLARE_OBJARRAY(M_COVR_Desc *, Array_Of_M_COVR_Desc_Ptr);
+WX_DEFINE_ARRAY_PTR(M_COVR_Desc *, Array_Of_M_COVR_Desc_Ptr);
 
 WX_DECLARE_LIST(M_COVR_Desc, List_Of_M_COVR_Desc);
 
@@ -446,7 +446,8 @@ class cm93compchart : public s57chart
             void GetPointPix(ObjRazRules *rzRules, wxPoint2DDouble *en, wxPoint *r, int nPoints);
 
 
-            ListOfObjRazRules *GetObjRuleListAtLatLon(float lat, float lon, float select_radius, ViewPort *VPoint);
+            ListOfObjRazRules *GetObjRuleListAtLatLon(float lat, float lon, float select_radius,
+                                                      ViewPort *VPoint, int selection_mask = MASK_ALL);
             S57ObjectDesc *CreateObjDescription(const ObjRazRules *obj);
 
             VE_Hash&  Get_ve_hash(void);
@@ -464,7 +465,6 @@ class cm93compchart : public s57chart
 
             void SetSpecialCellIndexOffset(int cell_index, int object_id, int subcell, int xoff, int yoff);
             void CloseandReopenCurrentSubchart(void);
-            void SetOffsetDialog(CM93OffsetDialog *dialog){ m_pOffsetDialog = dialog; }
 
             void InvalidateCache();
       private:
@@ -507,7 +507,8 @@ class cm93compchart : public s57chart
             int               m_special_offset_y;
             ViewPort          m_vpt;
 
-            CM93OffsetDialog  *m_pOffsetDialog;
+
+            cm93chart *m_last_cell_adjustvp;
 };
 
 

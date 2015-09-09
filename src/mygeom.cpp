@@ -385,7 +385,7 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_
     ppg->pn_vertex = (int *)malloc(nctr * sizeof(int));
     int *pctr = ppg->pn_vertex;
 
-    size_t buf_len = wxMax(twkb_len + 2, 20 + (nctr * 4));
+    size_t buf_len = wxMax(twkb_len + 2, 20 + (nctr * 6));
     char *buf = (char *)malloc(buf_len);        // allocate a buffer guaranteed big enough
 
     my_bufgets( buf, buf_len );                 // contour nVert, as a char line
@@ -411,7 +411,7 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_
     //  Read Raw Geometry
 
     float *ppolygeo = (float *)malloc(twkb_len + 1);    // allow for crlf
-    memmove(ppolygeo,  m_buf_ptr, twkb_len + 1);
+    memcpy(ppolygeo,  m_buf_ptr, twkb_len + 1);
     m_buf_ptr += twkb_len + 1;
     ppg->pgroup_geom = ppolygeo;
 
@@ -457,8 +457,7 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_
                 int byte_size = nvert * 2 * sizeof(float);
                 total_byte_size += byte_size;
             
-                tp->p_vertex = (double *)malloc(byte_size);
-                memmove(tp->p_vertex, m_buf_ptr, byte_size);
+                tp->p_vertex = (double *)m_buf_ptr;
                 m_buf_ptr += byte_size;
             }
             else{
@@ -466,7 +465,7 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_
                 total_byte_size += byte_size;
                 
                 tp->p_vertex = (double *)malloc(byte_size);
-                memmove(tp->p_vertex, m_buf_ptr, byte_size);
+                memcpy(tp->p_vertex, m_buf_ptr, byte_size);
                 m_buf_ptr += byte_size;
             }
                 
@@ -502,7 +501,6 @@ PolyTessGeo::PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_
         unsigned char *p_run = vbuf;
         while( p_tp ) {
             memcpy(p_run, p_tp->p_vertex, p_tp->nVert * 2 * sizeof(float));
-            free(p_tp->p_vertex);
             p_tp->p_vertex = (double  *)p_run;
             p_run += p_tp->nVert * 2 * sizeof(float);
             p_tp = p_tp->p_next; // pick up the next in chain
@@ -1469,7 +1467,7 @@ int PolyTessGeo::Write_PolyTriGroup( FILE *ofs)
     ostream2->Write(stemp.mb_str(), stemp.Len());
 
     int nrecl = ostream1->GetSize() + ostream2->GetSize();
-    stemp.sprintf( _T("  POLYTESSGEO  %08d %g %g\n"), nrecl, m_ref_lat, m_ref_lon);
+    stemp.sprintf( _T("  POLYTESSGEO  %08d %f %f\n"), nrecl, m_ref_lat, m_ref_lon);
 
     fwrite(stemp.mb_str(), 1, stemp.Len(), ofs);                 // Header, + record length
 
@@ -1971,7 +1969,7 @@ int PolyTessGeo::PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, 
     nptfinal = 1;
     
     m_nwkb = (nptfinal + 1) * 2 * sizeof(float);
-    m_ppg_head->pgroup_geom = (float *)malloc(m_nwkb);
+    m_ppg_head->pgroup_geom = (float *)calloc(sizeof(float), (nptfinal + 1) * 2);
     float *vro = m_ppg_head->pgroup_geom;
     ppt = geoPt;
     float tx,ty;
@@ -2925,33 +2923,30 @@ PolyTrapGroup::~PolyTrapGroup()
       free (trap_array);
 }
 
-
-
 void DouglasPeucker(double *PointList, int fp, int lp, double epsilon, wxArrayInt *keep)
 {
-    
 // Find the point with the maximum distance
     double dmax = 0;
     int index = 0;
-    {
-        for(int i = fp+1 ; i < lp ; ++i) {
-            
-            vector2D va(PointList[2*fp] - PointList[2*lp],
-                        PointList[2*fp+1] - PointList[2*lp+1]);
-            vector2D vb(PointList[2*i] - PointList[2*fp],
-                        PointList[2*i + 1] - PointList[2*fp+1]);
-            vector2D vn;
-            
-            double d = vGetLengthOfNormal( &va, &vb, &vn );
-            
-            if ( d > dmax ) {
-                index = i;
-                dmax = d;
-            }
+
+    vector2D va(PointList[2*fp] - PointList[2*lp],
+                PointList[2*fp+1] - PointList[2*lp+1]);
+
+    double da = va.x*va.x + va.y*va.y;
+    for(int i = fp+1 ; i < lp ; ++i) {
+        vector2D vb(PointList[2*i] - PointList[2*fp],
+                    PointList[2*i + 1] - PointList[2*fp+1]);
+        
+        double dab = va.x*vb.x + va.y*vb.y;
+        double db = vb.x*vb.x + vb.y*vb.y;
+        double d = da - dab*dab/db;
+        if ( d > dmax ) {
+            index = i;
+            dmax = d;
         }
     }
 // If max distance is greater than epsilon, recursively simplify
-    if ( dmax > epsilon ) {
+    if ( dmax > epsilon*epsilon ) {
         keep->Add(index);
         
     // Recursive call
@@ -2959,8 +2954,6 @@ void DouglasPeucker(double *PointList, int fp, int lp, double epsilon, wxArrayIn
         DouglasPeucker(PointList, index, lp, epsilon, keep);
 
     }
-
-    return;
 }
 
 

@@ -44,7 +44,7 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 #TODO: Should we use  -fno-stack-protector
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
 IF(NOT WIN32 AND NOT APPLE)
-    ADD_DEFINITIONS( "-Wall -O3 -fexceptions -fvisibility=hidden" )
+    ADD_DEFINITIONS( "-Wall -O2 -fexceptions -fvisibility=hidden" )
     SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bsymbolic")
 ENDIF(NOT WIN32 AND NOT APPLE)
 
@@ -54,7 +54,6 @@ IF( APPLE )
    SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
 ENDIF( APPLE )
 
-
 # Add some definitions to satisfy MS
 IF(WIN32)
     ADD_DEFINITIONS(-D__MSVC__)
@@ -62,13 +61,17 @@ IF(WIN32)
 ENDIF(WIN32)
 
 
-#SET(wxWidgets_USE_LIBS base core net xml html adv aui)
-#SET(BUILD_SHARED_LIBS TRUE)
-#SET( wxWidgets_USE_DEBUG OFF)
-#SET( wxWidgets_USE_UNICODE ON)
-#FIND_PACKAGE(wxWidgets REQUIRED)
 
-INCLUDE(${wxWidgets_USE_FILE})
+#  QT_ANDROID is a cross-build, so the native FIND_PACKAGE(wxWidgets...) and wxWidgets_USE_FILE is not useful.
+IF(NOT QT_ANDROID)
+IF(NOT DEFINED wxWidgets_USE_FILE)
+  SET(wxWidgets_USE_LIBS base core net xml html adv)
+  SET(BUILD_SHARED_LIBS TRUE)
+  FIND_PACKAGE(wxWidgets REQUIRED)
+ENDIF(NOT DEFINED wxWidgets_USE_FILE)
+
+  INCLUDE(${wxWidgets_USE_FILE})
+ENDIF(NOT QT_ANDROID)
 
 FIND_PACKAGE(Gettext REQUIRED)
 
@@ -173,10 +176,16 @@ SET(SRC_NMEA0183
     src/nmea0183/vlw.hpp
     src/nmea0183/mda.cpp
     src/nmea0183/mda.hpp
+    src/nmea0183/xdr.cpp
+    src/nmea0183/xdr.hpp
 )
 INCLUDE_DIRECTORIES(src/nmea0183)
 
+
+SET_PROPERTY(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS TRUE)
+SET(BUILD_SHARED_LIBS "ON")
 ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_DASHBOARD} ${SRC_NMEA0183} )
+
 
 IF(WIN32)
     SET(OPENCPN_IMPORT_LIB "../../${CMAKE_CFG_INTDIR}/${PARENT}")
@@ -184,7 +193,40 @@ IF(WIN32)
     ADD_DEPENDENCIES(${PACKAGE_NAME} ${PARENT})
 ENDIF(WIN32)
 
+
+# On Android, PlugIns need a specific linkage set....
+IF (QT_ANDROID )
+  # These libraries are needed to create PlugIns on Android.
+  
+  SET(OCPN_Core_LIBRARIES
+        # Presently, Android Plugins are built in the core tree, so the variables {wxQT_BASE}, etc.
+        # flow to this module from above.  If we want to build Android plugins out-of-core, this will need improvement.
+
+        # TODO This is pretty ugly, but there seems no way to avoid specifying a full path in a cross build....
+        /home/dsr/Projects/opencpn_sf/opencpn/build-opencpn-Android_for_armeabi_v7a_GCC_4_8_Qt_5_5_0-Debug/libopencpn.so
+
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_baseu-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_core-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_html-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_baseu_xml-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_qa-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_adv-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_aui-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_baseu_net-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_gl-3.1-arm-linux-androideabi.a
+        ${Qt_Base}/android_armv7/lib/libQt5Core.so
+        ${Qt_Base}/android_armv7/lib/libQt5OpenGL.so
+        ${Qt_Base}/android_armv7/lib/libQt5Widgets.so
+        ${Qt_Base}/android_armv7/lib/libQt5Gui.so
+        ${Qt_Base}/android_armv7/lib/libQt5AndroidExtras.so
+        
+        ${NDK_Base}/sources/cxx-stl/gnu-libstdc++/4.8/libs/armeabi-v7a/libgnustl_shared.so
+        )
+
+ENDIF(QT_ANDROID)
+
 TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} )
+TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${OCPN_Core_LIBRARIES} )
 
 
 IF(APPLE)

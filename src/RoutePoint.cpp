@@ -34,6 +34,7 @@
 #include "FontMgr.h"
 #include "cutil.h"
 #include "georef.h"
+#include "wx28compat.h"
 
 extern WayPointman *pWayPointMan;
 extern bool g_bIsNewLayer;
@@ -52,6 +53,7 @@ extern float g_fWaypointRangeRingsStep;
 extern int g_iWaypointRangeRingsStepUnits;
 extern wxColour g_colourWaypointRangeRingsColour;
 
+extern float g_ChartScaleFactorExp;
 
 #include <wx/listimpl.cpp>
 WX_DEFINE_LIST ( RoutePointList );
@@ -106,6 +108,10 @@ RoutePoint::RoutePoint()
     m_fWaypointRangeRingsStep = g_fWaypointRangeRingsStep;
     m_iWaypointRangeRingsStepUnits = g_iWaypointRangeRingsStepUnits;
     m_wxcWaypointRangeRingsColour = g_colourWaypointRangeRingsColour;
+#ifdef ocpnUSE_GL
+    m_pos_on_screen = false;
+#endif
+    
 }
 
 // Copy Constructor
@@ -270,8 +276,14 @@ void RoutePoint::CalculateNameExtents( void )
     if( m_pMarkFont ) {
         wxScreenDC dc;
 
+#ifdef __WXQT__                 // avoiding "painter not active" warning
+        int w, h;
+        dc.GetTextExtent(m_MarkName, &w, &h, NULL, NULL, m_pMarkFont);
+        m_NameExtents = wxSize(w,h);
+#else        
         dc.SetFont( *m_pMarkFont );
         m_NameExtents = dc.GetTextExtent( m_MarkName );
+#endif        
     } else
         m_NameExtents = wxSize( 0, 0 );
 
@@ -301,7 +313,7 @@ void RoutePoint::ReLoadIcon( void )
     m_pbmIcon = pWayPointMan->GetIconBitmap( m_IconName );
 
 #ifdef ocpnUSE_GL
-    m_wpBBox_chart_scale = -1;
+    m_wpBBox_view_scale_ppm = -1;
 
     m_iTextTexture = 0;
 #endif
@@ -424,7 +436,7 @@ void RoutePoint::Draw( ocpnDC& dc, wxPoint *rpn )
         wxBrush saveBrush = dc.GetBrush();
         wxPen savePen = dc.GetPen();
         dc.SetPen( ppPen1 );
-        dc.SetBrush( wxBrush( m_wxcWaypointRangeRingsColour, wxTRANSPARENT ) );
+        dc.SetBrush( wxBrush( m_wxcWaypointRangeRingsColour, wxBRUSHSTYLE_TRANSPARENT ) );
 
         for( int i = 1; i <= m_iWaypointRangeRingsNumber; i++ )
             dc.StrokeCircle( r.x, r.y, i * pix_radius );
@@ -444,16 +456,16 @@ void RoutePoint::Draw( ocpnDC& dc, wxPoint *rpn )
 }
 
 #ifdef ocpnUSE_GL
-void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
+void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region,bool use_cached_screen_coords )
 {
     if( !m_bIsVisible )
-    return;
+        return;
 
     //    Optimization, especially apparent on tracks in normal cases
     if( m_IconName == _T("empty") && !m_bShowName && !m_bPtIsSelected ) return;
 
     if(m_wpBBox.GetValid() &&
-       vp.chart_scale == m_wpBBox_chart_scale &&
+       vp.view_scale_ppm == m_wpBBox_view_scale_ppm &&
        vp.rotation == m_wpBBox_rotation) {
         /* see if this waypoint can intersect with bounding box */
         LLBBox vpBBox = vp.GetBBox();
@@ -481,7 +493,10 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
     wxRect hilitebox;
     unsigned char transparency = 150;
 
-    cc1->GetCanvasPointPix( m_lat, m_lon, &r );
+    if(use_cached_screen_coords && m_pos_on_screen)
+        r.x = m_screen_pos.m_x, r.y = m_screen_pos.m_y;
+    else
+        cc1->GetCanvasPointPix( m_lat, m_lon, &r );
 
 //    Substitue icon?
     wxBitmap *pbm;
@@ -525,14 +540,14 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
     }
     
     /* update bounding box */
-    if(!m_wpBBox.GetValid() || vp.chart_scale != m_wpBBox_chart_scale || vp.rotation != m_wpBBox_rotation) {
+    if(!m_wpBBox.GetValid() || vp.view_scale_ppm != m_wpBBox_view_scale_ppm || vp.rotation != m_wpBBox_rotation) {
         double lat1, lon1, lat2, lon2;
         cc1->GetCanvasPixPoint(r.x+hilitebox.x, r.y+hilitebox.y+hilitebox.height, lat1, lon1);
         cc1->GetCanvasPixPoint(r.x+hilitebox.x+hilitebox.width, r.y+hilitebox.y, lat2, lon2);
 
         m_wpBBox.SetMin(lon1, lat1);
         m_wpBBox.SetMax(lon2, lat2);
-        m_wpBBox_chart_scale = vp.chart_scale;
+        m_wpBBox_view_scale_ppm = vp.view_scale_ppm;
         m_wpBBox_rotation = vp.rotation;
     }
 
@@ -568,19 +583,40 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
         
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
+        
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         
         glColor3f(1, 1, 1);
         
         int x = r1.x, y = r1.y, w = r1.width, h = r1.height;
+        
+        float scale = 1.0;
+        if(g_bresponsive){
+            scale =  g_ChartScaleFactorExp;
+        }
+            
+        float ws = r1.width * scale;
+        float hs = r1.height * scale;
+        float xs = r.x - ws/2.;
+        float ys = r.y - hs/2.;
         float u = (float)w/glw, v = (float)h/glh;
+        
         glBegin(GL_QUADS);
-        glTexCoord2f(0, 0); glVertex2f(x, y);
-        glTexCoord2f(u, 0); glVertex2f(x+w, y);
-        glTexCoord2f(u, v); glVertex2f(x+w, y+h);
-        glTexCoord2f(0, v); glVertex2f(x, y+h);
+        glTexCoord2f(0, 0); glVertex2f(xs, ys);
+        glTexCoord2f(u, 0); glVertex2f(xs+ws, ys);
+        glTexCoord2f(u, v); glVertex2f(xs+ws, ys+hs);
+        glTexCoord2f(0, v); glVertex2f(xs, ys+hs);
         glEnd();
+        
+//         glBegin(GL_QUADS);
+//         glTexCoord2f(0, 0); glVertex2f(x, y);
+//         glTexCoord2f(u, 0); glVertex2f(x+w, y);
+//         glTexCoord2f(u, v); glVertex2f(x+w, y+h);
+//         glTexCoord2f(0, v); glVertex2f(x, y+h);
+//         glEnd();
+
         glDisable(GL_BLEND);
         glDisable(GL_TEXTURE_2D);
     }
@@ -629,7 +665,6 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
             
             glEnable(GL_TEXTURE_2D);
             glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         
             glColor3ub(m_FontColor.Red(), m_FontColor.Green(), m_FontColor.Blue());
             
@@ -641,6 +676,7 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
             glTexCoord2f(u, v); glVertex2f(x+w, y+h);
             glTexCoord2f(0, v); glVertex2f(x, y+h);
             glEnd();
+
             glDisable(GL_BLEND);
             glDisable(GL_TEXTURE_2D);
         }
@@ -667,7 +703,7 @@ void RoutePoint::DrawGL( ViewPort &vp, OCPNRegion &region )
         wxBrush saveBrush = dc.GetBrush();
         wxPen savePen = dc.GetPen();
         dc.SetPen( ppPen1 );
-        dc.SetBrush( wxBrush( m_wxcWaypointRangeRingsColour, wxTRANSPARENT ) );
+        dc.SetBrush( wxBrush( m_wxcWaypointRangeRingsColour, wxBRUSHSTYLE_TRANSPARENT ) );
         
         for( int i = 1; i <= m_iWaypointRangeRingsNumber; i++ )
             dc.StrokeCircle( r.x, r.y, i * pix_radius );

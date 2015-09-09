@@ -33,6 +33,8 @@
 
 #include <vector>
 
+#include "TexFont.h"
+
 #ifndef DECL_EXP
 #ifdef __WXMSW__
 #  define DECL_EXP     __declspec(dllexport)
@@ -93,9 +95,9 @@ public:
      void StrokeCircle(wxCoord x, wxCoord y, wxCoord radius);
 
      void DrawEllipse(wxCoord x, wxCoord y, wxCoord width, wxCoord height);
-     void DrawPolygon(int n, wxPoint points[], wxCoord xoffset = 0, wxCoord yoffset = 0);
+     void DrawPolygon(int n, wxPoint points[], wxCoord xoffset = 0, wxCoord yoffset = 0, float scale =1.0);
      void DrawPolygonTessellated(int n, wxPoint points[], wxCoord xoffset = 0, wxCoord yoffset = 0);
-     void StrokePolygon(int n, wxPoint points[], wxCoord xoffset = 0, wxCoord yoffset = 0);
+     void StrokePolygon(int n, wxPoint points[], wxCoord xoffset = 0, wxCoord yoffset = 0, float scale = 1.0);
 
      void DrawBitmap(const wxBitmap &bitmap, wxCoord x, wxCoord y, bool usemask);
 
@@ -123,6 +125,11 @@ protected:
      wxBrush m_brush;
      wxColour m_textforegroundcolour;
      wxFont m_font;
+
+#ifdef ocpnUSE_GL     
+     TexFont m_texfont;
+#endif
+     
 
 #if  wxUSE_GRAPHICS_CONTEXT
      wxGraphicsContext *pgc;
