@@ -229,6 +229,10 @@ bool         g_bEmailCrashReport;
 extern int                       g_ais_alert_dialog_x, g_ais_alert_dialog_y;
 extern int                       g_ais_alert_dialog_sx, g_ais_alert_dialog_sy;
 
+#if wxUSE_XLOCALE || !wxCHECK_VERSION(3,0,0)
+extern wxLocale                  *plocale_def_lang;
+#endif
+
 
 
 
@@ -426,7 +430,7 @@ void OCPNPlatform::Initialize_1( void )
 #endif
 #endif
 
-#ifdef __WXMSW__
+#ifdef __MSVC__
     //  Invoke my own handler for failures of malloc/new
     _set_new_handler( MyNewHandler );
     //  configure malloc to call the New failure handler on failure
@@ -466,7 +470,7 @@ void OCPNPlatform::Initialize_1( void )
 #endif
 #endif
             
-#ifdef __WXMSW__
+#ifdef __MSVC__
             
             //    Handle any Floating Point Exceptions which may leak thru from other
             //    processes.  The exception filter is in cutil.c
@@ -568,7 +572,53 @@ void OCPNPlatform::SetDefaultOptions( void )
     g_bShowAISName = false;
     g_nTrackPrecision = 2;
     
-    
+
+#ifdef __WXMSW__
+    //  Enable some default PlugIns, and their default options
+    if(pConfig){
+        pConfig->SetPath( _T ( "/PlugIns/chartdldr_pi.dll" ) );
+        pConfig->Write( _T ( "bEnabled" ), true );
+
+        pConfig->SetPath( _T ( "/PlugIns/wmm_pi.dll" ) );
+        pConfig->Write( _T ( "bEnabled" ), true );
+        
+        pConfig->SetPath ( _T ( "/Settings/WMM" ) );
+        pConfig->Write ( _T ( "ShowIcon" ), false );
+        
+    }
+#endif
+
+#ifdef __WXOSX__
+//  Enable some default PlugIns, and their default options
+    if(pConfig){
+        pConfig->SetPath( _T ( "/PlugIns/libchartdldr_pi.dylib" ) );
+        pConfig->Write( _T ( "bEnabled" ), true );
+        
+        pConfig->SetPath( _T ( "/PlugIns/libwmm_pi.dylib" ) );
+        pConfig->Write( _T ( "bEnabled" ), true );
+        
+        pConfig->SetPath ( _T ( "/Settings/WMM" ) );
+        pConfig->Write ( _T ( "ShowIcon" ), false );
+        
+    }
+#endif
+
+#ifdef __LINUX__
+//  Enable some default PlugIns, and their default options
+    if(pConfig){
+        pConfig->SetPath( _T ( "/PlugIns/libchartdldr_pi.so" ) );
+        pConfig->Write( _T ( "bEnabled" ), true );
+        
+        pConfig->SetPath( _T ( "/PlugIns/libwmm_pi.so" ) );
+        pConfig->Write( _T ( "bEnabled" ), true );
+        
+        pConfig->SetPath ( _T ( "/Settings/WMM" ) );
+        pConfig->Write ( _T ( "ShowIcon" ), false );
+        
+    }
+#endif
+
+        
 #ifdef __OCPN__ANDROID__
     
 #ifdef ocpnUSE_GL
@@ -576,9 +626,6 @@ void OCPNPlatform::SetDefaultOptions( void )
     g_GLOptions.m_bTextureCompression = 1;
     g_GLOptions.m_bTextureCompressionCaching = 1;
 #endif
-    
-    //[PlugIns/libchartdldr_pi.so]
-    //bEnabled=1
     
     g_btouch = true;
     g_bresponsive = true;
@@ -594,7 +641,7 @@ void OCPNPlatform::SetDefaultOptions( void )
     
     //  Suppress most tools, especially those that appear in the Basic menus.
     //  Of course, they may be re-enabled by experts...
-    g_toolbarConfig = _T("......X...........XXXXXXXXXXX");
+    g_toolbarConfig = _T("......X........X..XXXXXXXXXXX");
     g_bPermanentMOBIcon = false;
     
     wxString sGPS = _T("2;3;;0;0;;0;1;0;0;;0;;1;0;0;0;0");          // 17 parms
@@ -614,7 +661,16 @@ void OCPNPlatform::SetDefaultOptions( void )
         
         pConfig->SetPath ( _T ( "/Settings/WMM" ) );
         pConfig->Write ( _T ( "ShowIcon" ), false );
+   
         
+        pConfig->SetPath ( _T ( "/Settings/QTFonts" ) );
+
+        //Status Bar
+        wxString str = _T("en_US-b25a3899");
+        wxString pval = _T("StatusBar:Roboto,26,-1,5,75,0,0,0,0,0:rgb(0, 0, 0)");
+        
+        pConfig->Write (str, pval );
+        FontMgr::Get().LoadFontNative( &str, &pval );
     }
         
         
@@ -1249,6 +1305,30 @@ void OCPNPlatform::onStagedResizeFinal()
     
 }
 
+bool OCPNPlatform::GetFullscreen()
+{
+    bool bret = false;
+#ifdef __OCPN__ANDROID__
+    bret = androidGetFullscreen();
+#else
+    
+#endif
+
+    return bret;
+}
+
+bool OCPNPlatform::SetFullscreen( bool bFull )
+{
+    bool bret = false;
+#ifdef __OCPN__ANDROID__
+    bret = androidSetFullscreen( bFull );
+#else
+#endif
+    
+    return bret;
+}
+
+
 void OCPNPlatform::PositionAISAlert(wxWindow *alert_window)
 {
 #ifndef __OCPN__ANDROID__    
@@ -1680,4 +1760,35 @@ QString getQtStyleSheet( void )
 }
 
 #endif
+
+void OCPNPlatform::LaunchLocalHelp( void ) {
+ 
+#ifdef __OCPN__ANDROID__
+    androidLaunchHelpView();
+#else
+    wxString def_lang_canonical = _T("en_US");
+    
+    #if wxUSE_XLOCALE
+    if(plocale_def_lang)
+        def_lang_canonical = plocale_def_lang->GetCanonicalName();
+    #endif
+        
+        wxString help_locn = g_Platform->GetSharedDataDir() + _T("doc/help_");
+        
+        wxString help_try = help_locn + def_lang_canonical + _T(".html");
+        
+        if( ! ::wxFileExists( help_try ) ) {
+            help_try = help_locn + _T("en_US") + _T(".html");
+            
+            if( ! ::wxFileExists( help_try ) ) {
+                help_try = help_locn + _T("web") + _T(".html");
+            }
+            
+            if( ! ::wxFileExists( help_try ) ) return;
+        }
+        
+        wxLaunchDefaultBrowser(wxString( _T("file:///") ) + help_try );
+#endif        
+}
+
 

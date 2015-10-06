@@ -107,6 +107,7 @@ extern bool             g_bShowMag;
 extern double           g_UserVar;
 extern bool             g_bShowStatusBar;
 extern bool             g_bUIexpert;
+extern bool             g_bFullscreen;
 
 extern wxToolBarBase    *toolBar;
 
@@ -344,7 +345,7 @@ extern bool             g_btouch;
 extern bool             g_bresponsive;
 
 extern bool             bGPSValid;              // for track recording
-extern bool             g_bexpert;
+extern bool             g_bGLexpert;
 
 extern int              g_SENC_LOD_pixels;
 extern ArrayOfMMSIProperties   g_MMSI_Props_Array;
@@ -1288,7 +1289,7 @@ int MyConfig::LoadMyConfig()
 
     /* opengl options */
 #ifdef ocpnUSE_GL
-    Read( _T ( "OpenGLExpert" ), &g_bexpert, false );
+    Read( _T ( "OpenGLExpert" ), &g_bGLexpert, false );
     Read( _T ( "UseAcceleratedPanning" ), &g_GLOptions.m_bUseAcceleratedPanning, true );
 
     Read( _T ( "GPUTextureCompression" ), &g_GLOptions.m_bTextureCompression, 0);
@@ -1296,7 +1297,7 @@ int MyConfig::LoadMyConfig()
 
     Read( _T ( "GPUTextureDimension" ), &g_GLOptions.m_iTextureDimension, 512 );
     Read( _T ( "GPUTextureMemSize" ), &g_GLOptions.m_iTextureMemorySize, 128 );
-    if(!g_bexpert){
+    if(!g_bGLexpert){
         g_GLOptions.m_iTextureMemorySize = wxMax(128, g_GLOptions.m_iTextureMemorySize);
         g_GLOptions.m_bTextureCompressionCaching = g_GLOptions.m_bTextureCompression;
     }
@@ -1353,6 +1354,7 @@ int MyConfig::LoadMyConfig()
 #ifndef __WXOSX__
     Read( _T ( "ShowMenuBar" ), &m_bShowMenuBar, 0 );
 #endif
+    Read( _T ( "Fullscreen" ), &g_bFullscreen, 0 );
     Read( _T ( "ShowCompassWindow" ), &m_bShowCompassWin, 1 );
     Read( _T ( "ShowGrid" ), &g_bDisplayGrid, 0 );
     Read( _T ( "PlayShipsBells" ), &g_bPlayShipsBells, 0 );
@@ -2517,6 +2519,7 @@ void MyConfig::UpdateSettings()
 #endif
     Write( _T ( "DefaultFontSize" ), g_default_font_size );
     
+    Write( _T ( "Fullscreen" ), g_bFullscreen );
     Write( _T ( "ShowCompassWindow" ), m_bShowCompassWin );
     Write( _T ( "SetSystemTime" ), s_bSetSystemTime );
     Write( _T ( "ShowGrid" ), g_bDisplayGrid );

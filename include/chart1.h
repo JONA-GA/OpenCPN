@@ -66,7 +66,7 @@ wxString _menuText(wxString name, wxString shortcut);
 // The point for anchor watch should really be a class...
 double AnchorDistFix( double const d, double const AnchorPointMinDist, double const AnchorPointMaxDist);   //  pjotrc 2010.02.22
 
-bool TestGLCanvas(wxString &prog_dir);
+bool TestGLCanvas(wxString prog_dir);
 bool ReloadLocale();
 
 void LoadS57();
@@ -370,7 +370,6 @@ class MyFrame: public wxFrame
     int  DoOptionsDialog();
     int  ProcessOptionsDialog(int resultFlags, ArrayOfCDI *pNewDirArray );
     void DoPrint(void);
-    void LaunchLocalHelp(void);
     void StopSockets(void);
     void ResumeSockets(void);
     void TogglebFollow(void);
