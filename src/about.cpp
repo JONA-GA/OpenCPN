@@ -255,13 +255,13 @@ void about::Populate( void )
 
     // Show where the log file is going to be placed
     wxString log_string = _T("Logfile location: ") + g_Platform->GetLogFileName();
-    log_string.Replace("/", "/ ");      // allow line breaks, in a cheap way...
+    log_string.Replace(_T("/"),_T( "/ "));      // allow line breaks, in a cheap way...
     
     aboutText.Append( log_string );
 
     // Show where the config file is going to be placed
     wxString config_string = _T("<br><br>Config file location: ") + g_Platform->GetConfigFileName();
-    config_string.Replace("/", "/ ");
+    config_string.Replace(_T("/"),_T( "/ "));
     aboutText.Append( config_string );
     
     if(wxFONTSTYLE_ITALIC == dFont->GetStyle())

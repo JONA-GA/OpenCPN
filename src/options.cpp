@@ -409,7 +409,7 @@ void MMSIEditDialog::CreateControls( void )
 
     //  Set initial values...
     if (m_props->MMSI > 0)
-        m_MMSICtl->AppendText( wxString::Format( "%d", m_props->MMSI ) );
+        m_MMSICtl->AppendText( wxString::Format( _T("%d"), m_props->MMSI ) );
 
     switch ( m_props->TrackType ){
         case TRACKTYPE_ALWAYS:
@@ -942,10 +942,11 @@ size_t options::CreatePanel(const wxString & title)
 
 wxScrolledWindow *options::AddPage( size_t parent, const wxString & title)
 {
-    if ( parent > m_pListbook->GetPageCount() - 1 ) {
+    
+	if ( parent > m_pListbook->GetPageCount() - 1 ) {
         wxLogMessage( wxString::Format(
             _T("Warning: invalid parent in options::AddPage( %d, %s )"),
-                        parent, title));
+                        parent, title.c_str()));
         return NULL;
     }
     wxNotebookPage* page = m_pListbook->GetPage( parent );
@@ -1379,7 +1380,7 @@ void options::CreatePanel_NMEA_Compact( size_t parent, int border_size, int grou
 
     // Connect Events
     m_lcSources->Connect( wxEVT_COMMAND_LIST_ITEM_SELECTED, wxListEventHandler( options::OnSelectDatasource ), NULL, this );
-    m_lcSources->Connect( wxEVT_LIST_ITEM_ACTIVATED, wxListEventHandler( options::OnConnectionToggleEnable ), NULL, this );
+    m_lcSources->Connect( wxEVT_COMMAND_LIST_ITEM_ACTIVATED, wxListEventHandler( options::OnConnectionToggleEnable ), NULL, this );
     m_buttonAdd->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( options::OnAddDatasourceClick ), NULL, this );
     m_buttonRemove->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( options::OnRemoveDatasourceClick ), NULL, this );
 
@@ -1827,7 +1828,7 @@ void options::CreatePanel_NMEA( size_t parent, int border_size, int group_item_s
 
     // Connect Events
     m_lcSources->Connect( wxEVT_COMMAND_LIST_ITEM_SELECTED, wxListEventHandler( options::OnSelectDatasource ), NULL, this );
-    m_lcSources->Connect( wxEVT_LIST_ITEM_ACTIVATED, wxListEventHandler( options::OnConnectionToggleEnable ), NULL, this );
+    m_lcSources->Connect( wxEVT_COMMAND_LIST_ITEM_ACTIVATED, wxListEventHandler( options::OnConnectionToggleEnable ), NULL, this );
     m_buttonAdd->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( options::OnAddDatasourceClick ), NULL, this );
     m_buttonRemove->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( options::OnRemoveDatasourceClick ), NULL, this );
 
@@ -6806,9 +6807,9 @@ void SentenceListDlg::OnAddClick( wxCommandEvent& event )
 {
     wxTextEntryDialog textdlg( this, _( "Enter the NMEA sentence (2, 3 or 5 characters) " ),
                                _( "Enter the NMEA sentence" ) );
-    textdlg.SetMaxLength( 5 );
+    //textdlg.SetMaxLength( 5 ); // wxwidgget 2.9
     textdlg.SetTextValidator( wxFILTER_ALPHANUMERIC );
-    if ( textdlg.ShowModal() == wxID_CANCEL )
+    if ( textdlg.ShowModal() == wxID_CANCEL )     
         return;
     wxString stc = textdlg.GetValue();
 
