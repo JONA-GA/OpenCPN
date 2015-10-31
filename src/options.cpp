@@ -1344,7 +1344,7 @@ void options::CreatePanel_NMEA_Compact(size_t parent, int border_size,
       m_pNMEAForm, wxID_ANY, wxDefaultPosition, wxDefaultSize,
       m_choiceSerialProtocolNChoices, m_choiceSerialProtocolChoices, 0);
   m_choiceSerialProtocol->SetSelection(0);
-  m_choiceSerialProtocol->Enable(FALSE);
+  m_choiceSerialProtocol->Enable(TRUE);
 
   fgSizer1->Add(m_choiceSerialProtocol, 1, wxEXPAND | wxTOP, 5);
   m_stPriority = new wxStaticText(m_pNMEAForm, wxID_ANY, _("Priority"),
@@ -1955,7 +1955,7 @@ void options::CreatePanel_NMEA(size_t parent, int border_size,
       m_pNMEAForm, wxID_ANY, wxDefaultPosition, wxDefaultSize,
       m_choiceSerialProtocolNChoices, m_choiceSerialProtocolChoices, 0);
   m_choiceSerialProtocol->SetSelection(0);
-  m_choiceSerialProtocol->Enable(FALSE);
+  m_choiceSerialProtocol->Enable(TRUE);
 
   fgSizer1->Add(m_choiceSerialProtocol, 1, wxEXPAND | wxTOP, 5);
   m_stPriority = new wxStaticText(m_pNMEAForm, wxID_ANY, _("Priority"),
@@ -5351,7 +5351,7 @@ ConnectionParams* options::CreateConnectionParamsFromSelectedItem(void) {
   else
     pConnectionParams->OutputSentenceListType = BLACKLIST;
   pConnectionParams->Port = m_comboPort->GetValue().BeforeFirst(' ');
-  pConnectionParams->Protocol = PROTO_NMEA0183;
+  pConnectionParams->Protocol = (DataProtocol)m_choiceSerialProtocol->GetSelection();
 
   pConnectionParams->bEnabled = m_connection_enabled;
   pConnectionParams->b_IsSetup = FALSE;
@@ -5572,7 +5572,7 @@ void options::OnApplyClick(wxCommandEvent& event) {
     dsPortType port_type = cp->IOSelect;
     DataStream* dstr = new DataStream(g_pMUX, cp->Type, cp->GetDSPort(),
                                       wxString::Format(wxT("%i"), cp->Baudrate),
-                                      port_type, cp->Priority, cp->Garmin);
+                                      port_type, cp->Priority, cp->Garmin,cp->Protocol);
     dstr->SetInputFilter(cp->InputSentenceList);
     dstr->SetInputFilterType(cp->InputSentenceListType);
     dstr->SetOutputFilter(cp->OutputSentenceList);
@@ -7303,7 +7303,7 @@ void options::SetDefaultConnectionParams(void) {
   m_tcInputStc->SetValue(wxEmptyString);
   m_tcOutputStc->SetValue(wxEmptyString);
   m_choiceBaudRate->Select(m_choiceBaudRate->FindString(_T( "4800" )));
-  //    m_choiceSerialProtocol->Select( cp->Protocol ); // TODO
+  // m_choiceSerialProtocol->Select( cp->Protocol ); // TODO
   m_choicePriority->Select(m_choicePriority->FindString(_T( "1" )));
 
   bool bserial = TRUE;

@@ -292,8 +292,8 @@ bool chartdldr_pi::LoadConfig( void )
         fn.AppendDir(_T(CHART_DIR));
         
         pConf->Read ( _T ( "BaseChartDir" ), &m_base_chart_dir,  fn.GetPath() );
-        wxLogMessage( wxString::Format( _T ( "chartdldr_pi: %s" ) ,m_base_chart_dir ) );
-        wxLogMessage( wxString::Format( _T ( "chartdldr_pi: %s" ) ,fn.GetPath() ) );
+        wxLogMessage( _T ( "chartdldr_pi: %s" ) , m_base_chart_dir.c_str()  );
+        wxLogMessage( _T ( "chartdldr_pi: %s" ) , fn.GetPath().c_str() );
         
         pConf->Read ( _T ( "PreselectNew" ), &m_preselect_new, false );
         pConf->Read ( _T ( "PreselectUpdated" ), &m_preselect_updated, true );

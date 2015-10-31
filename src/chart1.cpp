@@ -5870,7 +5870,8 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
                                                    wxString::Format(wxT("%i"),cp->Baudrate),
                                                    port_type,
                                                    cp->Priority,
-                                                   cp->Garmin
+                                                   cp->Garmin,
+																cp->Protocol
                     );
                 dstr->SetInputFilter(cp->InputSentenceList);
                 dstr->SetInputFilterType(cp->InputSentenceListType);
@@ -9532,7 +9533,8 @@ void MyFrame::applySettingsString( wxString settings)
                                                        wxString::Format(wxT("%i"), cp->Baudrate),
                                                        port_type,
                                                        cp->Priority,
-                                                       cp->Garmin);
+                                                       cp->Garmin,
+																	cp->Protocol	);
                 dstr->SetInputFilter(cp->InputSentenceList);
                 dstr->SetInputFilterType(cp->InputSentenceListType);
                 dstr->SetOutputFilter(cp->OutputSentenceList);
