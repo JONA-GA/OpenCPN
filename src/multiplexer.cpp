@@ -125,7 +125,7 @@ void Multiplexer::StartAllStreams( void )
                                                port_type,
                                                cp->Priority,
                                                cp->Garmin,
-															cp->Protocol
+														  cp->Protocol
                                                );
                                                dstr->SetInputFilter(cp->InputSentenceList);
                                                dstr->SetInputFilterType(cp->InputSentenceListType);
