@@ -1428,13 +1428,17 @@ InitReturn ChartKAP::Init( const wxString& name, ChartInitFlag init_flags )
            TODO: should this be added as a subroutine for GEO chartso? */
       if((m_projection != PROJECTION_MERCATOR && m_projection != PROJECTION_TRANSVERSE_MERCATOR)
           || m_Chart_Skew > 2) {
+          
+          //   Analyze Refpoints early because we need georef coefficient here.
+          AnalyzeRefpoints( false );              // no post test needed
+     
           int count = nPlypoint;
           nPlypoint = 0;
           Plypoint *pOldPlyTable = pPlyTable;
           pPlyTable = NULL;
           for( int i = 0; i < count+1; i++ ) {
               double plylat = pOldPlyTable[i%count].ltp, plylon = pOldPlyTable[i%count].lnp;
-              double lastplylat, lastplylon, x1, y1, x2, y2;
+              double lastplylat = 0.0, lastplylon = 0.0, x1 = 0.0, y1 = 0.0, x2, y2;
               latlong_to_chartpix(plylat, plylon, x2, y2);
               if(i>0) {
                   if(lastplylon - plylon > 180)
@@ -2815,6 +2819,8 @@ int ChartBaseBSB::latlong_to_pix_vp(double lat, double lon, double &pixx, double
 void ChartBaseBSB::latlong_to_chartpix(double lat, double lon, double &pixx, double &pixy)
 {
       double alat, alon;
+      pixx = 0.0;
+      pixy = 0.0;
 
       if(bHaveEmbeddedGeoref)
       {
@@ -3252,133 +3258,129 @@ bool ChartBaseBSB::GetViewUsingCache( wxRect& source, wxRect& dest, const OCPNRe
 
 
       //    "Blit" the valid pixels out of the way
-      int height = pPixCache->GetHeight();
-      int width = pPixCache->GetWidth();
-      int buffer_stride_bytes = pPixCache->GetLinePitch();
-      
-      unsigned char *ps;
-      unsigned char *pd;
-
-      if(stride_rows > 0)                             // pan down
-      {
-          ps = pPixCache->GetpData() +  (abs(scaled_stride_rows) * buffer_stride_bytes);
-           if(stride_pixels > 0)
-                 ps += scaled_stride_pixels * BPP/8;
-
-           pd = pPixCache->GetpData();
-           if(stride_pixels <= 0)
-                 pd += abs(scaled_stride_pixels) * BPP/8;
-
-           for(int iy=0 ; iy< (height - abs(scaled_stride_rows)) ; iy++)
-           {
-                 memmove(pd, ps, (width - abs(scaled_stride_pixels)) *BPP/8);
-
-                 ps += buffer_stride_bytes;
-                 pd += buffer_stride_bytes;
-           }
-
-      }
-      else
-      {
-          ps = pPixCache->GetpData() + ((height - abs(scaled_stride_rows)-1) * buffer_stride_bytes);
-            if(stride_pixels > 0)               // make a hole on right
-                  ps += scaled_stride_pixels * BPP/8;
-
-            pd = pPixCache->GetpData() +  ((height -1) * buffer_stride_bytes);
-            if(stride_pixels <= 0)              // make a hole on the left
-                  pd += abs(scaled_stride_pixels) * BPP/8;
-
-
+    if( pPixCache )
+    {
+        int height = pPixCache->GetHeight();
+        int width = pPixCache->GetWidth();
+        int buffer_stride_bytes = pPixCache->GetLinePitch();
+        
+        unsigned char *ps;
+        unsigned char *pd;
+        
+        if(stride_rows > 0)                             // pan down
+        {
+            ps = pPixCache->GetpData() +  (abs(scaled_stride_rows) * buffer_stride_bytes);
+            if(stride_pixels > 0)
+                ps += scaled_stride_pixels * BPP/8;
+            
+            pd = pPixCache->GetpData();
+            if(stride_pixels <= 0)
+                pd += abs(scaled_stride_pixels) * BPP/8;
+            
             for(int iy=0 ; iy< (height - abs(scaled_stride_rows)) ; iy++)
             {
-                  memmove(pd, ps, (width - abs(scaled_stride_pixels)) *BPP/8);
-
-                  ps -= buffer_stride_bytes;
-                  pd -= buffer_stride_bytes;
+                memmove(pd, ps, (width - abs(scaled_stride_pixels)) *BPP/8);
+                ps += buffer_stride_bytes;
+                pd += buffer_stride_bytes;
             }
-      }
-
-
-
-
-
-
-
-//    Y Pan
-      if(source.y != cache_rect.y)
-      {
+            
+        }
+        else
+        {
+            ps = pPixCache->GetpData() + ((height - abs(scaled_stride_rows)-1) * buffer_stride_bytes);
+            if(stride_pixels > 0)               // make a hole on right
+                ps += scaled_stride_pixels * BPP/8;
+            
+            pd = pPixCache->GetpData() +  ((height -1) * buffer_stride_bytes);
+            if(stride_pixels <= 0)              // make a hole on the left
+                pd += abs(scaled_stride_pixels) * BPP/8;
+            
+            
+            for(int iy=0 ; iy< (height - abs(scaled_stride_rows)) ; iy++)
+            {
+                memmove(pd, ps, (width - abs(scaled_stride_pixels)) *BPP/8);
+                ps -= buffer_stride_bytes;
+                pd -= buffer_stride_bytes;
+            }
+        }
+        
+        //    Y Pan
+        if(source.y != cache_rect.y)
+        {
             wxRect sub_dest = dest;
             sub_dest.height = abs(scaled_stride_rows);
-
+            
             if(stride_rows > 0)                             // pan down
             {
-                  sub_dest.y = height - scaled_stride_rows;
-
+                sub_dest.y = height - scaled_stride_rows;
+                
             }
             else
             {
-                  sub_dest.y = 0;
-
+                sub_dest.y = 0;
+                
             }
-
+            
             //    Get the new bits needed
-
+            
             //    A little optimization...
             //    No sense in fetching bits that are not part of the ultimate render region
             wxRegionContain rc = Region.Contains(sub_dest);
             if((wxPartRegion == rc) || (wxInRegion == rc))
             {
-                  GetAndScaleData(pPixCache->GetpData(), source, source.width, sub_dest, width, cs1d, pan_scale_type_y);
+                GetAndScaleData(pPixCache->GetpData(), source, source.width, sub_dest, width, cs1d, pan_scale_type_y);
             }
             pPixCache->Update();
-
-//    Update the cached parameters, Y only
-
+            
+            //    Update the cached parameters, Y only
+            
             cache_rect.y = source.y;
-//          cache_rect = source;
+            //          cache_rect = source;
             cache_rect_scaled = dest;
             cached_image_ok = 1;
-
-      }                 // Y Pan
-
-
-
-
-//    X Pan
-      if(source.x != cache_rect.x)
-      {
+            
+        }                 // Y Pan
+        
+        
+        
+        
+        //    X Pan
+        if(source.x != cache_rect.x)
+        {
             wxRect sub_dest = dest;
             sub_dest.width = abs(scaled_stride_pixels);
-
+            
             if(stride_pixels > 0)                           // pan right
             {
-                  sub_dest.x = width - scaled_stride_pixels;
+                sub_dest.x = width - scaled_stride_pixels;
             }
             else                                                  // pan left
             {
-                  sub_dest.x = 0;
+                sub_dest.x = 0;
             }
-
+            
             //    Get the new bits needed
-
+            
             //    A little optimization...
             //    No sense in fetching bits that are not part of the ultimate render region
             wxRegionContain rc = Region.Contains(sub_dest);
             if((wxPartRegion == rc) || (wxInRegion == rc))
             {
-                  GetAndScaleData(pPixCache->GetpData(), source, source.width, sub_dest, width, cs1d, pan_scale_type_x);
+                GetAndScaleData(pPixCache->GetpData(), source, source.width, sub_dest, width, cs1d, pan_scale_type_x);
             }
-
+            
             pPixCache->Update();
-
-//    Update the cached parameters
+            
+            //    Update the cached parameters
             cache_rect = source;
             cache_rect_scaled = dest;
             cached_image_ok = 1;
-
-      }           // X pan
-
-      return true;
+            
+        }           // X pan
+        
+        return true;
+    }
+    return false;
 }
 
 
@@ -4868,7 +4870,7 @@ bool ChartBaseBSB::AnalyzeSkew(void)
 }
 
 
-int   ChartBaseBSB::AnalyzeRefpoints(void)
+int   ChartBaseBSB::AnalyzeRefpoints(bool b_testSolution)
 {
       int i,n;
       double elt, elg;
@@ -5240,7 +5242,10 @@ int   ChartBaseBSB::AnalyzeRefpoints(void)
            m_Chart_Skew = apparent_skew;
        }
 #endif       
-       
+
+        if(!b_testSolution)
+            return(0);
+        
         // Do a last little test using a synthetic ViewPort of nominal size.....
         ViewPort vp;
         vp.clat = pRefTable[0].latr;

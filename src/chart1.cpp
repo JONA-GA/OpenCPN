@@ -105,6 +105,7 @@
 #include "OCPNPlatform.h"
 #include "AISTargetQueryDialog.h"
 #include "S57QueryDialog.h"
+#include "glTexCache.h"
 
 #ifdef ocpnUSE_GL
 #include "glChartCanvas.h"
@@ -1406,7 +1407,20 @@ bool MyApp::OnInit()
 
     //  Get the default language info
     wxString def_lang_canonical;
+#ifdef __WXMSW__
+	LANGID lang_id = GetUserDefaultUILanguage();
+	wxChar lngcp[100];
+	const wxLanguageInfo* languageInfo = 0;
+	if (0 != GetLocaleInfo(MAKELCID(lang_id, SORT_DEFAULT), LOCALE_SENGLANGUAGE, lngcp, 100))
+	{
+		languageInfo = wxLocale::FindLanguageInfo(lngcp);
+		g_locale = wxString(lngcp);
+	}
+	else
+		languageInfo = wxLocale::GetLanguageInfo(wxLANGUAGE_DEFAULT);
+#else
     const wxLanguageInfo* languageInfo = wxLocale::GetLanguageInfo(wxLANGUAGE_DEFAULT);
+#endif
     if( languageInfo ) {
         def_lang_canonical = languageInfo->CanonicalName;
         imsg = _T("System default Language:  ");
@@ -1853,6 +1867,16 @@ bool MyApp::OnInit()
             }
 
         }
+
+		if (g_bportable)
+		{
+			ChartDirInfo cdi;
+			cdi.fullpath =_T("charts");
+			cdi.fullpath.Prepend(g_Platform->GetSharedDataDir());
+			cdi.magic_number = _T("");
+			ChartDirArray.Add(cdi);
+			ndirs++;
+		}
 
         if( ndirs ) pConfig->UpdateChartDirs( ChartDirArray );
 
@@ -2947,9 +2971,13 @@ void MyFrame::RequestNewToolbar(bool bforcenew)
             DestroyMyToolbar();
 
         g_toolbar = CreateAToolbar();
-        g_FloatingToolbarDialog->RePosition();
-        g_FloatingToolbarDialog->SetColorScheme( global_color_scheme );
-        g_FloatingToolbarDialog->Show( b_reshow && g_bshowToolbar );
+        if (g_FloatingToolbarDialog->m_bsubmerged) {
+            g_FloatingToolbarDialog->SubmergeToGrabber();
+        } else {
+            g_FloatingToolbarDialog->RePosition();
+            g_FloatingToolbarDialog->SetColorScheme(global_color_scheme);
+            g_FloatingToolbarDialog->Show(b_reshow && g_bshowToolbar);
+        }
 
 #ifndef __WXQT__
         gFrame->Raise(); // ensure keyboard focus to the chart window (needed by gtk+)
@@ -2971,6 +2999,8 @@ void MyFrame::UpdateToolbar( ColorScheme cs )
         if( g_FloatingToolbarDialog->IsToolbarShown() ) {
             DestroyMyToolbar();
             g_toolbar = CreateAToolbar();
+            if (g_FloatingToolbarDialog->m_bsubmerged) 
+                g_FloatingToolbarDialog->SubmergeToGrabber();
         }
     }
 
@@ -4530,29 +4560,28 @@ bool MyFrame::ToggleLights( bool doToggle, bool temporary )
             }
 	    pOLE = NULL;
         }
-    }
 
-    oldstate &= !ps52plib->IsObjNoshow("LIGHTS");
+        oldstate &= !ps52plib->IsObjNoshow("LIGHTS");
 
-    if( doToggle ){
-        if(oldstate)                            // On, going off
-            ps52plib->AddObjNoshow("LIGHTS");
-        else{                                   // Off, going on
-            if(pOLE)
-                pOLE->nViz = 1;
-            ps52plib->RemoveObjNoshow("LIGHTS");
+        if( doToggle ){
+            if(oldstate)                            // On, going off
+                ps52plib->AddObjNoshow("LIGHTS");
+            else{                                   // Off, going on
+                if(pOLE)
+                    pOLE->nViz = 1;
+                ps52plib->RemoveObjNoshow("LIGHTS");
+            }
+
+            SetMenubarItemState( ID_MENU_ENC_LIGHTS, !oldstate );
         }
 
-        SetMenubarItemState( ID_MENU_ENC_LIGHTS, !oldstate );
-    }
-
-    if( doToggle ) {
-        if( ! temporary ) {
-            ps52plib->GenerateStateHash();
-            cc1->ReloadVP();
+        if( doToggle ) {
+            if( ! temporary ) {
+                ps52plib->GenerateStateHash();
+                cc1->ReloadVP();
+            }
         }
     }
-
 
 #endif
     return oldstate;
@@ -5539,8 +5568,8 @@ void MyFrame::ToggleQuiltMode( void )
             cc1->InvalidateGL();
             Refresh();
         }
+        g_bQuiltEnable = cc1->GetQuiltMode();
     }
-    g_bQuiltEnable = cc1->GetQuiltMode();
 }
 
 void MyFrame::SetQuiltMode( bool bquilt )
