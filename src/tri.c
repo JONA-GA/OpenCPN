@@ -3033,7 +3033,7 @@ inline int int_less_than(ipoint_t *v0, ipoint_t *v1)
 }
 
 /* Return the maximum of the two points into the yval structure */
-inline int int_max(ipoint_t *yval, ipoint_t *v0, ipoint_t *v1)
+static int int_max(ipoint_t *yval, ipoint_t *v0, ipoint_t *v1)
 {
       if (v0->y > v1->y)
             *yval = *v0;
@@ -3052,7 +3052,7 @@ inline int int_max(ipoint_t *yval, ipoint_t *v0, ipoint_t *v1)
 
 
 /* Return the minimum of the two points into the yval structure */
-inline int int_min(ipoint_t *yval, ipoint_t *v0, ipoint_t *v1)
+static int int_min(ipoint_t *yval, ipoint_t *v0, ipoint_t *v1)
 {
       if (v0->y < v1->y)
             *yval = *v0;
@@ -3085,7 +3085,7 @@ double iCROSS(int v0x, int v0y, int v1x, int v1y, int v2x, int v2y)
  * have the same y--cood, etc.
  */
 
-inline int int_is_left_of(int segnum, ipoint_t *v)
+static int int_is_left_of(int segnum, ipoint_t *v)
 {
       isegment_t *s = &iseg[segnum];
       double area;
