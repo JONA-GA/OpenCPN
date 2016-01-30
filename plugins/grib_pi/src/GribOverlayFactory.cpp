@@ -473,7 +473,7 @@ bool GRIBOverlayFactory::DoRenderGribOverlay( PlugIn_ViewPort *vp )
     }
     if( m_Altitude ) {
         if( ! m_Message_Hiden.IsEmpty() ) m_Message_Hiden.Append(_T("\n"));
-		m_Message_Hiden.Append(_("Warning : Data at")).Append(_T(" "))
+		m_Message_Hiden.Append(_("Warning : Data at Geopotential Height")).Append(_T(" "))
             .Append(m_Settings.GetAltitudeFromIndex(m_Altitude, m_Settings.Settings[GribOverlaySettings::PRESSURE].m_Units)).Append(_T(" "))
             .Append(m_Settings.GetUnitSymbol(GribOverlaySettings::PRESSURE))
             .Append(_T(" ! "));
@@ -2006,7 +2006,6 @@ void GRIBOverlayFactory::DrawGLTexture( GLuint texture, int width, int height,
 
         //    Rotations occur around 0,0, so calculate a post-rotate translation factor
         double angle = vp->rotation;
-        angle -= vp->skew;
 
         glTranslatef( xd, yd, 0 );
         glRotatef( angle * 180. / PI, 0, 0, 1 );

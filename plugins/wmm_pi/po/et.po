@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: opencpn\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2015-09-24 20:40-0500\n"
-"PO-Revision-Date: 2015-10-22 23:37-0400\n"
+"POT-Creation-Date: 2016-01-08 08:29-0300\n"
+"PO-Revision-Date: 2016-01-25 19:59-0500\n"
 "Last-Translator: nohal <pavel@kalian.cz>\n"
 "Language-Team: Estonian\n"
 "Language: et_EE\n"
@@ -18,7 +18,7 @@ msgstr ""
 
 #: src/wmm_pi.cpp:86
 msgid "\n"
-"World Magnetic Model Plotting allows users to cross reference the magnetic deviation values printed on many raster charts.\n\n"
+"World Magnetic Model Plotting allows users to cross reference the magnetic declination values printed on many raster charts.\n\n"
 "Declination is the angle between true and magnetic north.\n"
 "Inclination is the vertical angle of the magnetic field.\n"
 "\t(+- 90 at the magnetic poles)\n"
@@ -186,7 +186,7 @@ msgstr "Näita andmeid tööriistariba ikoonil"
 msgid "Window transparency"
 msgstr "Akna läbipaistvus"
 
-#: src/WmmUIDialog.cpp:329 src/MagneticPlotMap.cpp:360
+#: src/WmmUIDialog.cpp:329 src/MagneticPlotMap.cpp:362
 msgid "Declination"
 msgstr "Kääne"
 
@@ -194,11 +194,11 @@ msgstr "Kääne"
 msgid "Degrees"
 msgstr "kraadi"
 
-#: src/WmmUIDialog.cpp:340 src/MagneticPlotMap.cpp:361
+#: src/WmmUIDialog.cpp:340 src/MagneticPlotMap.cpp:363
 msgid "Inclination"
 msgstr "Kalle"
 
-#: src/WmmUIDialog.cpp:350 src/MagneticPlotMap.cpp:361
+#: src/WmmUIDialog.cpp:350 src/MagneticPlotMap.cpp:363
 msgid "Field Strength"
 msgstr "Väljatugevus"
 
@@ -226,7 +226,7 @@ msgstr "Säilita"
 msgid "Cancel"
 msgstr "Tühista"
 
-#: src/MagneticPlotMap.cpp:359
+#: src/MagneticPlotMap.cpp:361
 msgid "Building Magnetic Map"
 msgstr "Magnetilist kaarti loomas"
 

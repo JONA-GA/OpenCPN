@@ -89,6 +89,8 @@ extern wxPageSetupData*          g_pageSetupData;
 // Global print route selection dialog
 extern RoutePrintSelection * pRoutePrintSelection;
 
+extern float g_ChartScaleFactorExp;
+
 /*!
 * Helper stuff for calculating Route Plans
 */
@@ -374,6 +376,7 @@ RouteProp::RouteProp( wxWindow* parent, wxWindowID id, const wxString& caption, 
     m_pEnroutePoint = NULL;
     m_bStartNow = false;
 
+    m_pRoute = 0;
     m_pEnroutePoint = NULL;
     m_bStartNow = false;
     long wstyle = style;
@@ -1843,8 +1846,8 @@ bool RouteProp::UpdateProperties()
             bool starting_point = false;
 
             starting_point = ( i == 0 ) && enroute;
-            if( m_pEnroutePoint && !starting_point ) starting_point = ( prp->m_GUID
-                    == m_pEnroutePoint->m_GUID );
+            if( m_pEnroutePoint && !starting_point )
+                starting_point = ( prp->m_GUID == m_pEnroutePoint->m_GUID );
 
             if( starting_point ) {
                 slat = gLat;
@@ -1891,8 +1894,13 @@ bool RouteProp::UpdateProperties()
         prp->SetDistance(leg_dist); // save the course to the next waypoint for printing.
 
             //  Bearing
-        if( g_bShowMag )
-            t.Printf( _T("%03.0f Deg. M"), gFrame->GetTrueOrMag( brg ) );
+        if( g_bShowMag ){
+            double latAverage = (prp->m_lat + slat)/2;
+            double lonAverage = (prp->m_lon + slon)/2;
+            double varBrg = gFrame->GetTrueOrMag( brg, latAverage, lonAverage);
+            
+            t.Printf( _T("%03.0f Deg. M"), varBrg );
+        }
         else
             t.Printf( _T("%03.0f Deg. T"), gFrame->GetTrueOrMag( brg ) );
 
@@ -1903,8 +1911,20 @@ bool RouteProp::UpdateProperties()
 
         // Course (bearing of next )
         if (_next_prp){
-            if( g_bShowMag )
-                t.Printf( _T("%03.0f Deg. M"), gFrame->GetTrueOrMag( course ) );
+            if( g_bShowMag ){
+                double next_lat = prp->m_lat;
+                double next_lon = prp->m_lon;
+                if (_next_prp ){
+                    next_lat = _next_prp->m_lat;
+                    next_lon = _next_prp->m_lon;
+                }
+                    
+                double latAverage = (prp->m_lat + next_lat)/2;
+                double lonAverage = (prp->m_lon + next_lon)/2;
+                double varCourse = gFrame->GetTrueOrMag( course, latAverage, lonAverage);
+                
+                t.Printf( _T("%03.0f Deg. M"), varCourse );
+            }
             else
                 t.Printf( _T("%03.0f Deg. T"), gFrame->GetTrueOrMag( course ) );
             if( arrival )
@@ -2429,8 +2449,15 @@ MarkInfoDef::MarkInfoDef( wxWindow* parent, wxWindowID id, const wxString& title
 
     m_bcomboBoxIcon = new wxBitmapComboBox( m_panelBasicProperties, wxID_ANY, _("Combo!"),
             wxDefaultPosition, wxDefaultSize, 0, NULL, wxCB_READONLY );
-    bSizer8->Add( m_bcomboBoxIcon, 1, wxALL, 5 );
 
+#ifdef __WXMSW__    
+    //  Accomodate scaling of icon
+    int min_size = metric * 3;
+    min_size = wxMax( min_size, (32 *g_ChartScaleFactorExp) + 8 );
+    m_bcomboBoxIcon->SetMinSize( wxSize(-1, min_size) );
+#endif
+    
+    bSizer8->Add( m_bcomboBoxIcon, 1, wxALL, 5 );
 
     bSizerTextProperties->AddSpacer(5);
     
@@ -2546,14 +2573,17 @@ MarkInfoDef::MarkInfoDef( wxWindow* parent, wxWindowID id, const wxString& title
 
     bSizerBasicProperties->Add( sbSizerProperties, 3, wxALL | wxEXPAND, 5 );
 
-    sbSizerLinks = new wxStaticBoxSizer(
-            new wxStaticBox( m_panelBasicProperties, wxID_ANY, _("Links") ), wxVERTICAL );
-
+    sbSizerLinks = new wxStaticBoxSizer( new wxStaticBox( m_panelBasicProperties, wxID_ANY, _("Links") ), wxVERTICAL );
+    bSizerBasicProperties->Add( sbSizerLinks, 2, wxALL | wxEXPAND, 5 );
+    
     m_scrolledWindowLinks = new wxScrolledWindow( m_panelBasicProperties, wxID_ANY,
-            wxDefaultPosition, wxDefaultSize, wxHSCROLL | wxVSCROLL );
+            wxDefaultPosition, wxSize(-1, 60), wxHSCROLL | wxVSCROLL );
     m_scrolledWindowLinks->SetScrollRate( 2, 2 );
+    sbSizerLinks->Add( m_scrolledWindowLinks, 0, wxEXPAND | wxALL, 5 );
+    
     bSizerLinks = new wxBoxSizer( wxVERTICAL );
-
+    m_scrolledWindowLinks->SetSizer( bSizerLinks );
+    
     m_hyperlink17 = new wxHyperlinkCtrl( m_scrolledWindowLinks, wxID_ANY, _("wxFB Website"),
             wxT("file:///C:\\ProgramData\\opencpn\\opencpn.log"), wxDefaultPosition,
             wxDefaultSize, wxHL_DEFAULT_STYLE );
@@ -2579,9 +2609,6 @@ MarkInfoDef::MarkInfoDef( wxWindow* parent, wxWindowID id, const wxString& title
 
     bSizerLinks->Add( m_hyperlink17, 0, wxALL, 5 );
 
-    m_scrolledWindowLinks->SetSizer( bSizerLinks );
-    sbSizerLinks->Add( m_scrolledWindowLinks, 1, wxEXPAND | wxALL, 5 );
-
     wxBoxSizer* bSizer9 = new wxBoxSizer( wxHORIZONTAL );
 
     m_buttonAddLink = new wxButton( m_panelBasicProperties, wxID_ANY, _("Add"), wxDefaultPosition,
@@ -2600,8 +2627,6 @@ MarkInfoDef::MarkInfoDef( wxWindow* parent, wxWindowID id, const wxString& title
                                                 0 );
     sbSizerLinks->Add( m_staticTextEditEnabled, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5 );
     
-    bSizerBasicProperties->Add( sbSizerLinks, 2, wxALL | wxEXPAND, 5 );
-
 
     m_panelDescription = new wxPanel( m_notebookProperties, wxID_ANY, wxDefaultPosition,
             wxDefaultSize, wxTAB_TRAVERSAL );
@@ -2661,7 +2686,10 @@ MarkInfoDef::MarkInfoDef( wxWindow* parent, wxWindowID id, const wxString& title
     m_sdbSizerButtons->Realize();
 
     bSizer1->Add( m_sdbSizerButtons, 0, wxALL | wxEXPAND, 5 );
+    
+    Fit();
 
+    SetMinSize(wxSize(-1, 600));
     RecalculateSize();
     
     // Connect Events
@@ -2715,24 +2743,26 @@ void MarkInfoDef::RecalculateSize( void )
 {
     
     Layout();
+
+    // We change only Y size, unless X is too big for the parent client size....
     
     wxSize esize;
-    esize.x = GetCharWidth() * 110;
-    esize.y = GetCharHeight() * 40;
+
+    esize.x = -1;
+    esize.y = GetCharHeight() * 30;
     
     wxSize dsize = GetParent()->GetClientSize();
     esize.y = wxMin(esize.y, dsize.y - (2 * GetCharHeight()));
     esize.x = wxMin(esize.x, dsize.x - (1 * GetCharHeight()));
-    SetClientSize(esize);
+    SetSize(wxSize(esize.x, esize.y));
     
     wxSize fsize = GetSize();
     fsize.y = wxMin(fsize.y, dsize.y - (2 * GetCharHeight()));
     fsize.x = wxMin(fsize.x, dsize.x - (1 * GetCharHeight()));
-    SetSize(fsize);
+    SetSize(wxSize(-1, fsize.y));
     
     m_defaultClientSize = GetClientSize();
     
-    Centre( wxBOTH );
 }
 
 
@@ -2990,23 +3020,30 @@ bool MarkInfoImpl::UpdateProperties( bool positionOnly )
         bool fillCombo = m_bcomboBoxIcon->GetCount() == 0;
         wxImageList *icons = pWayPointMan->Getpmarkicon_image_list();
 
+        int target = 16;
         if( fillCombo  && icons){
             for( int i = 0; i < pWayPointMan->GetNumIcons(); i++ ) {
                 wxString *ps = pWayPointMan->GetIconDescription( i );
                 wxBitmap bmp = icons->GetBitmap( i );
 
-#ifdef __WXMSW__                
-                int target = 16;
-                int h = bmp.GetHeight();
-                if(bmp.GetHeight() > target){
-                    wxBitmap bmpl = bmp;
-                    wxImage img = bmpl.ConvertToImage();
+#ifdef __WXMSW__
+                if(g_ChartScaleFactorExp > 1.0){
+                    target = bmp.GetHeight() * g_ChartScaleFactorExp;
+                    wxImage img = bmp.ConvertToImage();
                     img.Rescale(target, target, wxIMAGE_QUALITY_HIGH);
                     bmp = wxBitmap(img);
                 }
+                
 #endif                
                 m_bcomboBoxIcon->Append( *ps, bmp );
             }
+#ifdef __WXMSW__ 
+            int metric = GetCharHeight();
+            target = wxMax( target, metric /** 15 / 10*/);
+
+            HWND hWnd = GetHwndOf(m_bcomboBoxIcon);
+            ::SendMessage(hWnd, CB_SETITEMHEIGHT, -1, target);     //  Set selection box size
+#endif            
         }
         
         // find the correct item in the combo box
@@ -3032,6 +3069,9 @@ bool MarkInfoImpl::UpdateProperties( bool positionOnly )
     androidEnableBackButton( false );
     #endif
     
+    Fit();
+    SetMinSize(wxSize(-1, 600));
+    RecalculateSize();
     
     return true;
 }
@@ -3340,7 +3380,7 @@ void MarkInfoImpl::OnMarkInfoOKClick( wxCommandEvent& event )
     if( pRoutePropDialog && pRoutePropDialog->IsShown() )
         pRoutePropDialog->UpdateProperties();
 
-    SetClientSize(m_defaultClientSize);
+//    SetClientSize(m_defaultClientSize);
     
     #ifdef __OCPN__ANDROID__
     androidEnableBackButton( true );
@@ -3380,7 +3420,7 @@ void MarkInfoImpl::OnMarkInfoCancelClick( wxCommandEvent& event )
     Show( false );
     delete m_pMyLinkList;
     m_pMyLinkList = NULL;
-    SetClientSize(m_defaultClientSize);
+//    SetClientSize(m_defaultClientSize);
 
     #ifdef __OCPN__ANDROID__
     androidEnableBackButton( true );
