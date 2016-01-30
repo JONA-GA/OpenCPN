@@ -33,6 +33,7 @@
 #endif //precompiled headers
 
 #include "instrument.h"
+#include "wx28compat.h"
 
 //----------------------------------------------------------------
 //
@@ -54,6 +55,30 @@ DashboardInstrument::DashboardInstrument(wxWindow *pparent, wxWindowID id, wxStr
 
       Connect(wxEVT_ERASE_BACKGROUND, wxEraseEventHandler(DashboardInstrument::OnEraseBackground));
       Connect(wxEVT_PAINT, wxPaintEventHandler(DashboardInstrument::OnPaint));
+      
+      //  On OSX, there is an orphan mouse event that comes from the automatic
+      //  exEVT_CONTEXT_MENU synthesis on the main wxWindow mouse handler.
+      //  The event goes to an instrument window (here) that may have been deleted by the
+      //  preferences dialog.  Result is NULL deref.
+      //  Solution:  Handle right-click here, and DO NOT skip()
+      //  Strangely, this does not work for GTK...
+      //  See: http://trac.wxwidgets.org/ticket/15417
+      
+#ifdef __WXOSX__
+      Connect(wxEVT_RIGHT_DOWN, wxMouseEventHandler(DashboardInstrument::MouseEvent), NULL, this);
+#endif      
+}
+
+void DashboardInstrument::MouseEvent( wxMouseEvent &event )
+{
+    if ( event.GetEventType() == wxEVT_RIGHT_DOWN )
+    {
+       wxContextMenuEvent evtCtx(wxEVT_CONTEXT_MENU,
+                                  this->GetId(),
+                                  this->ClientToScreen(event.GetPosition()));
+        evtCtx.SetEventObject(this);
+        GetParent()->GetEventHandler()->AddPendingEvent(evtCtx );
+    }
 }
 
 int DashboardInstrument::GetCapacity()
@@ -83,12 +108,12 @@ void DashboardInstrument::OnPaint( wxPaintEvent& WXUNUSED(event) )
         return;
     }
 
-    wxBitmap bm( size.x, size.y, 32 );
-#if !wxCHECK_VERSION(2,9,4)
-    bm.UseAlpha();
+#if wxUSE_GRAPHICS_CONTEXT
+    wxGCDC dc( pdc );
+#else
+    wxDC &dc( pdc );
 #endif
-    wxMemoryDC mdc( bm );
-    wxGCDC dc( mdc );
+
     wxColour cl;
     GetGlobalColor( _T("DASHB"), &cl );
     dc.SetBackground( cl );
@@ -96,11 +121,7 @@ void DashboardInstrument::OnPaint( wxPaintEvent& WXUNUSED(event) )
 
     Draw( &dc );
 
-    if(m_drawSoloInPane) {
-        mdc.SelectObject( wxNullBitmap );
-        pdc.DrawBitmap( bm, 0, 0, false );
-    }
-    else {
+    if(!m_drawSoloInPane) {
 
     //  Windows GCDC does a terrible job of rendering small texts
     //  Workaround by using plain old DC for title box if text size is too small
@@ -109,7 +130,7 @@ void DashboardInstrument::OnPaint( wxPaintEvent& WXUNUSED(event) )
 #endif
         {
             wxPen pen;
-            pen.SetStyle( wxSOLID );
+            pen.SetStyle( wxPENSTYLE_SOLID );
             GetGlobalColor( _T("DASHL"), &cl );
             pen.SetColour( cl );
             dc.SetPen( pen );
@@ -120,39 +141,27 @@ void DashboardInstrument::OnPaint( wxPaintEvent& WXUNUSED(event) )
             GetGlobalColor( _T("DASHF"), &cl );
             dc.SetTextForeground( cl );
             dc.DrawText( m_title, 5, 0 );
-
-            mdc.SelectObject( wxNullBitmap );
-            pdc.DrawBitmap( bm, 0, 0, false );
         }
 
 #ifdef __WXMSW__
         if( g_pFontTitle->GetPointSize() <= 12 ) {
-            mdc.SelectObject( wxNullBitmap );           // the instrument body
-            pdc.DrawBitmap( bm, 0, 0, false );
-
-            wxBitmap tbm( size.x, m_TitleHeight, -1 );
-            wxMemoryDC tdc( tbm );
             wxColour cl;
             GetGlobalColor( _T("DASHB"), &cl );
-            tdc.SetBackground( cl );
-            tdc.Clear();
+            pdc.SetBrush(cl);
+            pdc.DrawRectangle(0, 0, size.x, m_TitleHeight);
 
             wxPen pen;
             pen.SetStyle( wxSOLID );
             GetGlobalColor( _T("DASHL"), &cl );
             pen.SetColour( cl );
-            tdc.SetPen( pen );
-            tdc.SetBrush( cl );
-            tdc.DrawRoundedRectangle( 0, 0, size.x, m_TitleHeight, 3 );
+            pdc.SetPen( pen );
+            pdc.SetBrush( cl );
+            pdc.DrawRoundedRectangle( 0, 0, size.x, m_TitleHeight, 3 );
 
-            tdc.SetFont( *g_pFontTitle );
+            pdc.SetFont( *g_pFontTitle );
             GetGlobalColor( _T("DASHF"), &cl );
-            tdc.SetTextForeground( cl );
-            tdc.DrawText( m_title, 5, 0 );
-
-            tdc.SelectObject( wxNullBitmap );
-            pdc.DrawBitmap( tbm, 0, 0, false );
-
+            pdc.SetTextForeground( cl );
+            pdc.DrawText( m_title, 5, 0 );
         }
 #endif
     }
@@ -219,18 +228,18 @@ void DashboardInstrument_Single::Draw(wxGCDC* dc)
 void DashboardInstrument_Single::SetData(int st, double data, wxString unit)
 {
       if (m_cap_flag & st){
-            if(!wxIsNaN(data)){
+            if(!wxIsNaN(data) && (data < 999)){
                 if (unit == _T("C"))
                   m_data = wxString::Format(m_format, data)+DEGREE_SIGN+_T("C");
-                else if (unit == _T("Deg"))
+                else if (unit == _T("\u00B0"))
                   m_data = wxString::Format(m_format, data)+DEGREE_SIGN;
-                else if (unit == _T("DegT"))
+                else if (unit == _T("\u00B0T"))
                   m_data = wxString::Format(m_format, data)+DEGREE_SIGN+_(" true");
-                else if (unit == _T("DegM"))
+                else if (unit == _T("\u00B0M"))
                   m_data = wxString::Format(m_format, data)+DEGREE_SIGN+_(" mag");
-                else if (unit == _T("DegL"))
+                else if (unit == _T("\u00B0L"))
                   m_data = _T(">")+ wxString::Format(m_format, data)+DEGREE_SIGN;
-                else if (unit == _T("DegR"))
+                else if (unit == _T("\u00B0R"))
                   m_data = wxString::Format(m_format, data)+DEGREE_SIGN+_T("<");
                 else if (unit == _T("N")) //Knots
                   m_data = wxString::Format(m_format, data)+_T(" Kts");
@@ -381,4 +390,3 @@ wxString toSDMM ( int NEflag, double a )
       }
       return s;
 }
-

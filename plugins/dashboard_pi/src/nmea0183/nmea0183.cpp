@@ -127,9 +127,9 @@ NMEA0183::NMEA0183()
    response_table.Append( (RESPONSE *) &Wnc );
 */
    response_table.Append( (RESPONSE *) &Wpl );
-/*
+
    response_table.Append( (RESPONSE *) &Xdr );
-   response_table.Append( (RESPONSE *) &Xte );
+/*   response_table.Append( (RESPONSE *) &Xte );
    response_table.Append( (RESPONSE *) &Xtr );
 */
    response_table.Append( (RESPONSE *) &Zda );
@@ -232,7 +232,8 @@ bool NMEA0183::IsGood( void ) const
    /*
    ** Next to last character must be a CR
    */
-
+   /*  This seems too harsh for cross platform work
+    * 
    if ( sentence.Sentence.Mid( sentence.Sentence.Len() - 2, 1 ) != wxString(_T("\r")) )
    {
       return( FALSE );
@@ -242,13 +243,18 @@ bool NMEA0183::IsGood( void ) const
    {
       return( FALSE );
    }
-
+   */
+   
    return( TRUE );
 }
 
 
 bool NMEA0183::PreParse( void )
 {
+    wxCharBuffer buf = sentence.Sentence.ToUTF8();
+    if( !buf.data() )                            // badly formed sentence?
+        return false;
+    
       if ( IsGood() )
       {
             wxString mnemonic = sentence.Field( 0 );

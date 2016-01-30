@@ -385,6 +385,8 @@ OGdkOverlapType gdk_region_rect_in         (const OGdkRegion    *region,
 void           gdk_region_offset          (OGdkRegion          *region,
                                            int                dx,
                                            int                dy);
+void           gdk_region_union_with_rect (OGdkRegion          *region,
+                                               const OGdkRectangle *rect);
 void           gdk_region_union           (OGdkRegion          *source1,
                                            const OGdkRegion    *source2);
 void           gdk_region_intersect       (OGdkRegion          *source1,
@@ -426,6 +428,7 @@ public:
     {
         if (m_region)
             gdk_region_destroy( m_region );
+        free( m_region );
     }
 
     OGdkRegion  *m_region;
@@ -461,23 +464,23 @@ OCPNRegion::OCPNRegion( const wxRect& rect ) : wxRegion(rect.x, rect.y, rect.wid
 {
 }
 
-#ifdef __WXOSX__
-OCPNRegion::OCPNRegion( size_t n, const wxPoint *points, int fillStyle ) : wxRegion(n, points, (wxPolygonFillMode)fillStyle)
+OCPNRegion::OCPNRegion( const wxRegion& region ) : wxRegion(region)
 {
 }
 
-#else
-OCPNRegion::OCPNRegion( size_t n, const wxPoint *points, int fillStyle ) : wxRegion(n, points, fillStyle)
-{
-}
+OCPNRegion::OCPNRegion( size_t n, const wxPoint *points, int fillStyle )
+    : wxRegion(n, points,
+#if wxCHECK_VERSION(2,9,0)
+               (wxPolygonFillMode)
 #endif
-
-
-wxRegion &OCPNRegion::ConvertTowxRegion()
+               fillStyle)
 {
-    return *(wxRegion *)this;
 }
 
+wxRegion *OCPNRegion::GetNew_wxRegion() const
+{
+    return new wxRegion(this);
+}
 
 #endif    
 
@@ -498,6 +501,27 @@ OCPNRegion::OCPNRegion( const wxRect& rect )
 {
     InitRect(rect.x, rect.y, rect.width, rect.height);
 }
+
+OCPNRegion::OCPNRegion( const wxRegion& region )
+{
+    wxRegionIterator ri(region);
+    if(!ri.HaveRects())
+        return;
+
+    wxRect rect = ri.GetRect();
+    InitRect(rect.x, rect.y, rect.width, rect.height);
+    ri++;
+
+    while(ri.HaveRects()) {
+        Union(ri.GetRect());
+        ri++;
+    }
+}
+
+OCPNRegion::~OCPNRegion()
+{
+}
+
 
 void OCPNRegion::InitRect(wxCoord x, wxCoord y, wxCoord w, wxCoord h)
 {
@@ -603,7 +627,7 @@ bool OCPNRegion::ODoUnionWithRect(const wxRect& r)
         rect.width = r.width;
         rect.height = r.height;
 
-///        gdk_region_union_with_rect( M_REGIONDATA->m_region, &rect );
+        gdk_region_union_with_rect( M_REGIONDATA->m_region, &rect );
     }
 
     return true;
@@ -661,6 +685,7 @@ bool OCPNRegion::ODoSubtract( const OCPNRegion& region )
     return true;
 }
 
+#if 0
 bool OCPNRegion::DoXor( const OCPNRegion& region )
 {
     wxCHECK_MSG( region.Ok(), false, _T("invalid region") );
@@ -676,6 +701,7 @@ bool OCPNRegion::DoXor( const OCPNRegion& region )
 
     return true;
 }
+#endif
 
 bool OCPNRegion::ODoOffset( wxCoord x, wxCoord y )
 {
@@ -767,10 +793,10 @@ void *OCPNRegion::GetRegion() const
     return M_REGIONDATA->m_region;
 }
 
-
-wxRegion &OCPNRegion::ConvertTowxRegion()
+wxRegion *OCPNRegion::GetNew_wxRegion() const
 {
     wxRegion *r = new wxRegion;
+    r->Clear();
     
     OGdkRectangle *gdkrects = NULL;
     int numRects = 0;
@@ -793,7 +819,7 @@ wxRegion &OCPNRegion::ConvertTowxRegion()
     }
     free( gdkrects );
     
-    return *r;
+    return r;
 }
 
 
@@ -814,6 +840,16 @@ OCPNRegionIterator::~OCPNRegionIterator()
     delete m_ri;
 }
 
+void OCPNRegionIterator::Reset()
+{
+    m_ri->Reset();
+}
+
+void OCPNRegionIterator::Reset(const OCPNRegion& region)
+{
+    m_ri->Reset(region);
+}
+
 wxRect OCPNRegionIterator::GetRect() const
 {
     return m_ri->GetRect();
@@ -829,10 +865,6 @@ void OCPNRegionIterator::NextRect()
     ++(*m_ri);
 }
 
-
-void OCPNRegionIterator::Init()
-{
-}
 
 #endif
 
@@ -860,6 +892,11 @@ void OCPNRegionIterator::Init()
 OCPNRegionIterator::~OCPNRegionIterator()
 {
     wxDELETEA(m_rects);
+}
+
+void OCPNRegionIterator::Reset()
+{
+    m_current = 0u;
 }
 
 void OCPNRegionIterator::NextRect()
@@ -1186,7 +1223,7 @@ gdk_region_union_with_rect (OGdkRegion          *region,
     tmp_region.extents.y2 = rect->y + rect->height;
     tmp_region.size = 1;
     
-///    gdk_region_union (region, &tmp_region);
+    gdk_region_union (region, &tmp_region);
 }
 
 /*-

@@ -26,6 +26,7 @@
  */
 
 #include "depth.h"
+#include "wx28compat.h"
 extern int g_iDashDepthUnit;
 
 
@@ -101,16 +102,22 @@ void DashboardInstrument_Depth::DrawBackground(wxGCDC* dc)
       dc->SetTextForeground(cl);
 
       wxPen pen;
-      pen.SetStyle(wxSOLID);
+      pen.SetStyle(wxPENSTYLE_SOLID);
       GetGlobalColor(_T("DASHF"), &cl);
       pen.SetColour(cl);
-      pen.SetWidth(2);
+      pen.SetWidth(1);
       dc->SetPen(pen);
 
-      dc->DrawLine(3, 40, size.x-3, 40);
+      dc->DrawLine(3, 50, size.x-3, 50);
       dc->DrawLine(3, 140, size.x-3, 140);
 
-      pen.SetStyle(wxSHORT_DASH);
+#ifdef __WXMSW__      
+      pen.SetStyle(wxPENSTYLE_SHORT_DASH);
+#else
+      pen.SetStyle(wxPENSTYLE_DOT);
+      pen.SetWidth(1);
+#endif      
+      
       dc->SetPen(pen);
       dc->DrawLine(3, 65, size.x-3, 65);
       dc->DrawLine(3, 90, size.x-3, 90);
@@ -154,7 +161,7 @@ void DashboardInstrument_Depth::DrawForeground(wxGCDC* dc)
 
       GetGlobalColor(_T("DASHL"), &cl);
       wxBrush brush;
-      brush.SetStyle(wxSOLID);
+      brush.SetStyle(wxBRUSHSTYLE_SOLID);
       brush.SetColour(cl);
       dc->SetBrush(brush);
       dc->SetPen(*wxTRANSPARENT_PEN);

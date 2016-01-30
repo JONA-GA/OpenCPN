@@ -33,11 +33,13 @@
 #include <wx/encconv.h>
 #include <wx/regex.h>
 #include <wx/progdlg.h>
+#include "wx/tokenzr.h"
+#include "wx/dir.h"
 
 #include "chartdbs.h"
 #include "chartbase.h"
 #include "pluginmanager.h"
-
+#include "mygeom.h"                     // For DouglasPeucker();
 #ifndef UINT32
 #define UINT32 unsigned int
 #endif
@@ -110,9 +112,9 @@ bool ChartTableHeader::CheckValid()
           msg.Prepend(wxT("   Warning: found incorrect chart db version: "));
           wxLogMessage(msg);
 
-          return false;       // no match....
+//          return false;       // no match....
 
-/*
+
           // Try previous version....
           sprintf(vb, "V%03d", DB_VERSION_PREVIOUS);
           if (strncmp(vb, dbVersion, sizeof(dbVersion)))
@@ -122,7 +124,7 @@ bool ChartTableHeader::CheckValid()
                 wxLogMessage(_T("   Scheduling db upgrade to current db version on Options->Charts page visit..."));
                 return true;
           }
-*/
+
 
     }
     else
@@ -154,6 +156,7 @@ ChartTableEntry::ChartTableEntry(ChartBase &theChart)
 
 
     ChartType = theChart.GetChartType();
+    ChartFamily = theChart.GetChartFamily();
     Scale = theChart.GetNativeScale();
 
     Skew = theChart.GetChartSkew();
@@ -169,7 +172,9 @@ ChartTableEntry::ChartTableEntry(ChartBase &theChart)
 
     m_pfilename = new wxString;           // create and populate helper members
     *m_pfilename = fn.GetFullName();
-
+    m_psFullPath = new wxString;
+    *m_psFullPath = theChart.GetFullPath();
+    
     Extent ext;
     theChart.GetChartExtent(&ext);
     LatMax = ext.NLAT;
@@ -177,20 +182,79 @@ ChartTableEntry::ChartTableEntry(ChartBase &theChart)
     LonMin = ext.WLON;
     LonMax = ext.ELON;
 
+    m_bbox.SetMax(LonMax, LatMax);
+    m_bbox.SetMin(LonMin, LatMin);
+    
     // Fill in the PLY information
-
+    //  LOD calculation
+    int LOD_pixels = 1;
+    double scale_max_zoom = Scale / 4;
+    
+    double display_ppm = 1 / .00025;     // nominal for most LCD displays
+    double meters_per_pixel_max_scale = scale_max_zoom / display_ppm;
+    double LOD_meters = meters_per_pixel_max_scale * LOD_pixels;
+    
+//    double LOD_meters = 5;
+    
     // If  COVR table has only one entry, us it for the primary Ply Table
     if (theChart.GetCOVREntries() == 1) {
           nPlyEntries = theChart.GetCOVRTablePoints(0);
-          float *pf = (float *)malloc(2 * nPlyEntries * sizeof(float));
-          pPlyTable = pf;
-          float *pfe = pf;
-          Plypoint *ppp = (Plypoint *)theChart.GetCOVRTableHead(0);
+          
+          if(nPlyEntries > 5 && (LOD_meters > .01)){
+              wxArrayInt index_keep;
+              
+              index_keep.Clear();
+              index_keep.Add(0);
+              index_keep.Add(nPlyEntries-1);
+              index_keep.Add(1);
+              index_keep.Add(nPlyEntries-2);
 
-          for (int i = 0; i < nPlyEntries; i++) {
+              double *DPbuffer = (double *)malloc(2 * nPlyEntries * sizeof(double));
+              
+              double *pfed = DPbuffer;
+              Plypoint *ppp = (Plypoint *)theChart.GetCOVRTableHead(0);
+              
+              for (int i = 0; i < nPlyEntries; i++) {
+                  *pfed++ = ppp->ltp;
+                  *pfed++ = ppp->lnp;
+                  ppp++;
+              }
+              
+              DouglasPeucker(DPbuffer, 1, nPlyEntries-2, LOD_meters/(1852 * 60), &index_keep);
+//              printf("DB DP Reduction: %d/%d\n", index_keep.GetCount(), nPlyEntries);
+
+              // Mark the keepers by adding a simple constant to ltp
+              for(unsigned int i=0 ; i < index_keep.GetCount() ; i++){
+                  int k = index_keep.Item(i);
+                  DPbuffer[2*k] += 2000.;
+              }
+              
+              
+              float *pf = (float *)malloc(2 * index_keep.GetCount() * sizeof(float));
+              float *pfe = pf;
+              
+              for (int i = 0; i < nPlyEntries; i++) {
+                  if(DPbuffer[2 * i] > 1000.){
+                      *pfe++ = DPbuffer[2*i] - 2000.;
+                      *pfe++ = DPbuffer[(2*i) + 1];
+                  }
+              }
+
+              pPlyTable = pf;
+              nPlyEntries = index_keep.GetCount();
+              free( DPbuffer );
+          }
+          else {
+            float *pf = (float *)malloc(2 * nPlyEntries * sizeof(float));
+            pPlyTable = pf;
+            float *pfe = pf;
+            Plypoint *ppp = (Plypoint *)theChart.GetCOVRTableHead(0);
+
+            for (int i = 0; i < nPlyEntries; i++) {
                 *pfe++ = ppp->ltp;
                 *pfe++ = ppp->lnp;
                 ppp++;
+            }
           }
     }
     // Else create a rectangular primary Ply Table from the chart extents
@@ -225,10 +289,58 @@ ChartTableEntry::ChartTableEntry(ChartBase &theChart)
           int *pip = (int *)malloc(nAuxPlyEntries * sizeof(int));
 
           for (int j = 0 ; j < nAuxPlyEntries; j++) {
+              int nPE = theChart.GetCOVRTablePoints(j);
+              
+              if(nPE > 5 && (LOD_meters > .01)){
+                  wxArrayInt index_keep;
+                  
+                  index_keep.Clear();
+                  index_keep.Add(0);
+                  index_keep.Add(nPE-1);
+                  index_keep.Add(1);
+                  index_keep.Add(nPE-2);
+                  
+                  double *DPbuffer = (double *)malloc(2 * nPE * sizeof(double));
+                  
+                  double *pfed = DPbuffer;
+                  Plypoint *ppp = (Plypoint *)theChart.GetCOVRTableHead(j);
+                  
+                  for (int i = 0; i < nPE; i++) {
+                      *pfed++ = ppp->ltp;
+                      *pfed++ = ppp->lnp;
+                      ppp++;
+                  }
+                  
+                  DouglasPeucker(DPbuffer, 1, nPE-2, LOD_meters/(1852 * 60), &index_keep);
+ //                 printf("DBa DP Reduction: %d/%d\n", index_keep.GetCount(), nPE);
+                  
+                  // Mark the keepers by adding a simple constant to ltp
+                  for(unsigned int i=0 ; i < index_keep.GetCount() ; i++){
+                      int k = index_keep.Item(i);
+                      DPbuffer[2*k] += 2000.;
+                  }
+                  
+                  
+                  float *pf = (float *)malloc(2 * index_keep.GetCount() * sizeof(float));
+                  float *pfe = pf;
+                  
+                  for (int i = 0; i < nPE; i++) {
+                      if(DPbuffer[2 * i] > 1000.){
+                          *pfe++ = DPbuffer[2*i] - 2000.;
+                          *pfe++ = DPbuffer[(2*i) + 1];
+                      }
+                  }
+                  
+                  pft0[j] = pf;
+                  pip[j] = index_keep.GetCount();
+                  free( DPbuffer );
+              }
+              else {
                 float *pf_entry = (float *)malloc(theChart.GetCOVRTablePoints(j) * 2 * sizeof(float));
                 memcpy(pf_entry, theChart.GetCOVRTableHead(j), theChart.GetCOVRTablePoints(j) * 2 * sizeof(float));
                 pft0[j] = pf_entry;
                 pip[j] = theChart.GetCOVRTablePoints(j);
+              }
           }
 
           pAuxPlyTable = pfp;
@@ -275,6 +387,7 @@ ChartTableEntry::~ChartTableEntry()
     }
     
     delete m_pfilename;
+    delete m_psFullPath;
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -321,8 +434,10 @@ int ChartTableEntry::GetChartType() const
 
 int ChartTableEntry::GetChartFamily() const
 {
-      switch(ChartType)
-      {
+    if(s_dbVersion < 18)
+    {
+        switch(ChartType)
+        {
             case CHART_TYPE_KAP:
             case CHART_TYPE_GEO:
                   return CHART_FAMILY_RASTER;
@@ -335,6 +450,9 @@ int ChartTableEntry::GetChartFamily() const
             default:
                   return CHART_FAMILY_UNKNOWN;
       }
+    }
+    else
+        return ChartFamily;
 }
 
 
@@ -350,7 +468,7 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
     ChartDatabase *pD = (ChartDatabase *)pDb;
     int db_version = pD->GetVersion();
 
-    if(db_version == 17)
+    if(db_version == 18)
     {
         // Read the path first
         for (cp = path; (*cp = (char)is.GetC()) != 0; cp++);
@@ -363,6 +481,87 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
         wxString fullfilename(pFullPath, wxConvUTF8);
         wxFileName fn(fullfilename);
         *m_pfilename = fn.GetFullName();
+        m_psFullPath = new wxString;
+        *m_psFullPath = fullfilename;
+        
+        // Read the table entry
+        ChartTableEntry_onDisk_18 cte;
+        is.Read(&cte, sizeof(ChartTableEntry_onDisk_18));
+        
+        //    Transcribe the elements....
+        EntryOffset = cte.EntryOffset;
+        ChartType = cte.ChartType;
+        ChartFamily = cte.ChartFamily;
+        LatMax = cte.LatMax;
+        LatMin = cte.LatMin;
+        LonMax = cte.LonMax;
+        LonMin = cte.LonMin;
+
+        m_bbox.SetMax(LonMax, LatMax);
+        m_bbox.SetMin(LonMin, LatMin);
+        
+        Skew = cte.skew;
+        ProjectionType = cte.ProjectionType;
+        
+        Scale = cte.Scale;
+        edition_date = cte.edition_date;
+        file_date = cte.file_date;
+        
+        nPlyEntries = cte.nPlyEntries;
+        nAuxPlyEntries = cte.nAuxPlyEntries;
+        
+        nNoCovrPlyEntries = cte.nNoCovrPlyEntries;
+        
+        bValid = cte.bValid;
+        
+        if (nPlyEntries) {
+            int npeSize = nPlyEntries * 2 * sizeof(float);
+            pPlyTable = (float *)malloc(npeSize);
+            is.Read(pPlyTable, npeSize);
+        }
+        
+        if (nAuxPlyEntries) {
+            int napeSize = nAuxPlyEntries * sizeof(int);
+            pAuxPlyTable = (float **)malloc(nAuxPlyEntries * sizeof(float *));
+            pAuxCntTable = (int *)malloc(napeSize);
+            is.Read(pAuxCntTable, napeSize);
+            
+            for (int nAuxPlyEntry = 0; nAuxPlyEntry < nAuxPlyEntries; nAuxPlyEntry++) {
+                int nfSize = pAuxCntTable[nAuxPlyEntry] * 2 * sizeof(float);
+                pAuxPlyTable[nAuxPlyEntry] = (float *)malloc(nfSize);
+                is.Read(pAuxPlyTable[nAuxPlyEntry], nfSize);
+            }
+        }
+        
+        if (nNoCovrPlyEntries) {
+            int napeSize = nNoCovrPlyEntries * sizeof(int);
+            pNoCovrCntTable = (int *)malloc(napeSize);
+            is.Read(pNoCovrCntTable, napeSize);
+            
+            pNoCovrPlyTable = (float **)malloc(nNoCovrPlyEntries * sizeof(float *));
+            for (int i = 0; i < nNoCovrPlyEntries; i++) {
+                int nfSize = pNoCovrCntTable[i] * 2 * sizeof(float);
+                pNoCovrPlyTable[i] = (float *)malloc(nfSize);
+                is.Read(pNoCovrPlyTable[i], nfSize);
+            }
+        }
+    }
+    
+    else if(db_version == 17)
+    {
+        // Read the path first
+        for (cp = path; (*cp = (char)is.GetC()) != 0; cp++);
+        pFullPath = (char *)malloc(cp - path + 1);
+        strncpy(pFullPath, path, cp - path + 1);
+        wxLogVerbose(_T("  Chart %s"), pFullPath);
+        
+        //  Create and populate the helper members
+        m_pfilename = new wxString;
+        wxString fullfilename(pFullPath, wxConvUTF8);
+        wxFileName fn(fullfilename);
+        *m_pfilename = fn.GetFullName();
+        m_psFullPath = new wxString;
+        *m_psFullPath = fullfilename;
         
         // Read the table entry
         ChartTableEntry_onDisk_17 cte;
@@ -375,6 +574,9 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
         LatMin = cte.LatMin;
         LonMax = cte.LonMax;
         LonMin = cte.LonMin;
+
+        m_bbox.SetMax(LonMax, LatMax);
+        m_bbox.SetMin(LonMin, LatMin);
         
         Skew = cte.skew;
         ProjectionType = cte.ProjectionType;
@@ -437,7 +639,9 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
           wxString fullfilename(pFullPath, wxConvUTF8);
           wxFileName fn(fullfilename);
           *m_pfilename = fn.GetFullName();
-
+          m_psFullPath = new wxString;
+          *m_psFullPath = fullfilename;
+          
       // Read the table entry
           ChartTableEntry_onDisk_16 cte;
           is.Read(&cte, sizeof(ChartTableEntry_onDisk_16));
@@ -450,6 +654,9 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
           LonMax = cte.LonMax;
           LonMin = cte.LonMin;
 
+          m_bbox.SetMax(LonMax, LatMax);
+          m_bbox.SetMin(LonMin, LatMin);
+          
           Skew = cte.skew;
           ProjectionType = cte.ProjectionType;
 
@@ -503,6 +710,9 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
       LonMax = cte.LonMax;
       LonMin = cte.LonMin;
 
+      m_bbox.SetMax(LonMax, LatMax);
+      m_bbox.SetMin(LonMin, LatMin);
+      
       Scale = cte.Scale;
       edition_date = cte.edition_date;
       file_date = cte.file_date;
@@ -550,6 +760,9 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
           LatMin = cte.LatMin;
           LonMax = cte.LonMax;
           LonMin = cte.LonMin;
+          m_bbox.SetMax(LonMax, LatMax);
+          m_bbox.SetMin(LonMin, LatMin);
+          
           Scale = cte.Scale;
           edition_date = cte.edition_date;
           file_date = 0;                        //  file_date does not exist in V14;
@@ -588,11 +801,12 @@ bool ChartTableEntry::Write(const ChartDatabase *pDb, wxOutputStream &os)
 
     //      Write the current version type only
     //      Create an on_disk table entry
-    ChartTableEntry_onDisk_17 cte;
+    ChartTableEntry_onDisk_18 cte;
 
       //    Transcribe the elements....
     cte.EntryOffset = EntryOffset;
     cte.ChartType = ChartType;
+    cte.ChartFamily = ChartFamily;
     cte.LatMax = LatMax;
     cte.LatMin = LatMin;
     cte.LonMax = LonMax;
@@ -612,7 +826,7 @@ bool ChartTableEntry::Write(const ChartDatabase *pDb, wxOutputStream &os)
 
     cte.nNoCovrPlyEntries = nNoCovrPlyEntries;
     
-    os.Write(&cte, sizeof(ChartTableEntry_onDisk_17));
+    os.Write(&cte, sizeof(ChartTableEntry_onDisk_18));
     wxLogVerbose(_T("  Wrote Chart %s"), pFullPath);
 
     //      Write out the tables
@@ -649,7 +863,22 @@ bool ChartTableEntry::Write(const ChartDatabase *pDb, wxOutputStream &os)
 
 void ChartTableEntry::Clear()
 {
-    memset(this, 0, sizeof(ChartTableEntry));
+//    memset(this, 0, sizeof(ChartTableEntry));
+    
+    pFullPath = NULL;
+    pPlyTable = NULL;
+    pAuxPlyTable = NULL;
+    pAuxCntTable = NULL;
+    bValid = false;;
+    pNoCovrCntTable = NULL;
+    pNoCovrPlyTable = NULL;
+    
+    nNoCovrPlyEntries = 0;
+    nAuxPlyEntries = 0;
+    
+    m_pfilename = NULL;             // a helper member, not on disk
+    m_psFullPath = NULL;
+    
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -724,19 +953,62 @@ void ChartDatabase::UpdateChartClassDescriptorArray(void)
 
 const ChartTableEntry &ChartDatabase::GetChartTableEntry(int index) const
 {
-      if(index < GetChartTableEntries())
-            return chartTable[index];
+      if(index < m_nentries)
+          return active_chartTable[index];
       else
             return m_ChartTableEntryDummy;
 }
 
 ChartTableEntry *ChartDatabase::GetpChartTableEntry(int index) const
 {
-      if(index < GetChartTableEntries())
-            return &chartTable[index];
+    if(index < m_nentries)
+          return &active_chartTable[index];
       else
             return (ChartTableEntry *)&m_ChartTableEntryDummy;
 }
+
+bool ChartDatabase::CompareChartDirArray( ArrayOfCDI& test_array )
+{
+    //  Compare the parameter "test_array" with this.m_dir_array
+    //    Return true if functionally identical (order does not signify).
+    
+    if(test_array.GetCount() != m_dir_array.GetCount())
+        return false;
+    
+    bool bfound_inner;
+    unsigned int nfound_outer = 0;
+    
+    for(unsigned int i = 0 ; i < test_array.GetCount() ; i++){
+        ChartDirInfo p = test_array.Item(i);
+        bfound_inner = false;
+        for(unsigned int j = 0 ; j < m_dir_array.GetCount() ; j++){
+            ChartDirInfo q = m_dir_array.Item(j);
+            
+            if(p.fullpath.IsSameAs(q.fullpath)){
+                bfound_inner = true;
+                break;
+            }
+        }
+        if(bfound_inner)
+            nfound_outer++;
+    }
+    
+    return (nfound_outer == test_array.GetCount());
+    
+}
+
+wxString ChartDatabase::GetMagicNumberCached(wxString dir)
+{
+    for(unsigned int j = 0 ; j < m_dir_array.GetCount() ; j++){
+        ChartDirInfo q = m_dir_array.Item(j);
+        if(dir.IsSameAs(q.fullpath))
+            return q.magic_number;
+    }
+    
+    return _T("");
+            
+}
+
 
 
 bool ChartDatabase::Read(const wxString &filePath)
@@ -751,7 +1023,7 @@ bool ChartDatabase::Read(const wxString &filePath)
 
     m_DBFileName = filePath;
 
-    wxFileInputStream ifs(filePath);
+    wxFFileInputStream ifs(filePath);
     if(!ifs.Ok()) return false;
 
     ChartTableHeader cth;
@@ -791,16 +1063,20 @@ bool ChartDatabase::Read(const wxString &filePath)
     }
 
     entries = cth.GetTableEntries();
-    chartTable.Alloc(entries);
+    active_chartTable.Alloc(entries);
     while (entries-- && entry.Read(this, ifs))
-        chartTable.Add(entry);
+        active_chartTable.Add(entry);
 
     entry.Clear();
     bValid = true;
+    entry.SetAvailable(true);
+    
+    m_nentries = active_chartTable.GetCount();
     return true;
 
 read_error:
     bValid = false;
+    m_nentries = active_chartTable.GetCount();
     return false;
 }
 
@@ -813,10 +1089,10 @@ bool ChartDatabase::Write(const wxString &filePath)
 
     if (!dir.DirExists() && !dir.Mkdir()) return false;
 
-    wxFileOutputStream ofs(filePath);
+    wxFFileOutputStream ofs(filePath);
     if(!ofs.Ok()) return false;
 
-    ChartTableHeader cth(m_chartDirs.GetCount(), chartTable.GetCount());
+    ChartTableHeader cth(m_chartDirs.GetCount(), active_chartTable.GetCount());
     cth.Write(ofs);
 
     for (int iDir = 0; iDir < cth.GetDirEntries(); iDir++) {
@@ -831,8 +1107,8 @@ bool ChartDatabase::Write(const wxString &filePath)
         ofs.Write(s, dirlen);
     }
 
-    for (UINT32 iTable = 0; iTable < chartTable.size(); iTable++)
-        chartTable[iTable].Write(this, ofs);
+    for (UINT32 iTable = 0; iTable < active_chartTable.size(); iTable++)
+        active_chartTable[iTable].Write(this, ofs);
 
     //      Explicitly set the version
     m_dbversion = DB_VERSION_CURRENT;
@@ -963,49 +1239,40 @@ wxString ChartDatabase::GetFullChartInfo(ChartBase *pc, int dbIndex, int *char_w
             r += line;
             lc++;
 
-            line.Empty();
             if(pc)
             {
+                  line.Empty();
                   line = _(" ID:  ");
                   line += pc->GetID();
-            }
-            line += _T("\n");
-            max_width = wxMax(max_width, line.Len());
-            r += line;
-            lc++;
+                  line += _T("\n");
+                  max_width = wxMax(max_width, line.Len());
+                  r += line;
+                  lc++;
 
-            line.Empty();
-            if(pc)
-            {
+                  line.Empty();
                   line = _(" Depth Units:  ");
                   line += pc->GetDepthUnits();
-            }
-            line += _T("\n");
-            max_width = wxMax(max_width, line.Len());
-            r += line;
-            lc++;
+                  line += _T("\n");
+                  max_width = wxMax(max_width, line.Len());
+                  r += line;
+                  lc++;
 
-            line.Empty();
-            if(pc)
-            {
+                  line.Empty();
                   line = _(" Soundings:  ");
                   line += pc->GetSoundingsDatum();
-            }
-            line += _T("\n");
-            max_width = wxMax(max_width, line.Len());
-            r += line;
-            lc++;
+                  line += _T("\n");
+                  max_width = wxMax(max_width, line.Len());
+                  r += line;
+                  lc++;
 
-            line.Empty();
-            if(pc)
-            {
+                  line.Empty();
                   line = _(" Datum:  ");
                   line += pc->GetDatumString();
+                  line += _T("\n");
+                  max_width = wxMax(max_width, line.Len());
+                  r += line;
+                  lc++;
             }
-            line += _T("\n");
-            max_width = wxMax(max_width, line.Len());
-            r += line;
-            lc++;
 
             line = _(" Projection:  ");
             if(PROJECTION_UNKNOWN == cte.GetChartProjectionType())
@@ -1026,24 +1293,21 @@ wxString ChartDatabase::GetFullChartInfo(ChartBase *pc, int dbIndex, int *char_w
             {
                   line = _(" Source Edition:  ");
                   line += pc->GetSE();
-            }
-            line += _T("\n");
-            max_width = wxMax(max_width, line.Len());
-            r += line;
-            lc++;
+                  line += _T("\n");
+                  max_width = wxMax(max_width, line.Len());
+                  r += line;
+                  lc++;
 
-            line.Empty();
-            if(pc)
-            {
+                  line.Empty();
                   line = _(" Updated:  ");
                   wxDateTime ed = pc->GetEditionDate();
                   line += ed.FormatISODate();
+                  line += _T("\n");
+                  max_width = wxMax(max_width, line.Len());
+                  r += line;
+                  lc++;
             }
-            line += _T("\n");
-            max_width = wxMax(max_width, line.Len());
-            r += line;
-            lc++;
-
+            
             line.Empty();
             if(pc && pc->GetExtraInfo().Len())
             {
@@ -1076,7 +1340,7 @@ bool ChartDatabase::Create(ArrayOfCDI &dir_array, wxProgressDialog *pprog)
       bValid = false;
 
       m_chartDirs.Clear();
-      chartTable.Clear();
+      active_chartTable.Clear();
       Update(dir_array, true, pprog);                   // force the update the reload everything
 
       bValid = true;
@@ -1102,13 +1366,13 @@ bool ChartDatabase::Update(ArrayOfCDI& dir_array, bool bForce, wxProgressDialog 
       bValid = false;               // database is not useable right now...
 
       //  Mark all charts provisionally invalid
-      for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
-            chartTable[i].SetValid(false);
+      for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
+          active_chartTable[i].SetValid(false);
 
       m_chartDirs.Clear();
 
       if(bForce)
-            chartTable.Clear();
+          active_chartTable.Clear();
 
       bool lbForce = bForce;
 
@@ -1116,7 +1380,7 @@ bool ChartDatabase::Update(ArrayOfCDI& dir_array, bool bForce, wxProgressDialog 
       if(s_dbVersion != DB_VERSION_CURRENT)
       {
 
-            chartTable.Clear();
+          active_chartTable.Clear();
             lbForce = true;
             s_dbVersion = DB_VERSION_CURRENT;         // Update the static indicator
             m_dbversion = DB_VERSION_CURRENT;         // and the member
@@ -1142,20 +1406,22 @@ bool ChartDatabase::Update(ArrayOfCDI& dir_array, bool bForce, wxProgressDialog 
       }           //for
 
 
-      for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
+      for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
       {
-            if(!chartTable[i].GetbValid())
+          if(!active_chartTable[i].GetbValid())
             {
-                  chartTable.RemoveAt(i);
+                active_chartTable.RemoveAt(i);
                   i--;                 // entry is gone, recheck this index for next entry
             }
       }
 
       //    And once more, setting the Entry index field
-      for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
-            chartTable[i].SetEntryOffset( i );
+      for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
+          active_chartTable[i].SetEntryOffset( i );
 
 
+      m_nentries = active_chartTable.GetCount();
+      
       bValid = true;
       return true;
 }
@@ -1167,9 +1433,9 @@ bool ChartDatabase::Update(ArrayOfCDI& dir_array, bool bForce, wxProgressDialog 
 int ChartDatabase::FinddbIndex(wxString PathToFind)
 {
       //    Find the chart
-      for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
+      for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
       {
-            if(PathToFind.IsSameAs(wxString(chartTable[i].GetpFullPath(), wxConvUTF8)))
+          if(active_chartTable[i].GetpsFullPath()->IsSameAs(PathToFind))
             {
                   return i;
             }
@@ -1187,11 +1453,11 @@ int ChartDatabase::FinddbIndex(wxString PathToFind)
 int ChartDatabase::DisableChart(wxString& PathToDisable)
 {
       //    Find the chart
-      for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
+      for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
       {
-            if(PathToDisable.IsSameAs(wxString(chartTable[i].GetpFullPath(), wxConvUTF8)))
+          if(PathToDisable.IsSameAs(wxString(active_chartTable[i].GetpFullPath(), wxConvUTF8)))
             {
-                  ChartTableEntry *pentry = &chartTable[i];
+                ChartTableEntry *pentry = &active_chartTable[i];
                   pentry->Disable();
 
                   return 1;
@@ -1255,12 +1521,12 @@ int ChartDatabase::TraverseDirAndAddCharts(ChartDirInfo& dir_info, wxProgressDia
             if(pprog)
                   pprog->SetTitle(_("OpenCPN Chart Scan...."));
 
-            int nEntries = chartTable.GetCount();
+            int nEntries = active_chartTable.GetCount();
 
             for(int ic=0 ; ic<nEntries ; ic++)
             {
 
-                  wxFileName fn(wxString(chartTable[ic].GetpFullPath(), wxConvUTF8));
+                wxFileName fn(wxString(active_chartTable[ic].GetpFullPath(), wxConvUTF8));
                   wxString t = fn.GetPath();
 
 
@@ -1269,7 +1535,7 @@ int ChartDatabase::TraverseDirAndAddCharts(ChartDirInfo& dir_info, wxProgressDia
                         t = fn.GetPath();
                         if(fn.GetPath() == dir_path)
                         {
-                              chartTable[ic].SetValid(true);
+                            active_chartTable[ic].SetValid(true);
  //                             if(pprog)
  //                                  pprog->Update((ic * 100) /nEntries, fn.GetFullPath());
 
@@ -1322,7 +1588,7 @@ bool ChartDatabase::DetectDirChange(const wxString & dir_path, const wxString & 
       //Traverse the list of files, getting their interesting stuff to add to accumulator
       for(int ifile=0 ; ifile < n_files ; ifile++)
       {
-            if(pprog && ((((ifile * 100) / n_files) % 20) == 0))
+            if(pprog && (ifile % (n_files / 60 + 1)) == 0)
                   pprog->Update(wxMin((ifile * 100) /n_files, 100), dir_path);
 
             wxFileName file(FileList.Item(ifile));
@@ -1365,9 +1631,8 @@ bool ChartDatabase::IsChartDirUsed(const wxString &theDir)
         dir.RemoveLast();
 
     dir.Append(wxT("*"));
-    for (UINT32 i = 0; i < chartTable.GetCount(); i++) {
-        wxString chartPath(chartTable[i].GetpFullPath(), wxConvUTF8);
-        if (chartPath.Matches(dir))
+    for (UINT32 i = 0; i < active_chartTable.GetCount(); i++) {
+        if (active_chartTable[i].GetpsFullPath()->Matches(dir))
             return true;
     }
     return false;
@@ -1551,6 +1816,8 @@ wxString ChartDatabase::Get_CM93_FileName(wxString dir_name)
 //  if target chart is already in table, mark it valid and skip chart processing
 // ----------------------------------------------------------------------------
 
+WX_DECLARE_STRING_HASH_MAP( int, ChartCollisionsHashMap );
+
 int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
                                          ChartClassDescriptor &chart_desc,
                                          wxProgressDialog *pprog)
@@ -1608,9 +1875,7 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
       }
       else {                            // This is a cm93 dataset, specified as yada/yada/cm93
             wxString dir_plus = dir_name;
-#ifdef __WXMSW__
             dir_plus += wxFileName::GetPathSeparator();
-#endif            
             FileList .Add(dir_plus);
       }
 
@@ -1628,26 +1893,31 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
       //    and bthis_dir_in_dB is false.
       bool bthis_dir_in_dB = IsChartDirUsed(dir_name);
 
-      int isearch = 0;              // create a smarter search index
-                                          // indexing the DB starting from the last found item
-
       if(pprog)
             pprog->SetTitle(_("OpenCPN Chart Add...."));
+
+      // build a hash table based on filename (without directory prefix) of
+      // the chart to fast to detect identical charts
+      ChartCollisionsHashMap collision_map; 
+      int nEntry = active_chartTable.GetCount();
+      for(int i=0 ; i<nEntry ; i++) {
+          wxString table_file_name(active_chartTable[i].GetpFullPath(), wxConvUTF8);
+          wxFileName table_file(table_file_name);
+          collision_map[table_file.GetFullName()] = i;
+      }
 
       for(int ifile=0 ; ifile < nFile ; ifile++)
       {
             wxFileName file(FileList.Item(ifile));
             wxString full_name = file.GetFullPath();
             wxString file_name = file.GetFullName();
-
             //    Validate the file name again, considering MSW's semi-random treatment of case....
             // TODO...something fishy here - may need to normalize saved name?
             if(!file_name.Matches(lowerFileSpec) && !file_name.Matches(filespec) && !b_found_cm93)
                 continue;
 
-            if(pprog)
-                  pprog->Update(wxMin((ifile * 100) /nFile, 100), full_name);
-
+            if(pprog && (ifile % (nFile / 60 + 1)) == 0)
+                  pprog->Update(wxMin((ifile * 100) / nFile, 100), full_name);
 
             ChartTableEntry *pnewChart = NULL;
             bool bAddFinal = true;
@@ -1661,93 +1931,76 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
                   msg.Append(full_name);
                   wxLogMessage(msg);
             }
-            else         // traverse the existing database looking for duplicates, and choosing the right one
+            else         // check the collisions map looking for duplicates, and choosing the right one
             {
-                  int nEntry = chartTable.GetCount();
-                  for(int i=0 ; i<nEntry ; i++)
-                  {
-                        wxString table_file_name(chartTable[isearch].GetpFullPath(), wxConvUTF8);
+                if(collision_map.find(file_name) != collision_map.end()) {
+                    int isearch = collision_map[file_name];
+                    wxString table_file_name(active_chartTable[isearch].GetpFullPath(), wxConvUTF8);
 
-                        //    If the chart full file paths are exactly the same, select the newer one
-                        if(bthis_dir_in_dB && full_name.IsSameAs(table_file_name))
+                    //    If the chart full file paths are exactly the same, select the newer one
+                    if(bthis_dir_in_dB && full_name.IsSameAs(table_file_name))
+                    {
+                        b_add_msg++;
+
+                        //    Check the file modification time
+                        time_t t_oldFile = active_chartTable[isearch].GetFileTime();
+                        time_t t_newFile = file.GetModificationTime().GetTicks();
+                        
+                        if( t_newFile <= t_oldFile )
                         {
-                              b_add_msg++;
+                            bAddFinal = false;
+                            active_chartTable[isearch].SetValid(true);
+                        }
+                        else
+                        {
+                            bAddFinal = true;
+                            active_chartTable[isearch].SetValid(false);
+                            wxString msg = _T("   Replacing older chart file of same path: ");
+                            msg.Append(full_name);
+                            wxLogMessage(msg);
+                        }
+                    } else {
+                    
+                        //  Look at the chart file name (without directory prefix) for a further check for duplicates
+                        //  This catches the case in which the "same" chart is in different locations,
+                        //  and one may be newer than the other.
+                        b_add_msg++;
+                        
+                        if(pnewChart->IsEarlierThan(active_chartTable[isearch]))
+                        {
+                            wxFileName table_file(table_file_name);
+                            //    Make sure the compare file actually exists
+                            if(table_file.IsFileReadable())
+                            {
+                                active_chartTable[isearch].SetValid(true);
+                                bAddFinal = false;
+                                wxString msg = _T("   Retaining newer chart file of same name: ");
+                                msg.Append(full_name);
+                                wxLogMessage(msg);
 
-                              //    Check the file modification time
-                              time_t t_oldFile = chartTable[isearch].GetFileTime();
-                              time_t t_newFile = file.GetModificationTime().GetTicks();
-
-                              if( t_newFile <= t_oldFile )
-                              {
-                                    bAddFinal = false;
-                                    chartTable[isearch].SetValid(true);
-                              }
-                              else
-                              {
-                                    bAddFinal = true;
-                                    chartTable[isearch].SetValid(false);
-                                    wxString msg = _T("   Replacing older chart file of same path: ");
-                                    msg.Append(full_name);
-                                    wxLogMessage(msg);
-                              }
-
-                              break;
+                            }
+                        }
+                        else if(pnewChart->IsEqualTo(active_chartTable[isearch]))
+                        {
+                            //    The file names (without dir prefix) are identical,
+                            //    and the mod times are identical
+                            //    Prsume that this is intentional, in order to facilitate
+                            //    having the same chart in multiple groups.
+                            //    So, add this chart.
+                            bAddFinal = true;
                         }
 
-
-                  //  Look at the chart file name (without directory prefix) for a further check for duplicates
-                  //  This catches the case in which the "same" chart is in different locations,
-                  //  and one may be newer than the other.
-                        wxFileName table_file(table_file_name);
-
-                        if( table_file.GetFullName() == file_name )
+                        else
                         {
-                              b_add_msg++;
-
-                              if(pnewChart->IsEarlierThan(chartTable[isearch]))
-                              {
-                                    //    Make sure the compare file actually exists
-                                    if(table_file.IsFileReadable())
-                                    {
-                                          chartTable[isearch].SetValid(true);
-                                          bAddFinal = false;
-                                          wxString msg = _T("   Retaining newer chart file of same name: ");
-                                          msg.Append(full_name);
-                                          wxLogMessage(msg);
-
-                                    }
-                              }
-                              else if(pnewChart->IsEqualTo(chartTable[isearch]))
-                              {
-                                    //    The file names (without dir prefix) are identical,
-                                    //    and the mod times are identical
-                                    //    Prsume that this is intentional, in order to facilitate
-                                    //    having the same chart in multiple groups.
-                                    //    So, add this chart.
-                                    bAddFinal = true;
-                              }
-
-                              else
-                              {
-                                    chartTable[isearch].SetValid(false);
-                                    bAddFinal = true;
-                                    wxString msg = _T("   Replacing older chart file of same name: ");
-                                    msg.Append(full_name);
-                                    wxLogMessage(msg);
-                              }
-
-                              break;
+                            active_chartTable[isearch].SetValid(false);
+                            bAddFinal = true;
+                            wxString msg = _T("   Replacing older chart file of same name: ");
+                            msg.Append(full_name);
+                            wxLogMessage(msg);
                         }
-
-                        //TODO    Look at the chart ID as a further check against duplicates
-
-
-                        isearch++;
-                        if(nEntry == isearch)
-                              isearch = 0;
-                  }     // for
+                    }
+                }
             }
-
 
             if(bAddFinal)
             {
@@ -1757,17 +2010,21 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
                         msg.Append(full_name);
                         wxLogMessage(msg);
                   }
-                  chartTable.Add(pnewChart);
+                  collision_map[file_name] = active_chartTable.GetCount();
+                  active_chartTable.Add(pnewChart);
                   nDirEntry++;
             }
             else
             {
+                delete pnewChart;
 //                  wxString msg = _T("   Not adding chart file: ");
 //                  msg.Append(full_name);
 //                  wxLogMessage(msg);
             }
       }
 
+      m_nentries = active_chartTable.GetCount();
+      
       return nDirEntry;
 }
 
@@ -1804,29 +2061,29 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
     }
     else         // traverse the existing database looking for duplicates, and choosing the right one
             {
-                int nEntry = chartTable.GetCount();
+                int nEntry = active_chartTable.GetCount();
                 for(int i=0 ; i<nEntry ; i++)
                 {
-                    wxString table_file_name(chartTable[isearch].GetpFullPath(), wxConvUTF8);
+                    wxString *ptable_file_name = active_chartTable[isearch].GetpsFullPath();
                     
                     //    If the chart full file paths are exactly the same, select the newer one
-                    if(bthis_dir_in_dB && full_name.IsSameAs(table_file_name))
+                    if(bthis_dir_in_dB && full_name.IsSameAs(*ptable_file_name))
                     {
                         b_add_msg++;
                         
                         //    Check the file modification time
-                        time_t t_oldFile = chartTable[isearch].GetFileTime();
+                        time_t t_oldFile = active_chartTable[isearch].GetFileTime();
                         time_t t_newFile = file.GetModificationTime().GetTicks();
                         
                         if( t_newFile <= t_oldFile )
                         {
                             bAddFinal = false;
-                            chartTable[isearch].SetValid(true);
+                            active_chartTable[isearch].SetValid(true);
                         }
                         else
                         {
                             bAddFinal = true;
-                            chartTable[isearch].SetValid(false);
+                            active_chartTable[isearch].SetValid(false);
                             wxString msg = _T("   Replacing older chart file of same path: ");
                             msg.Append(full_name);
                             wxLogMessage(msg);
@@ -1839,18 +2096,18 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                     //  Look at the chart file name (without directory prefix) for a further check for duplicates
                     //  This catches the case in which the "same" chart is in different locations,
                     //  and one may be newer than the other.
-                    wxFileName table_file(table_file_name);
+                    wxFileName table_file(*ptable_file_name);
                     
                     if( table_file.GetFullName() == file_name )
                     {
                         b_add_msg++;
                         
-                        if(pnewChart->IsEarlierThan(chartTable[isearch]))
+                        if(pnewChart->IsEarlierThan(active_chartTable[isearch]))
                         {
                             //    Make sure the compare file actually exists
                             if(table_file.IsFileReadable())
                             {
-                                chartTable[isearch].SetValid(true);
+                                active_chartTable[isearch].SetValid(true);
                                 bAddFinal = false;
                                 wxString msg = _T("   Retaining newer chart file of same name: ");
                                 msg.Append(full_name);
@@ -1858,7 +2115,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                                 
                             }
                         }
-                        else if(pnewChart->IsEqualTo(chartTable[isearch]))
+                        else if(pnewChart->IsEqualTo(active_chartTable[isearch]))
                         {
                             //    The file names (without dir prefix) are identical,
                             //    and the mod times are identical
@@ -1870,7 +2127,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                         
                         else
                         {
-                            chartTable[isearch].SetValid(false);
+                            active_chartTable[isearch].SetValid(false);
                             bAddFinal = true;
                             wxString msg = _T("   Replacing older chart file of same name: ");
                             msg.Append(full_name);
@@ -1899,22 +2156,25 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                     wxLogMessage(msg);
                 }
 
-                chartTable.Add(pnewChart);
+                active_chartTable.Add(pnewChart);
                 
                 rv = true;
             }
             else
             {
+                delete pnewChart;
                 //                  wxString msg = _T("   Not adding chart file: ");
                 //                  msg.Append(full_name);
                 //                  wxLogMessage(msg);
                 rv = false;
             }
             
+    m_nentries = active_chartTable.GetCount();
+            
     return rv;
 }
             
-bool ChartDatabase::AddSingleChart( wxString &ChartFullPath )
+bool ChartDatabase::AddSingleChart( wxString &ChartFullPath, bool b_force_full_search )
 {
     //  Find a relevant chart class descriptor
     wxFileName fn(ChartFullPath);
@@ -1945,24 +2205,33 @@ bool ChartDatabase::AddSingleChart( wxString &ChartFullPath )
         }
     }
     
+    //  If we know that we need to do a full recursive search of the db,
+    //  then there is no need to verify it by doing a directory match
+    bool b_recurse = true;
+    if(!b_force_full_search)
+        b_recurse = IsChartDirUsed(dir_name);
     
-    bool rv = AddChart( ChartFullPath, desc, NULL, 0,  IsChartDirUsed(dir_name) );
+    bool rv = AddChart( ChartFullPath, desc, NULL, 0,  b_recurse );
 
     //  remove duplicates marked in AddChart()
 
-    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
+    for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
     {
-        if(!chartTable[i].GetbValid())
+        if(!active_chartTable[i].GetbValid())
         {
-            chartTable.RemoveAt(i);
+            active_chartTable.RemoveAt(i);
             i--;                 // entry is gone, recheck this index for next entry
         }
     }
     
     //    Update the Entry index fields
-    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++)
-        chartTable[i].SetEntryOffset( i );
-    
+    for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++)
+        active_chartTable[i].SetEntryOffset( i );
+ 
+    //  Get a new magic number
+    wxString new_magic;
+    DetectDirChange(dir_name, _T(""), new_magic, 0);
+        
     
     //    Update (clone) the CDI array
     bool bcfound = false;
@@ -1977,7 +2246,7 @@ bool ChartDatabase::AddSingleChart( wxString &ChartFullPath )
         
         //      If entry is found that matches this cell, clear the magic number.
         if( newcdi.fullpath == dir_name ){
-            newcdi.magic_number = _T("");
+            newcdi.magic_number = new_magic;
             bcfound = true;
         }
         
@@ -1987,7 +2256,7 @@ bool ChartDatabase::AddSingleChart( wxString &ChartFullPath )
     if( !bcfound ){
         ChartDirInfo cdi;
         cdi.fullpath = dir_name;
-        cdi.magic_number = _T("");
+        cdi.magic_number = new_magic;
         NewChartDirArray.Add ( cdi );
     }
     
@@ -2004,6 +2273,8 @@ bool ChartDatabase::AddSingleChart( wxString &ChartFullPath )
         m_chartDirs.Add( cdi.fullpath );
     }
     
+    m_nentries = active_chartTable.GetCount();
+    
     return rv;
     
 }
@@ -2014,9 +2285,9 @@ bool ChartDatabase::RemoveSingleChart( wxString &ChartFullPath )
     bool rv = false;
  
     //  Walk the chart table, looking for the target
-    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++) {
+    for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++) {
         if( !strcmp( ChartFullPath.mb_str(), GetChartTableEntry(i).GetpFullPath() ) ){
-            chartTable.RemoveAt(i);
+            active_chartTable.RemoveAt(i);
             break;
         }
     }
@@ -2025,7 +2296,7 @@ bool ChartDatabase::RemoveSingleChart( wxString &ChartFullPath )
     //    Update the EntryOffset fields for the array
     ChartTableEntry *pcte;
     
-    for(unsigned int i=0 ; i<chartTable.GetCount() ; i++){
+    for(unsigned int i=0 ; i<active_chartTable.GetCount() ; i++){
         pcte = GetpChartTableEntry(i);
         pcte->SetEntryOffset( i );
     }
@@ -2059,6 +2330,7 @@ bool ChartDatabase::RemoveSingleChart( wxString &ChartFullPath )
         m_chartDirs.Add( cdi.fullpath );
     }
     
+    m_nentries = active_chartTable.GetCount();
     
     return rv;
 }
@@ -2086,7 +2358,6 @@ ChartTableEntry *ChartDatabase::CreateChartTableEntry(const wxString &filePath, 
       wxLogMessage(msg);
 
       ChartBase *pch = GetChart(filePath, chart_desc);
-
       if (pch == NULL) {
             wxString msg = wxT("   ...creation failed for ");
             msg.Append(filePath);
@@ -2117,15 +2388,15 @@ bool ChartDatabase::GetCentroidOfLargestScaleChart(double *clat, double *clon, C
       int cur_max_i = -1;
       int cur_max_scale = 0;
 
-      int nEntry = chartTable.GetCount();
+      int nEntry = active_chartTable.GetCount();
 
       for(int i=0 ; i<nEntry ; i++)
       {
-            if(GetChartFamily(chartTable[i].GetChartType()) == family)
+          if(GetChartFamily(active_chartTable[i].GetChartType()) == family)
             {
-                  if(chartTable[i].GetScale() > cur_max_scale)
+                if(active_chartTable[i].GetScale() > cur_max_scale)
                   {
-                        cur_max_scale = chartTable[i].GetScale();
+                      cur_max_scale = active_chartTable[i].GetScale();
                         cur_max_i = i;
                   }
             }
@@ -2135,8 +2406,8 @@ bool ChartDatabase::GetCentroidOfLargestScaleChart(double *clat, double *clon, C
             return false;                             // nothing found
       else
       {
-            *clat = (chartTable[cur_max_i].GetLatMax() + chartTable[cur_max_i].GetLatMin()) / 2.;
-            *clon = (chartTable[cur_max_i].GetLonMin() + chartTable[cur_max_i].GetLonMax()) /2.;
+          *clat = (active_chartTable[cur_max_i].GetLatMax() + active_chartTable[cur_max_i].GetLatMin()) / 2.;
+          *clon = (active_chartTable[cur_max_i].GetLonMin() + active_chartTable[cur_max_i].GetLonMax()) /2.;
       }
       return true;
 }
@@ -2146,8 +2417,8 @@ bool ChartDatabase::GetCentroidOfLargestScaleChart(double *clat, double *clon, C
 //-------------------------------------------------------------------
 int ChartDatabase::GetDBChartProj(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
-            return chartTable[dbIndex].GetChartProjectionType();
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
+        return active_chartTable[dbIndex].GetChartProjectionType();
       else
             return PROJECTION_UNKNOWN;
 }
@@ -2157,8 +2428,8 @@ int ChartDatabase::GetDBChartProj(int dbIndex)
 //-------------------------------------------------------------------
 int ChartDatabase::GetDBChartFamily(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
-            return chartTable[dbIndex].GetChartFamily();
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
+          return active_chartTable[dbIndex].GetChartFamily();
       else
             return CHART_FAMILY_UNKNOWN;
 }
@@ -2168,9 +2439,9 @@ int ChartDatabase::GetDBChartFamily(int dbIndex)
 //-------------------------------------------------------------------
 wxString ChartDatabase::GetDBChartFileName(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
       {
-            return wxString(chartTable[dbIndex].GetpFullPath(), wxConvUTF8);
+          return wxString(active_chartTable[dbIndex].GetpFullPath(), wxConvUTF8);
       }
       else
             return _T("");
@@ -2182,8 +2453,8 @@ wxString ChartDatabase::GetDBChartFileName(int dbIndex)
 //-------------------------------------------------------------------
 int ChartDatabase::GetDBChartType(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
-            return chartTable[dbIndex].GetChartType();
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
+        return active_chartTable[dbIndex].GetChartType();
       else
             return 0;
 }
@@ -2193,8 +2464,8 @@ int ChartDatabase::GetDBChartType(int dbIndex)
 //-------------------------------------------------------------------
 float ChartDatabase::GetDBChartSkew(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
-            return chartTable[dbIndex].GetChartSkew();
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
+        return active_chartTable[dbIndex].GetChartSkew();
       else
             return 0.;
 }
@@ -2204,8 +2475,8 @@ float ChartDatabase::GetDBChartSkew(int dbIndex)
 //-------------------------------------------------------------------
 int ChartDatabase::GetDBChartScale(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
-            return chartTable[dbIndex].GetScale();
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
+        return active_chartTable[dbIndex].GetScale();
       else
             return 1;
 }
@@ -2215,7 +2486,7 @@ int ChartDatabase::GetDBChartScale(int dbIndex)
 //-------------------------------------------------------------------
 bool ChartDatabase::GetDBBoundingBox(int dbIndex, wxBoundingBox *box)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
       {
             const ChartTableEntry &entry = GetChartTableEntry(dbIndex);
             box->SetMax(entry.GetLonMax(), entry.GetLatMax());
@@ -2225,12 +2496,26 @@ bool ChartDatabase::GetDBBoundingBox(int dbIndex, wxBoundingBox *box)
       return true;
 }
 
+const wxBoundingBox &ChartDatabase::GetDBBoundingBox(int dbIndex)
+{
+    if((bValid) && (dbIndex >= 0) )
+    {
+        const ChartTableEntry &entry = GetChartTableEntry(dbIndex);
+        return entry.GetBBox();
+    }
+    else
+    {
+        return m_dummy_bbox;
+    }
+}
+
+
 //-------------------------------------------------------------------
 //    Get PlyPoint from Database
 //-------------------------------------------------------------------
 int ChartDatabase::GetDBPlyPoint(int dbIndex, int plyindex, float *lat, float *lon)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
       {
             const ChartTableEntry &entry = GetChartTableEntry(dbIndex);
             if(entry.GetnPlyEntries())
@@ -2254,7 +2539,7 @@ int ChartDatabase::GetDBPlyPoint(int dbIndex, int plyindex, float *lat, float *l
 //-------------------------------------------------------------------
 int ChartDatabase::GetDBAuxPlyPoint(int dbIndex, int plyindex, int ply, float *lat, float *lon)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
       {
             const ChartTableEntry &entry = GetChartTableEntry(dbIndex);
             if(entry.GetnAuxPlyEntries())
@@ -2277,7 +2562,7 @@ int ChartDatabase::GetDBAuxPlyPoint(int dbIndex, int plyindex, int ply, float *l
 
 int  ChartDatabase::GetnAuxPlyEntries(int dbIndex)
 {
-      if((bValid) && (dbIndex >= 0) && (dbIndex < (int)chartTable.size()))
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
       {
             const ChartTableEntry &entry = GetChartTableEntry(dbIndex);
             return entry.GetnAuxPlyEntries();
@@ -2286,14 +2571,54 @@ int  ChartDatabase::GetnAuxPlyEntries(int dbIndex)
             return 0;
 }
 
+bool  ChartDatabase::IsChartAvailable(int dbIndex)
+{
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size()))
+    {
+        ChartTableEntry *pentry = GetpChartTableEntry(dbIndex);
+        
+        //      If not PLugIn chart, assume always available
+        if(pentry->GetChartType() != CHART_TYPE_PLUGIN)
+            return true;
+        
+        wxString *path = pentry->GetpsFullPath();
+        wxFileName fn(*path);
+        wxString ext = fn.GetExt();
+        ext.Prepend(_T("*."));
+        wxString ext_upper = ext.MakeUpper();
+        wxString ext_lower = ext.MakeLower();
+        
+        //    Search the array of chart class descriptors to find a match
+        //    between the search mask and the the chart file extension
+        
+        for(unsigned int i=0 ; i < m_ChartClassDescriptorArray.GetCount() ; i++)
+        {
+            if(m_ChartClassDescriptorArray.Item(i).m_descriptor_type == PLUGIN_DESCRIPTOR)
+            {
+                if(m_ChartClassDescriptorArray.Item(i).m_search_mask == ext_upper) {
+                    return true;
+                }
+                if(m_ChartClassDescriptorArray.Item(i).m_search_mask == ext_lower) {
+                    return true;
+                }
+            }
+        }
+    }
+        
+    return false;
+}
+
 void ChartDatabase::ApplyGroupArray(ChartGroupArray *pGroupArray)
 {
-      for(unsigned int ic=0 ; ic < chartTable.GetCount(); ic++)
-      {
-            ChartTableEntry *pcte = &chartTable[ic];
-            pcte->GetGroupArray().Clear();
+    wxString separator(wxFileName::GetPathSeparator());
 
-            wxString chart_full_path(pcte->GetpFullPath(), wxConvUTF8);
+    for(unsigned int ic=0 ; ic < active_chartTable.GetCount(); ic++)
+      {
+            ChartTableEntry *pcte = &active_chartTable[ic];
+
+            pcte->ClearGroupArray();
+
+            wxString *chart_full_path = pcte->GetpsFullPath();
 
             for(unsigned int igroup = 0; igroup < pGroupArray->GetCount(); igroup++)
             {
@@ -2301,15 +2626,22 @@ void ChartDatabase::ApplyGroupArray(ChartGroupArray *pGroupArray)
                   for(unsigned int j=0; j < pGroup->m_element_array.GetCount(); j++)
                   {
                         wxString element_root = pGroup->m_element_array.Item(j)->m_element_name;
-                        if(chart_full_path.StartsWith(element_root))
+                        
+                        //  The element may be a full single chart name
+                        //  If so, add it
+                        //  Otherwise, append a sep character so that similar paths are distinguished.
+                        //  See FS#1060
+                        if(!chart_full_path->IsSameAs(element_root))
+                            element_root.Append(separator);	// Prevent comingling similar looking path names
+                        if(chart_full_path->StartsWith(element_root))
                         {
                               bool b_add = true;
                               for(unsigned int k=0 ; k < pGroup->m_element_array.Item(j)->m_missing_name_array.GetCount(); k++)
                               {
                                     wxString missing_item = pGroup->m_element_array.Item(j)->m_missing_name_array.Item(k);
-                                    if(chart_full_path.StartsWith(missing_item))
+                                    if(chart_full_path->StartsWith(missing_item))
                                     {
-                                          if(chart_full_path == missing_item) // missing item is full chart name
+                                          if(chart_full_path->IsSameAs( missing_item )) // missing item is full chart name
                                           {
                                                 b_add = false;
                                                 break;
@@ -2326,7 +2658,7 @@ void ChartDatabase::ApplyGroupArray(ChartGroupArray *pGroupArray)
                               }
 
                               if(b_add)
-                                    pcte->GetGroupArray().Add(igroup+1);
+                                    pcte->AddIntToGroupArray( igroup + 1 ); 
                         }
                   }
             }

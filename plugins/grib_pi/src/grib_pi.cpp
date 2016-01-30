@@ -29,7 +29,9 @@
 
 #ifndef  WX_PRECOMP
   #include "wx/wx.h"
-  #include <wx/glcanvas.h>
+  #ifdef ocpnUSE_GL
+      #include <wx/glcanvas.h>
+  #endif
 #endif //precompiled headers
 
 #include <wx/fileconf.h>
@@ -49,6 +51,8 @@ extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p)
     delete p;
 }
 
+extern int   m_DialogStyle;
+
 //---------------------------------------------------------------------------------------------------------
 //
 //    Grib PlugIn Implementation
@@ -65,7 +69,7 @@ extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p)
 //---------------------------------------------------------------------------------------------------------
 
 grib_pi::grib_pi(void *ppimgr)
-      :opencpn_plugin_17(ppimgr)
+    :opencpn_plugin_112(ppimgr)
 {
       // Create the PlugIn icons
       initialize_images();
@@ -85,14 +89,15 @@ int grib_pi::Init(void)
       AddLocaleCatalog( _T("opencpn-grib_pi") );
 
       // Set some default private member parameters
-      m_grib_dialog_x = 0;
-      m_grib_dialog_y = 0;
-      m_grib_dialog_sx = 200;
-      m_grib_dialog_sy = 400;
-      m_pGribDialog = NULL;
+      m_CtrlBarxy = wxPoint( 0 ,0 );
+      m_CursorDataxy = wxPoint( 0, 0 );
+
+      m_pGribCtrlBar = NULL;
       m_pGRIBOverlayFactory = NULL;
 
       ::wxDisplaySize(&m_display_width, &m_display_height);
+
+      m_DialogStyleChanged = false;
 
       //    Get a pointer to the opencpn configuration object
       m_pconfig = GetOCPNConfigObject();
@@ -104,11 +109,33 @@ int grib_pi::Init(void)
       m_parent_window = GetOCPNCanvasWindow();
 
 //      int m_height = GetChartbarHeight();
-      //    This PlugIn needs a toolbar icon, so request its insertion if enabled locally
-      if(m_bGRIBShowIcon)
-          m_leftclick_tool_id = InsertPlugInTool(_T(""), _img_grib, _img_grib, wxITEM_CHECK,
-                                                 _("Grib"), _T(""), NULL,
-                                                 GRIB_TOOL_POSITION, 0, this);
+      //    This PlugIn needs a CtrlBar icon, so request its insertion if enabled locally
+	  if (m_bGRIBShowIcon) {
+		  wxString shareLocn = *GetpSharedDataLocation() +
+			  _T("plugins") + wxFileName::GetPathSeparator() +
+			  _T("grib_pi") + wxFileName::GetPathSeparator()
+			  + _T("data") + wxFileName::GetPathSeparator();
+
+		  wxString normalIcon = shareLocn + _T("grib.svg");
+		  wxString toggledIcon = shareLocn + _T("grib_toggled.svg");
+		  wxString rolloverIcon = shareLocn + _T("grib_rollover.svg");
+
+		  //  For journeyman styles, we prefer the built-in raster icons which match the rest of the toolbar.
+		  if (GetActiveStyleName().Lower() != _T("traditional")){
+			  normalIcon = _T("");
+			  toggledIcon = _T("");
+			  rolloverIcon = _T("");
+		  }
+
+		  wxLogMessage(normalIcon);
+		  m_leftclick_tool_id = InsertPlugInToolSVG(_T(""), normalIcon, rolloverIcon, toggledIcon, wxITEM_CHECK,
+			  _("Grib"), _T(""), NULL, GRIB_TOOL_POSITION, 0, this);
+	  }
+
+      if( !QualifyCtrlBarPosition( m_CtrlBarxy, m_CtrlBar_Sizexy ) ) {
+          m_CtrlBarxy = wxPoint( 20, 60 );   //reset to the default position
+          m_CursorDataxy = wxPoint( 20, 170 );
+      }
 
       return (WANTS_OVERLAY_CALLBACK |
               WANTS_OPENGL_OVERLAY_CALLBACK |
@@ -117,16 +144,17 @@ int grib_pi::Init(void)
               INSTALLS_TOOLBAR_TOOL     |
               WANTS_CONFIG              |
               WANTS_PREFERENCES         |
-              WANTS_PLUGIN_MESSAGING
+              WANTS_PLUGIN_MESSAGING    |
+              WANTS_MOUSE_EVENTS
             );
 }
 
 bool grib_pi::DeInit(void)
 {
-    if(m_pGribDialog) {
-        m_pGribDialog->Close();
-        delete m_pGribDialog;
-        m_pGribDialog = NULL;
+    if(m_pGribCtrlBar) {
+        m_pGribCtrlBar->Close();
+        delete m_pGribCtrlBar;
+        m_pGribCtrlBar = NULL;
     }
 
     delete m_pGRIBOverlayFactory;
@@ -175,29 +203,46 @@ wxString grib_pi::GetShortDescription()
 wxString grib_pi::GetLongDescription()
 {
       return _("GRIB PlugIn for OpenCPN\n\
-Provides basic GRIB file overlay capabilities for several GRIB file types.\n\n\
-Supported GRIB file types include:\n\
-- wind direction and speed\n\
-- significant wave height\n\
+Provides basic GRIB file overlay capabilities for several GRIB file types\n\
+and a request function to get GRIB files by eMail.\n\n\
+Supported GRIB data include:\n\
+- wind direction and speed (at 10 m)\n\
+- wind gust\n\
+- surface pressure\n\
+- rainfall\n\
+- cloud cover\n\
+- significant wave height and direction\n\
+- air surface temperature (at 2 m)\n\
 - sea surface temperature\n\
-- surface current direction and speed.");
-
+- surface current direction and speed\n\
+- Convective Available Potential Energy (CAPE)\n\
+- wind, altitude, temperature and relative humidity at 300, 500, 700, 850 hPa." );
 }
 
-
+\
 void grib_pi::SetDefaults(void)
 {
 }
 
 
-int grib_pi::GetToolbarToolCount(void)
+int grib_pi::GetToolBarToolCount(void)
 {
       return 1;
+}
+
+bool grib_pi::MouseEventHook( wxMouseEvent &event )
+{
+    if( (m_pGribCtrlBar && m_pGribCtrlBar->pReq_Dialog) )
+        return m_pGribCtrlBar->pReq_Dialog->MouseEventHook( event );
+    return false;
 }
 
 void grib_pi::ShowPreferencesDialog( wxWindow* parent )
 {
     GribPreferencesDialog *Pref = new GribPreferencesDialog(parent);
+
+    DimeWindow( Pref );                                     //aplly global colours scheme
+    SetDialogFont( Pref );                                  //Apply global font
 
     Pref->m_cbUseHiDef->SetValue(m_bGRIBUseHiDef);
     Pref->m_cbUseGradualColors->SetValue(m_bGRIBUseGradualColors);
@@ -236,24 +281,24 @@ void grib_pi::ShowPreferencesDialog( wxWindow* parent )
              updatelevel = 3;
          }
 
-         if(m_pGribDialog ) {
+         if(m_pGribCtrlBar ) {
              switch( updatelevel ) {
              case 0:
                  break;
              case 3:
                  //rebuild current activefile with new parameters and rebuil data list with current index
-                 m_pGribDialog->CreateActiveFileFromName( m_pGribDialog->m_bGRIBActiveFile->GetFileName() );
-                 m_pGribDialog->PopulateComboDataList();
-                 m_pGribDialog->TimelineChanged();
+                 m_pGribCtrlBar->CreateActiveFileFromName( m_pGribCtrlBar->m_bGRIBActiveFile->GetFileName() );
+                 m_pGribCtrlBar->PopulateComboDataList();
+                 m_pGribCtrlBar->TimelineChanged();
                  break;
              case 2 :
                  //only rebuild  data list with current index and new timezone
-                 m_pGribDialog->PopulateComboDataList();
-                 m_pGribDialog->TimelineChanged();
+                 m_pGribCtrlBar->PopulateComboDataList();
+                 m_pGribCtrlBar->TimelineChanged();
                  break;
              case 1:
                  //only re-compute the best forecast
-                 m_pGribDialog->ComputeBestForecastForNow();
+                 m_pGribCtrlBar->ComputeBestForecastForNow();
                  break;
              }
          }
@@ -262,146 +307,200 @@ void grib_pi::ShowPreferencesDialog( wxWindow* parent )
      }
 }
 
+bool grib_pi::QualifyCtrlBarPosition( wxPoint position, wxSize size )
+{   // Make sure drag bar (title bar) or grabber always screen
+    bool b_reset_pos = false;
+#ifdef __WXMSW__
+    //  Support MultiMonitor setups which an allow negative window positions.
+    //  If the requested window does not intersect any installed monitor,
+    //  then default to simple primary monitor positioning.
+    RECT frame_title_rect;
+    frame_title_rect.left =  position.x;
+    frame_title_rect.top =    position.y;
+    frame_title_rect.right =  position.x + size.x;
+    frame_title_rect.bottom = m_DialogStyle == ATTACHED_HAS_CAPTION ? position.y + 30 : position.y + size.y;
+
+
+    if(NULL == MonitorFromRect(&frame_title_rect, MONITOR_DEFAULTTONULL))
+        b_reset_pos = true;
+#else
+    wxRect window_title_rect;                    // conservative estimate
+    window_title_rect.x = position.x;
+    window_title_rect.y = position.y;
+    window_title_rect.width = size.x;
+    window_title_rect.height = m_DialogStyle == ATTACHED_HAS_CAPTION ? 30 : size.y;
+
+    wxRect ClientRect = wxGetClientDisplayRect();
+    if(!ClientRect.Intersects(window_title_rect))
+        b_reset_pos = true;
+
+#endif
+    return !b_reset_pos;
+}
+
+void grib_pi::MoveDialog( wxDialog *dialog, wxPoint position, wxPoint dfault )
+{
+    wxPoint p = position;
+    //Check and ensure there is always a "grabb" zone always visible wathever the dialoue size is.
+    if( p.x + dialog->GetSize().GetX() > GetOCPNCanvasWindow()->GetClientSize().GetX() || p.x < 0 )
+        p.x = wxMin( (GetOCPNCanvasWindow()->GetClientSize().GetX() - dialog->GetSize().GetX()), dfault.x );
+    if( p.y + dialog->GetSize().GetY() > GetOCPNCanvasWindow()->GetClientSize().GetY() )
+        p.y = dfault.y;
+
+#ifdef __WXGTK__
+    dialog->Move(0, 0);
+#endif
+    dialog->Move(p);
+}
+
 void grib_pi::OnToolbarToolCallback(int id)
 {
-    if(!m_pGribDialog)
+    if( !::wxIsBusy() ) ::wxBeginBusyCursor();
+
+    bool starting = false;
+
+    double scale_factor = GetOCPNGUIToolScaleFactor_PlugIn();
+    if( scale_factor != m_GUIScaleFactor ) starting = true;
+
+    m_GUIScaleFactor = scale_factor;
+    
+    if(!m_pGribCtrlBar)
     {
-        m_pGribDialog = new GRIBUIDialog(m_parent_window, this);
-        wxPoint p = wxPoint(m_grib_dialog_x, m_grib_dialog_y);
-        m_pGribDialog->Move(0,0);        // workaround for gtk autocentre dialog behavior
-        m_pGribDialog->Move(p);
+        starting = true;
+        long style = m_DialogStyle == ATTACHED_HAS_CAPTION ? wxCAPTION|wxCLOSE_BOX|wxSYSTEM_MENU : wxBORDER_NONE|wxSYSTEM_MENU;
+        m_pGribCtrlBar = new GRIBUICtrlBar(m_parent_window, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                wxDefaultSize, style, this);
+        m_pGribCtrlBar->SetScaledBitmap(m_GUIScaleFactor);
+        
         wxMenu* dummy = new wxMenu(_T("Plugin"));
         wxMenuItem* table = new wxMenuItem( dummy, wxID_ANY, wxString( _("Weather table") ), wxEmptyString, wxITEM_NORMAL );
+#ifdef __WXMSW__
+        wxFont *qFont = OCPNGetFont(_("Menu"), 10);
+        table->SetFont(*qFont);
+#endif
         m_MenuItem = AddCanvasContextMenuItem(table, this);
         SetCanvasContextMenuItemViz(m_MenuItem, false);
 
         // Create the drawing factory
-        m_pGRIBOverlayFactory = new GRIBOverlayFactory( *m_pGribDialog );
+        m_pGRIBOverlayFactory = new GRIBOverlayFactory( *m_pGribCtrlBar );
         m_pGRIBOverlayFactory->SetTimeZone( m_bTimeZone );
         m_pGRIBOverlayFactory->SetParentSize( m_display_width, m_display_height);
         m_pGRIBOverlayFactory->SetSettings( m_bGRIBUseHiDef, m_bGRIBUseGradualColors );
 
-        m_pGribDialog->OpenFile( m_bLoadLastOpenFile == 0 );
+        m_pGribCtrlBar->OpenFile( m_bLoadLastOpenFile == 0 );
+
     }
 
-      // Qualify the GRIB dialog position
-            bool b_reset_pos = false;
+    if( m_pGribCtrlBar->GetFont() != *OCPNGetFont(_("Dialog"), 10) ) starting = true;
 
-#ifdef __WXMSW__
-        //  Support MultiMonitor setups which an allow negative window positions.
-        //  If the requested window does not intersect any installed monitor,
-        //  then default to simple primary monitor positioning.
-            RECT frame_title_rect;
-            frame_title_rect.left =   m_grib_dialog_x;
-            frame_title_rect.top =    m_grib_dialog_y;
-            frame_title_rect.right =  m_grib_dialog_x + m_grib_dialog_sx;
-            frame_title_rect.bottom = m_grib_dialog_y + 30;
+    //Toggle GRIB overlay display
+    m_bShowGrib = !m_bShowGrib;
 
-
-            if(NULL == MonitorFromRect(&frame_title_rect, MONITOR_DEFAULTTONULL))
-                  b_reset_pos = true;
-#else
-       //    Make sure drag bar (title bar) of window on Client Area of screen, with a little slop...
-            wxRect window_title_rect;                    // conservative estimate
-            window_title_rect.x = m_grib_dialog_x;
-            window_title_rect.y = m_grib_dialog_y;
-            window_title_rect.width = m_grib_dialog_sx;
-            window_title_rect.height = 30;
-
-            wxRect ClientRect = wxGetClientDisplayRect();
-            ClientRect.Deflate(60, 60);      // Prevent the new window from being too close to the edge
-            if(!ClientRect.Intersects(window_title_rect))
-                  b_reset_pos = true;
-
-#endif
-
-            if(b_reset_pos)
-            {
-                  m_grib_dialog_x = 20;
-                  m_grib_dialog_y = 170;
-                  m_grib_dialog_sx = 300;
-                  m_grib_dialog_sy = 540;
+    //    Toggle dialog?
+    if(m_bShowGrib) {
+        if( starting ) {
+            SetDialogFont( m_pGribCtrlBar );
+	    m_pGribCtrlBar->SetScaledBitmap( m_GUIScaleFactor );
+            m_pGribCtrlBar->SetDialogsStyleSizePosition( true );
+            m_pGribCtrlBar->Refresh();
+        } else {
+            MoveDialog( m_pGribCtrlBar, GetCtrlBarXY(), wxPoint( 20, 60) );
+            if( m_DialogStyle >> 1 == SEPARATED ) {
+                MoveDialog( m_pGribCtrlBar->GetCDataDialog(), GetCursorDataXY(), wxPoint( 20, 170));
+                m_pGribCtrlBar->GetCDataDialog()->Show( m_pGribCtrlBar->m_CDataIsShown );
+                }
+        }
+        m_pGribCtrlBar->Show();
+        if( m_pGribCtrlBar->m_bGRIBActiveFile ) {
+            if( m_pGribCtrlBar->m_bGRIBActiveFile->IsOK() ) {
+                ArrayOfGribRecordSets *rsa = m_pGribCtrlBar->m_bGRIBActiveFile->GetRecordSetArrayPtr();
+                if(rsa->GetCount() > 1) SetCanvasContextMenuItemViz( m_MenuItem, true);
             }
-
-      //Toggle GRIB overlay display
-      m_bShowGrib = !m_bShowGrib;
-
-      //    Toggle dialog?
-      if(m_bShowGrib) {
-          m_pGribDialog->Show();
-          if( m_pGribDialog->m_bGRIBActiveFile ) {
-              if( m_pGribDialog->m_bGRIBActiveFile->IsOK() ) {
-                  ArrayOfGribRecordSets *rsa = m_pGribDialog->m_bGRIBActiveFile->GetRecordSetArrayPtr();
-                  if(rsa->GetCount() > 1) SetCanvasContextMenuItemViz( m_MenuItem, true);
-              }
-          }
-      } else {
-          SetCanvasContextMenuItemViz( m_MenuItem, false);
-          m_pGribDialog->Hide();
-          if(m_pGribDialog->pReq_Dialog) m_pGribDialog->pReq_Dialog->Hide();
-          }
-
-      // Toggle is handled by the toolbar but we must keep plugin manager b_toggle updated
-      // to actual status to ensure correct status upon toolbar rebuild
-      SetToolbarItemState( m_leftclick_tool_id, m_bShowGrib );
-/*
-      wxPoint p = m_pGribDialog->GetPosition();
-      m_pGribDialog->Move(0,0);        // workaround for gtk autocentre dialog behavior
-      m_pGribDialog->Move(p);
-*/
-      RequestRefresh(m_parent_window); // refresh mainn window
+        }
+        // Toggle is handled by the CtrlBar but we must keep plugin manager b_toggle updated
+        // to actual status to ensure correct status upon CtrlBar rebuild
+        SetToolbarItemState( m_leftclick_tool_id, m_bShowGrib );
+        RequestRefresh(m_parent_window); // refresh main window
+    } else
+       m_pGribCtrlBar->Close();
 }
 
-void grib_pi::OnGribDialogClose()
+void grib_pi::OnGribCtrlBarClose()
 {
     m_bShowGrib = false;
     SetToolbarItemState( m_leftclick_tool_id, m_bShowGrib );
 
-    m_pGribDialog->Hide();
-    if(m_pGribDialog->pReq_Dialog) m_pGribDialog->pReq_Dialog->Hide();
+    m_pGribCtrlBar->Hide();
 
     SaveConfig();
 
     SetCanvasContextMenuItemViz(m_MenuItem, false);
 
-    RequestRefresh(m_parent_window); // refresh mainn window
+    RequestRefresh(m_parent_window); // refresh main window
 
+	if (::wxIsBusy()) ::wxEndBusyCursor();
+
+    if( m_DialogStyleChanged ) {
+        m_pGribCtrlBar->Destroy();
+        m_pGribCtrlBar = NULL;
+        m_DialogStyleChanged = false;
+    }
 }
 
 bool grib_pi::RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp)
 {
-    if(!m_pGribDialog ||
-       !m_pGribDialog->IsShown() ||
+    if(!m_pGribCtrlBar ||
+       !m_pGribCtrlBar->IsShown() ||
        !m_pGRIBOverlayFactory)
         return false;
 
-    m_pGribDialog->SetViewPort( vp );
+    m_pGribCtrlBar->SetViewPort( vp );
     m_pGRIBOverlayFactory->RenderGribOverlay ( dc, vp );
+    if( m_pGribCtrlBar->pReq_Dialog )
+        m_pGribCtrlBar->pReq_Dialog->RenderZoneOverlay( dc );
+    if( ::wxIsBusy() ) ::wxEndBusyCursor();
     return true;
 }
 
 bool grib_pi::RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp)
 {
-    if(!m_pGribDialog ||
-       !m_pGribDialog->IsShown() ||
+    if(!m_pGribCtrlBar ||
+       !m_pGribCtrlBar->IsShown() ||
        !m_pGRIBOverlayFactory)
         return false;
 
-    m_pGribDialog->SetViewPort( vp );
+    m_pGribCtrlBar->SetViewPort( vp );
     m_pGRIBOverlayFactory->RenderGLGribOverlay ( pcontext, vp );
+    if( m_pGribCtrlBar->pReq_Dialog )
+        m_pGribCtrlBar->pReq_Dialog->RenderGlZoneOverlay();
+    if( ::wxIsBusy() ) ::wxEndBusyCursor();
     return true;
 }
 
 void grib_pi::SetCursorLatLon(double lat, double lon)
 {
-    if(m_pGribDialog)
-        m_pGribDialog->SetCursorLatLon(lat, lon);
+    if(m_pGribCtrlBar && m_pGribCtrlBar->IsShown())
+        m_pGribCtrlBar->SetCursorLatLon(lat, lon);
 }
 
 void grib_pi::OnContextMenuItemCallback(int id)
 {
-    if(!m_pGribDialog->m_bGRIBActiveFile) return;
-    m_pGribDialog->ContextMenuItemCallback(id);
+    if(!m_pGribCtrlBar->m_bGRIBActiveFile) return;
+    m_pGribCtrlBar->ContextMenuItemCallback(id);
+}
+
+void grib_pi::SetDialogFont( wxWindow *dialog, wxFont *font)
+{
+    dialog->SetFont( *font );
+    wxWindowList list = dialog->GetChildren();
+    wxWindowListNode *node = list.GetFirst();
+    for( size_t i = 0; i < list.GetCount(); i++ ) {
+        wxWindow *win = node->GetData();
+        win->SetFont( *font );
+        node = node->GetNext();
+    }
+    dialog->Fit();
+    dialog->Refresh();
 }
 
 void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body)
@@ -419,7 +518,7 @@ void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body)
     }
     if(message_id == _T("GRIB_TIMELINE_REQUEST"))
     {
-        SendTimelineMessage(m_pGribDialog ? m_pGribDialog->TimelineTime() : wxDateTime::Now());
+        SendTimelineMessage(m_pGribCtrlBar ? m_pGribCtrlBar->TimelineTime() : wxDateTime::Now());
     }
     if(message_id == _T("GRIB_TIMELINE_RECORD_REQUEST"))
     {
@@ -433,11 +532,16 @@ void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body)
                         v[_T("Minute")].AsInt(),
                         v[_T("Second")].AsInt());
 
-        GribTimelineRecordSet *set = m_pGribDialog ? m_pGribDialog->GetTimeLineRecordSet(time) : NULL;
+        if(!m_pGribCtrlBar)
+            OnToolbarToolCallback(0);
+
+        GribTimelineRecordSet *set = m_pGribCtrlBar ? m_pGribCtrlBar->GetTimeLineRecordSet(time) : NULL;
 
         char ptr[64];
         snprintf(ptr, sizeof ptr, "%p", set);
 
+        v[_T("GribVersionMajor")] = PLUGIN_VERSION_MAJOR;
+        v[_T("GribVersionMinor")] = PLUGIN_VERSION_MINOR;
         v[_T("TimelineSetPtr")] = wxString::From8BitData(ptr);
 
         wxJSONWriter w;
@@ -467,11 +571,15 @@ bool grib_pi::LoadConfig(void)
     pConf->Read ( _T( "CopyFirstCumulativeRecord" ), &m_bCopyFirstCumRec, 1 );
     pConf->Read ( _T( "CopyMissingWaveRecord" ), &m_bCopyMissWaveRec, 1 );
 
-    m_grib_dialog_sx = pConf->Read ( _T ( "GRIBDialogSizeX" ), 300L );
-    m_grib_dialog_sy = pConf->Read ( _T ( "GRIBDialogSizeY" ), 540L );
-    m_grib_dialog_x =  pConf->Read ( _T ( "GRIBDialogPosX" ), 20L );
-    m_grib_dialog_y =  pConf->Read ( _T ( "GRIBDialogPosY" ), 170L );
+    m_CtrlBar_Sizexy.x = pConf->Read ( _T ( "GRIBCtrlBarSizeX" ), 1400L );
+    m_CtrlBar_Sizexy.y = pConf->Read ( _T ( "GRIBCtrlBarSizeY" ), 800L );
+    m_CtrlBarxy.x =  pConf->Read ( _T ( "GRIBCtrlBarPosX" ), 20L );
+    m_CtrlBarxy.y =  pConf->Read ( _T ( "GRIBCtrlBarPosY" ), 60L );
+    m_CursorDataxy.x =  pConf->Read ( _T ( "GRIBCursorDataPosX" ),20L );
+    m_CursorDataxy.y =  pConf->Read ( _T ( "GRIBCursorDataPosY" ), 170L );
 
+    pConf->Read( _T ( "GribCursorDataDisplayStyle" ), &m_DialogStyle, 0 );
+    if( m_DialogStyle > 3 ) m_DialogStyle = 0;         //ensure validity of the .conf value
     return true;
 }
 
@@ -493,22 +601,30 @@ bool grib_pi::SaveConfig(void)
     pConf->Write ( _T ( "CopyFirstCumulativeRecord" ), m_bCopyFirstCumRec );
     pConf->Write ( _T ( "CopyMissingWaveRecord" ), m_bCopyMissWaveRec );
 
-    pConf->Write ( _T ( "GRIBDialogSizeX" ),  m_grib_dialog_sx );
-    pConf->Write ( _T ( "GRIBDialogSizeY" ),  m_grib_dialog_sy );
-    pConf->Write ( _T ( "GRIBDialogPosX" ),   m_grib_dialog_x );
-    pConf->Write ( _T ( "GRIBDialogPosY" ),   m_grib_dialog_y );
+    pConf->Write ( _T ( "GRIBCtrlBarSizeX" ), m_CtrlBar_Sizexy.x );
+    pConf->Write ( _T ( "GRIBCtrlBarSizeY" ), m_CtrlBar_Sizexy.y );
+    pConf->Write ( _T ( "GRIBCtrlBarPosX" ), m_CtrlBarxy.x );
+    pConf->Write ( _T ( "GRIBCtrlBarPosY" ), m_CtrlBarxy.y );
+    pConf->Write ( _T ( "GRIBCursorDataPosX" ), m_CursorDataxy.x );
+    pConf->Write ( _T ( "GRIBCursorDataPosY" ), m_CursorDataxy.y );
 
     return true;
 }
 
 void grib_pi::SetColorScheme(PI_ColorScheme cs)
 {
-    DimeWindow(m_pGribDialog);
+    DimeWindow(m_pGribCtrlBar);
+    if( m_pGribCtrlBar ) {
+        if( m_pGRIBOverlayFactory ) m_pGRIBOverlayFactory->ClearCachedLabel();
+        if(m_pGribCtrlBar->pReq_Dialog) m_pGribCtrlBar->pReq_Dialog->Refresh();
+        m_pGribCtrlBar->Refresh();
+        //m_pGribDialog->SetDataBackGroundColor();
+    }
 }
 
 void grib_pi::SendTimelineMessage(wxDateTime time)
 {
-    if(!m_pGribDialog)
+    if(!m_pGribCtrlBar)
         return;
 
     wxJSONValue v;
@@ -531,8 +647,7 @@ void grib_pi::SendTimelineMessage(wxDateTime time)
 void GribPreferencesDialog::OnStartOptionChange( wxCommandEvent& event )
 {
     if(m_rbStartOptions->GetSelection() == 2) {
-        wxMessageDialog mes(this, _("You have chosen to authorize interpolation.\nDon't forget that data displayed at current time will not be real but interpolated!"),
-                _("Warning!"), wxOK);
-            mes.ShowModal();
-        }
+        OCPNMessageBox_PlugIn(this, _("You have chosen to authorize interpolation.\nDon't forget that data displayed at current time will not be real but Recomputed\nThis can decrease accuracy!"),
+                _("Warning!"));
+    }
 }

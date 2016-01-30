@@ -37,6 +37,7 @@
 #include <wx/bmpcbox.h>
 #include <wx/notebook.h>
 #include <wx/filesys.h>
+#include <wx/clrpicker.h>
 #include "LinkPropDlg.h"
 
 #if wxCHECK_VERSION(2, 9, 0)
@@ -60,11 +61,17 @@ class   HyperlinkList;
 
 ////@begin control identifiers
 #define ID_ROUTEPROP 7000
-#define SYMBOL_ROUTEPROP_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX
 #define SYMBOL_ROUTEPROP_TITLE _("Route Properties")
 #define SYMBOL_ROUTEPROP_IDNAME ID_ROUTEPROP
 #define SYMBOL_ROUTEPROP_SIZE wxSize(450, 300)
 #define SYMBOL_ROUTEPROP_POSITION wxDefaultPosition
+
+#ifdef __WXOSX__
+#define SYMBOL_ROUTEPROP_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxSTAY_ON_TOP
+#else
+#define SYMBOL_ROUTEPROP_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX
+#endif
+
 
 #define ID_TEXTCTRL            7001
 #define ID_TEXTCTRL2           7002
@@ -77,6 +84,8 @@ class   HyperlinkList;
 #define ID_ROUTEPROP_EXTEND    7207
 #define ID_ROUTEPROP_COPYTXT   7307
 #define ID_ROUTEPROP_PRINT     7407
+#define ID_WAYPOINTRANGERINGS  7507 
+#define ID_SHOWWAYPOINTRANGERINGS  7607 
 #define ID_PLANSPEEDCTL        7008
 #define ID_TEXTCTRL4           7009
 #define ID_TEXTCTRLDESC        7010
@@ -90,6 +99,9 @@ class   HyperlinkList;
 #define ID_RCLK_MENU_COPY_LL   7018
 #define ID_RCLK_MENU_PASTE     7019
 #define ID_RCLK_MENU_PASTE_LL  7020
+#define ID_TIMEZONESEL_UTC     7021
+#define ID_TIMEZONESEL_LOCAL   7022
+#define ID_TIMEZONESEL_LMT     7023
 
 #define ID_MARKPROP 8000
 #define SYMBOL_MARKPROP_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX
@@ -129,23 +141,17 @@ class RouteProp: public wxDialog
 
 public:
     /// Constructors
-    RouteProp( );
-    RouteProp(wxWindow* parent, wxWindowID id = SYMBOL_ROUTEPROP_IDNAME,
-        const wxString& caption = SYMBOL_ROUTEPROP_TITLE,
-        const wxPoint& pos = SYMBOL_ROUTEPROP_POSITION,
-        const wxSize& size = SYMBOL_ROUTEPROP_SIZE,
-        long style = SYMBOL_ROUTEPROP_STYLE );
+    static RouteProp* getInstance(wxWindow* parent, wxWindowID id = SYMBOL_ROUTEPROP_IDNAME,
+                                   const wxString& caption = SYMBOL_ROUTEPROP_TITLE,
+                                   const wxPoint& pos = SYMBOL_ROUTEPROP_POSITION,
+                                   const wxSize& size = SYMBOL_ROUTEPROP_SIZE,
+                                   long style = SYMBOL_ROUTEPROP_STYLE );
     ~RouteProp( );
-
-    /// Creation
-    bool Create( wxWindow* parent, wxWindowID id = SYMBOL_ROUTEPROP_IDNAME,
-                 const wxString& caption = SYMBOL_ROUTEPROP_TITLE,
-                 const wxPoint& pos = SYMBOL_ROUTEPROP_POSITION,
-                 const wxSize& size = SYMBOL_ROUTEPROP_SIZE,
-                 long style = SYMBOL_ROUTEPROP_STYLE );
-
+    static bool getInstanceFlag(){ return instanceFlag; } 
+    
     void CreateControls();
-
+    void CreateControlsCompact();
+    
     void SetColorScheme(ColorScheme cs);
     void SetDialogTitle(const wxString & title);
     void OnRoutepropCancelClick( wxCommandEvent& event );
@@ -163,25 +169,25 @@ public:
     bool IsThisRouteExtendable();
     void OnEvtColDragEnd(wxListEvent& event);
     void InitializeList();
-
-
+    void RecalculateSize( void );
+    
     /// Should we show tooltips?
     static bool ShowToolTips();
 
-    void SetRouteAndUpdate(Route *pR);
+    void SetRouteAndUpdate(Route *pR, bool only_points = false);
     Route *GetRoute(void){return m_pRoute;}
 
     bool UpdateProperties(void);
-	wxString MakeTideInfo(int jx, time_t tm, int tz_selection, long LMT_Offset);
+    wxString MakeTideInfo(int jx, time_t tm, int tz_selection, long LMT_Offset);
     bool SaveChanges(void);
 
     wxTextCtrl  *m_TotalDistCtl;
     wxTextCtrl  *m_PlanSpeedCtl;
-	wxTextCtrl	*m_StartTimeCtl;
+    wxTextCtrl	*m_StartTimeCtl;
     wxTextCtrl  *m_TimeEnrouteCtl;
 
-	wxStaticText *m_PlanSpeedLabel;
-	wxStaticText *m_StartTimeLabel;
+    wxStaticText *m_PlanSpeedLabel;
+    wxStaticText *m_StartTimeLabel;
 
     wxTextCtrl  *m_RouteNameCtl;
     wxTextCtrl  *m_RouteStartCtl;
@@ -211,7 +217,7 @@ public:
     int         m_tz_selection;
 
     wxDateTime	 m_starttime; // kept as UTC
-    wxRadioBox	*pDispTz;
+//    wxRadioBox	*pDispTz;
     wxStaticText  *m_staticText1;
     wxStaticText  *m_staticText2;
     wxStaticText  *m_staticText3;
@@ -220,6 +226,25 @@ public:
     wxChoice      *m_chWidth;
 
     wxStaticBoxSizer* m_pListSizer;
+    wxScrolledWindow *itemDialog1;
+    
+private:
+    RouteProp( );
+    RouteProp(wxWindow* parent, wxWindowID id = SYMBOL_ROUTEPROP_IDNAME,
+              const wxString& caption = SYMBOL_ROUTEPROP_TITLE,
+              const wxPoint& pos = SYMBOL_ROUTEPROP_POSITION,
+              const wxSize& size = SYMBOL_ROUTEPROP_SIZE,
+              long style = SYMBOL_ROUTEPROP_STYLE );
+    
+    static bool instanceFlag;
+    static RouteProp *single;
+    
+    int GetTZSelection(void);
+    wxRadioButton  *m_prb_tzUTC;
+    wxRadioButton  *m_prb_tzLocal;
+    wxRadioButton  *m_prb_tzLMT;
+    bool m_bcompact;
+    
 };
 
 //    LatLonTextCtrl Specification
@@ -253,6 +278,8 @@ public:
 ///////////////////////////////////////////////////////////////////////////////
 class MarkInfoDef : public wxDialog
 {
+    DECLARE_EVENT_TABLE()
+    
 	private:
 
 	protected:
@@ -267,7 +294,7 @@ class MarkInfoDef : public wxDialog
         wxObject*               m_contextObject;
         wxMenu*                 m_menuLink;
         wxNotebook*             m_notebookProperties;
-        wxPanel*                m_panelBasicProperties;
+        wxScrolledWindow*       m_panelBasicProperties;
         wxPanel*                m_panelDescription;
         wxPanel*                m_panelExtendedProperties;
         wxScrolledWindow*       m_scrolledWindowLinks;
@@ -292,29 +319,46 @@ class MarkInfoDef : public wxDialog
         wxTextCtrl*             m_textName;
         wxToggleButton*         m_toggleBtnEdit;
         wxStaticBoxSizer*       sbSizerLinks;
-
-		// Virtual event handlers, overide them in your derived class
+        wxSize                  m_defaultClientSize;
+        wxStaticText*           m_staticTextArrivalRadius;
+        wxTextCtrl*             m_textArrivalRadius;
+        wxBoxSizer*             bSizerBasicProperties;
+        wxCheckBox*             m_checkBoxShowWaypointRangeRings;
+    
+        wxChoice*               m_choiceWaypointRangeRingsNumber;
+        wxFlexGridSizer*        waypointradarGrid;
+        wxTextCtrl*             m_textWaypointRangeRingsStep;
+        wxChoice*               m_choiceWaypointRangeRingsUnits;
+        wxFlexGridSizer*        waypointrrSelect;
+        wxChoice*               m_chColor;
+        
+    // Virtual event handlers, overide them in your derived class
         virtual void OnPositionCtlUpdated( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnDescChangedBasic( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnExtDescriptionClick( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnDeleteLink( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnEditLink( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnAddLink( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnEditLinkToggle( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnDescChangedExt( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnMarkInfoCancelClick( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnMarkInfoOKClick( wxCommandEvent& event ) { event.Skip(); }
-		void OnCopyPasteLatLon( wxCommandEvent& event );
+        virtual void OnDescChangedBasic( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnExtDescriptionClick( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnDeleteLink( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnEditLink( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnAddLink( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnEditLinkToggle( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnDescChangedExt( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnMarkInfoCancelClick( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnMarkInfoOKClick( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnArrivalRadiusChange( wxCommandEvent& event ) { event.Skip(); }
+        virtual void OnWaypointRangeRingsStepChange( wxCommandEvent& event ) { event.Skip(); }
+        void OnCopyPasteLatLon( wxCommandEvent& event );
+        void OnWaypointRangeRingSelect( wxCommandEvent& event );
+        void OnShowWaypointRangeRingSelect( wxCommandEvent& event );
 
-	public:
+    public:
+        MarkInfoDef( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Waypoint Properties"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( -1, -1 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
+        ~MarkInfoDef();
 
-		MarkInfoDef( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Waypoint Properties"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 450,550 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
-		~MarkInfoDef();
-
-		void m_hyperlink17OnContextMenu( wxMouseEvent &event )
-		{
-			m_hyperlink17->PopupMenu( m_menuLink, event.GetPosition() );
-		}
+        void RecalculateSize( void );
+        
+        void m_hyperlink17OnContextMenu( wxMouseEvent &event )
+        {
+            m_hyperlink17->PopupMenu( m_menuLink, event.GetPosition() );
+        }
 
 };
 
@@ -332,7 +376,13 @@ public :
       void InitialFocus(void);
       void OnRightClick( wxCommandEvent& event );
 
-      MarkInfoImpl( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Waypoint Information"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 450,550 ), long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
+      static MarkInfoImpl *getInstance( wxWindow* parent,
+                          wxWindowID id = wxID_ANY,
+                          const wxString& title = _("Waypoint Information"),
+                          const wxPoint& pos = wxDefaultPosition,
+                          const wxSize& size = wxSize( -1, -1 ),
+                          long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
+      static bool getInstanceFlag(){ return instanceFlag; } 
       ~MarkInfoImpl();
 
       void m_hyperlinkContextMenu( wxMouseEvent &event );
@@ -348,6 +398,16 @@ protected :
       void OnExtDescriptionClick( wxCommandEvent& event );
 
 private :
+    MarkInfoImpl( wxWindow* parent,
+                  wxWindowID id = wxID_ANY,
+                  const wxString& title = _("Waypoint Information"),
+                  const wxPoint& pos = wxDefaultPosition,
+                  const wxSize& size = wxSize( -1, -1 ),
+                  long style = wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxRESIZE_BORDER );
+    
+    static bool instanceFlag;
+    static MarkInfoImpl *single;
+    
       RoutePoint  *m_pRoutePoint;
       HyperlinkList *m_pMyLinkList;
       void OnHyperLinkClick(wxHyperlinkEvent &event);

@@ -25,22 +25,52 @@
 #ifndef __GLTEXTUREDESCRIPTOR_H__
 #define __GLTEXTUREDESCRIPTOR_H__
 
+#include "wx/wxprec.h"
+
+#ifndef  WX_PRECOMP
+#include "wx/wx.h"
+#endif //precompiled headers
+
 #include "dychart.h"
+
+
+#define CA_READ         0
+#define CA_WRITE        1
+
+#define GPU_TEXTURE_UNKNOWN             0
+#define GPU_TEXTURE_UNCOMPRESSED        1
+#define GPU_TEXTURE_COMPRESSED          2
 
 class glTextureDescriptor
 {
 public:
     glTextureDescriptor();
     ~glTextureDescriptor();
+    void FreeAll();
+    void FreeMap();
+    void FreeCompLevel(int level);
+    void FreeCompComp();
 
+    size_t GetMapArrayAlloc(void);
+    size_t GetCompArrayAlloc(void);
+    size_t GetCompCompArrayAlloc(void);
+
+    unsigned char *CompressedArrayAccess( int mode, unsigned char *write_data, int level);
+    unsigned char *CompCompArrayAccess( int mode, unsigned char *write_data, int level);
     GLuint tex_name;
-    int tex_mult;
     int level_min;
-    int level_max;
-    int base_size;
-    int GPU_base;
-
-    unsigned char *map_array[10];
+    int x;
+    int y;
+    int nGPU_compressed;
+    int nCache_Color;
+    
+    unsigned char       *map_array[10];
+    bool                miplevel_upload[10];
+    int                 compcomp_size[10];
+    
+private:    
+    unsigned char *comp_array[10];
+    unsigned char *compcomp_array[10];
 };
 
 

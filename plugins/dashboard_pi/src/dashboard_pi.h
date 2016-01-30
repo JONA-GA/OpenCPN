@@ -61,6 +61,7 @@
 #include "clock.h"
 #include "wind_history.h"
 #include "baro_history.h"
+#include "from_ownship.h"
 
 class DashboardWindow;
 class DashboardWindowContainer;
@@ -78,8 +79,9 @@ class DashboardWindowContainer
 
             ~DashboardWindowContainer(){}
             DashboardWindow              *m_pDashboardWindow;
-            bool                          m_bIsVisible; // Only used for config
-            bool                          m_bIsDeleted; // Only used for config
+            bool                          m_bIsVisible; 
+            bool                          m_bIsDeleted; 
+            bool                          m_bPersVisible;  // Persists visibility, even when Dashboard tool is toggled off.
             wxString                      m_sName;
             wxString                      m_sCaption;
             wxString                      m_sOrientation;

@@ -43,15 +43,16 @@
 #include "s57RegistrarMgr.h"
 #include "S57ClassRegistrar.h"
 #include "S57Light.h"
-
+#include "S57Sector.h"
 #include "s52s57.h"                 //types
-#include "chcanv.h"                // for Viewport
 #include "OCPNRegion.h"
-
+#include "ocpndc.h"
+#include "viewport.h"
 
 // ----------------------------------------------------------------------------
 // Useful Prototypes
 // ----------------------------------------------------------------------------
+
 
 // ----------------------------------------------------------------------------
 // S57 Utility Prototypes
@@ -87,25 +88,21 @@ class S57ClassRegistrar;
 class S57Obj;
 class VE_Element;
 class VC_Element;
+class connector_segment;
 
 #include <wx/dynarray.h>
 
 // Declare the Array of S57Obj
 WX_DECLARE_OBJARRAY(S57Obj, ArrayOfS57Obj);
+WX_DECLARE_OBJARRAY(S57Obj *, ArrayOfS57ObjPtr);
+
 // And also a list
 WX_DECLARE_LIST(S57Obj, ListOfS57Obj);
 
 
 WX_DECLARE_LIST(ObjRazRules, ListOfObjRazRules);
 
-WX_DECLARE_OBJARRAY(VE_Element, ArrayOfVE_Elements);
-WX_DECLARE_OBJARRAY(VC_Element, ArrayOfVC_Elements);
 
-WX_DECLARE_HASH_MAP( int, wxString, wxIntegerHash, wxIntegerEqual, MyNatsurHash );
-WX_DECLARE_HASH_MAP( int, int, wxIntegerHash, wxIntegerEqual, VectorHelperHash );
-
-WX_DECLARE_HASH_MAP( int, VE_Element *, wxIntegerHash, wxIntegerEqual, VE_Hash );
-WX_DECLARE_HASH_MAP( int, VC_Element *, wxIntegerHash, wxIntegerEqual, VC_Hash );
 
 //----------------------------------------------------------------------------
 // s57 Chart object class
@@ -134,6 +131,7 @@ public:
       virtual bool RenderOverlayRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
 
       virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
+      virtual LLRegion GetValidRegion();
 
       virtual void GetPointPix(ObjRazRules *rzRules, float rlat, float rlon, wxPoint *r);
       virtual void GetPointPix(ObjRazRules *rzRules, wxPoint2DDouble *en, wxPoint *r, int nPoints);
@@ -154,19 +152,22 @@ public:
 
       int _insertRules(S57Obj *obj, LUPrec *LUP, s57chart *pOwner);
 
-      virtual ListOfObjRazRules *GetObjRuleListAtLatLon(float lat, float lon, float select_radius, ViewPort *VPoint);
+      virtual ListOfObjRazRules *GetObjRuleListAtLatLon(float lat, float lon, float select_radius, 
+                                                        ViewPort *VPoint, int selection_mask = MASK_ALL);
       bool DoesLatLonSelectObject(float lat, float lon, float select_radius, S57Obj *obj);
       bool IsPointInObjArea(float lat, float lon, float select_radius, S57Obj *obj);
       wxString GetObjectAttributeValueAsString( S57Obj *obj, int iatt, wxString curAttrName );
+      static wxString GetAttributeValueAsString( S57attVal *pAttrVal, wxString AttrName );
       static int CompareLights( const void** l1, const void** l2 );
       wxString CreateObjDescriptions( ListOfObjRazRules* rule);
-      wxString GetAttributeDecode(wxString& att, int ival);
+      static wxString GetAttributeDecode(wxString& att, int ival);
 
       wxFileName GetSENCFileName(){ return m_SENCFileName; }
       void SetSENCFileName(wxFileName fn){ m_SENCFileName = fn;}
 
       int BuildRAZFromSENCFile(const wxString& SENCPath);
-
+      static void GetChartNameFromTXT(const wxString& FullPath, wxString &Name);
+      
       int my_fgets( char *buf, int buf_len_max, wxInputStream& ifs );
 
       //    Initialize from an existing SENC file
@@ -182,13 +183,17 @@ public:
 
       virtual void ForceEdgePriorityEvaluate(void);
 
+      float *GetLineVertexBuffer( void ){ return m_line_vertex_buffer; }
+      
       void ClearRenderedTextCache();
       
       double GetCalculatedSafetyContour(void){ return m_next_safe_cnt; }
 
 //#ifdef ocpnUSE_GL
-      virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
-      virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region);
+      virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
+                                        const OCPNRegion &RectRegion, const LLRegion &Region);
+      virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
+                                               const OCPNRegion &RectRegion, const LLRegion &Region);
 //#endif
       
 // Public data
@@ -215,9 +220,12 @@ public:
       virtual void InvalidateCache();
       virtual bool RenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint);
 
+      virtual void ClearDepthContourArray(void);
       virtual void BuildDepthContourArray(void);
       int ValidateAndCountUpdates( const wxFileName file000, const wxString CopyDir,
                                    wxString &LastUpdateDate, bool b_copyfiles);
+      static int GetUpdateFileArray(const wxFileName file000, wxArrayString *UpFiles,
+                                    wxDateTime date000, wxString edtn000 );
       wxString GetISDT(void);
 
       char GetUsageChar(void){ return m_usage_char; }
@@ -229,7 +237,7 @@ public:
       struct _chart_context     *m_this_chart_context;
       
 private:
-
+      int GetLineFeaturePointArray(S57Obj *obj, void **ret_array);
       void SetSafetyContour(void);
     
       bool DoRenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, RenderTypeEnum option, bool force_new_view);
@@ -243,14 +251,9 @@ private:
       InitReturn PostInit( ChartInitFlag flags, ColorScheme cs );
       InitReturn FindOrCreateSenc( const wxString& name );
       int BuildSENCFile(const wxString& FullPath000, const wxString& SENCFileName);
-
-      void  CreateSENCRecord( OGRFeature *pFeature, FILE * fpOut, int mode, S57Reader *poReader );
-      void  CreateSENCVectorEdgeTable(FILE * fpOut, S57Reader *poReader);
-      void  CreateSENCConnNodeTable(FILE * fpOut, S57Reader *poReader);
-
+      
       void SetLinePriorities(void);
 
-      void GetChartNameFromTXT(const wxString& FullPath, wxString &Name);
       bool BuildThumbnail(const wxString &bmpname);
       bool CreateHeaderDataFromENC(void);
       bool CreateHeaderDataFromSENC(void);
@@ -266,20 +269,15 @@ private:
 
       void FreeObjectsAndRules();
       const char *getName(OGRFeature *feature);
-      int GetUpdateFileArray(const wxFileName file000, wxArrayString *UpFiles);
 
-//#ifdef ocpnUSE_GL
-      bool DoRenderRectOnGL(const wxGLContext &glc, const ViewPort& VPoint, wxRect &rect);
-      bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_overlay);
-      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const wxRect &Rect, bool b_render_nodta = true);
-      void SetClipRegionGL(const wxGLContext &glc, const ViewPort& VPoint, const OCPNRegion &Region, bool b_render_nodta = true);
-//#endif
+      bool DoRenderOnGL(const wxGLContext &glc, const ViewPort& VPoint);
+      bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
+                                  const OCPNRegion &RectRegion, const LLRegion &Region, bool b_overlay);
+
+      void AssembleLineGeometry( void );
+      void BuildLineVBO( void );
       
-
  // Private Data
-      wxString    *m_pcsv_locn;
-
-
       char        *hdr_buf;
       char        *mybuf_ptr;
       int         hdr_len;
@@ -319,9 +317,12 @@ private:
 
       VE_Hash     m_ve_hash;
       VC_Hash     m_vc_hash;
-
-      MyNatsurHash m_natsur_hash;               // hash table for cacheing NATSUR string values from int attributes
-
+      
+      connected_segment_hash m_connector_hash;
+      
+      float      *m_line_vertex_buffer;
+      size_t      m_vbo_byte_length;
+      
       bool        m_blastS57TextRender;
       wxString    m_lastColorScheme;
       wxRect      m_last_vprect;
@@ -330,6 +331,13 @@ private:
       char        m_usage_char;
       
       double      m_next_safe_cnt;
+      double      m_LOD_meters;
+
+      int         m_LineVBO_name;
+protected:      
+      sm_parms    vp_transform;
+      
 };
+
 
 #endif

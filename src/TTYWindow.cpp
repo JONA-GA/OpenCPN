@@ -53,15 +53,21 @@ TTYWindow::TTYWindow(wxWindow *parent, int n_lines, WindowDestroyListener * list
     wxBoxSizer* bSizerOuterContainer = new wxBoxSizer( wxVERTICAL );
     SetSizer( bSizerOuterContainer );
 
-    m_pScroll = new TTYScroll(this, n_lines);
+    m_tFilter = new wxTextCtrl( this, wxID_ANY );
+
+    m_pScroll = new TTYScroll(this, n_lines, *m_tFilter);
     m_pScroll->Scroll(-1, 1000);        // start with full scroll down
 
     bSizerOuterContainer->Add( m_pScroll, 1, wxEXPAND, 5 );
 
+    wxStaticBox *psbf = new wxStaticBox( this,  wxID_ANY, _("Filter")) ;
+    wxStaticBoxSizer* sbSizer2 = new wxStaticBoxSizer( psbf , wxVERTICAL );
+    sbSizer2->Add( m_tFilter, 1, wxALL|wxEXPAND, 5 );
+    bSizerOuterContainer->Add( sbSizer2, 0, wxEXPAND, 5 );
+
     wxBoxSizer* bSizerBottomContainer = new wxBoxSizer( wxHORIZONTAL );
     bSizerOuterContainer->Add( bSizerBottomContainer, 0, wxEXPAND, 5 );
-
-
+    
     wxStaticBox *psb = new wxStaticBox( this,  wxID_ANY, _("Legend")) ;
     wxStaticBoxSizer* sbSizer1 = new wxStaticBoxSizer( psb , wxVERTICAL );
 
@@ -88,7 +94,7 @@ TTYWindow::~TTYWindow()
 
 void TTYWindow::CreateLegendBitmap()
 {
-    m_bm_legend.Create(400, 80);
+    m_bm_legend.Create(400, 130);
     wxMemoryDC dc;
     dc.SelectObject( m_bm_legend );
     if( m_bm_legend.IsOk()) {
@@ -109,18 +115,32 @@ void TTYWindow::CreateLegendBitmap()
         dc.DrawText(  _("Message accepted"), 30, y );
 
         y += yp;
-        wxBrush b2(wxColour( _T("#a0832a")) );
+        wxBrush b2(wxColour( _T("CORAL")) );
         dc.SetBrush(b2);
         dc.DrawRectangle( 5, y, 20, 20 );
-        dc.SetTextForeground( wxColour(_T("#a0832a")) );
-        dc.DrawText(  _("Message filtered and dropped"), 30, y );
+        dc.SetTextForeground( wxColour(_T("CORAL")) );
+        dc.DrawText(  _("Input message filtered, output message filtered and dropped"), 30, y );
 
         y += yp;
-        wxBrush b3(wxColour( _T("BLUE")) );
+        wxBrush b3(wxColour( _T("MAROON")) );
         dc.SetBrush(b3);
+        dc.DrawRectangle( 5, y, 20, 20 );
+        dc.SetTextForeground( wxColour(_T("MAROON")) );
+        dc.DrawText(  _("Input Message filtered and dropped"), 30, y );
+
+        y += yp;
+        wxBrush b4(wxColour( _T("BLUE")) );
+        dc.SetBrush(b4);
         dc.DrawRectangle( 5, y, 20, 20 );
         dc.SetTextForeground( wxColour(_T("BLUE")) );
         dc.DrawText(  _("Output Message"), 30, y );
+
+        y += yp;
+        wxBrush b5(wxColour( _T("RED")) );
+        dc.SetBrush(b5);
+        dc.DrawRectangle( 5, y, 20, 20 );
+        dc.SetTextForeground( wxColour(_T("RED")) );
+        dc.DrawText(  _("Information Message or Message with errors"), 30, y );
     }
     dc.SelectObject( wxNullBitmap );
 }

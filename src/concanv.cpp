@@ -47,6 +47,7 @@
 #include "routeman.h"
 #include "navutil.h"
 #include "FontMgr.h"
+#include "wx28compat.h"
 
 extern Routeman         *g_pRouteMan;
 extern MyFrame          *gFrame;
@@ -73,6 +74,7 @@ BEGIN_EVENT_TABLE(ConsoleCanvas, wxWindow)
     EVT_MENU(ID_NAVLEG, ConsoleCanvas::OnContextMenuSelection)
     EVT_MENU(ID_NAVROUTE, ConsoleCanvas::OnContextMenuSelection)
     EVT_MENU(ID_NAVHIGHWAY, ConsoleCanvas::OnContextMenuSelection)
+    
 END_EVENT_TABLE()
 
 // Define a constructor for my canvas
@@ -87,7 +89,7 @@ long style = wxSIMPLE_BORDER | wxCLIP_CHILDREN;
 #endif
 
     wxDialog::Create( frame, wxID_ANY, _T(""), wxDefaultPosition, wxDefaultSize, style );
-
+    
     m_pParent = frame;
 
     m_pitemBoxSizerLeg = new wxBoxSizer( wxVERTICAL );
@@ -96,10 +98,12 @@ long style = wxSIMPLE_BORDER | wxCLIP_CHILDREN;
     pThisLegText->Fit();
     m_pitemBoxSizerLeg->Add( pThisLegText, 0, wxALIGN_CENTER_HORIZONTAL, 2 );
 
-    //     pSBoxRgn = new wxRegion(pThisLegBox->GetRect() );
 
-    pThisLegFont = wxTheFontList->FindOrCreateFont( 10, wxDEFAULT, wxNORMAL, wxBOLD );
-
+    wxFont *qFont = GetOCPNScaledFont(_("Dialog"));
+    
+    wxFont *pThisLegFont = FontMgr::Get().FindOrCreateFont( 10, wxFONTFAMILY_DEFAULT,
+                                                          qFont->GetStyle(), wxFONTWEIGHT_BOLD, false,
+                                                          qFont->GetFaceName() );
     pThisLegText->SetFont( *pThisLegFont );
 
     pXTE = new AnnunText( this, -1, _("Console Legend"), _("Console Value") );
@@ -142,11 +146,11 @@ ConsoleCanvas::~ConsoleCanvas()
 {
     delete pCDI;
 }
-
+    
 void ConsoleCanvas::SetColorScheme( ColorScheme cs )
 {
     pbackBrush = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("DILG1"/*UIBDR*/) ),
-            wxSOLID );
+            wxBRUSHSTYLE_SOLID );
     SetBackgroundColour( GetGlobalColor( _T("DILG1"/*"UIBDR"*/) ) );
 
     //  Also apply color scheme to all known children
@@ -243,31 +247,14 @@ void ConsoleCanvas::UpdateRouteData()
 {
     wxString str_buf;
 
-    if( g_pRouteMan->GetpActiveRoute() ) {
-
-        if( g_pRouteMan->m_bDataValid ) {
-
-//    Range
-            wxString srng;
+    if( g_pRouteMan->GetpActiveRoute() )
+    {
+        if( g_pRouteMan->m_bDataValid )
+        {
+            // Range to the next waypoint is needed always
             float rng = g_pRouteMan->GetCurrentRngToActivePoint();
-            float nrng = g_pRouteMan->GetCurrentRngToActiveNormalArrival();
 
-//                  if((fabs(rng - nrng) > .01) && (rng < 10.0))
-            double deltarng = fabs( rng - nrng );
-            if( ( deltarng > .01 ) && ( ( deltarng / rng ) > .10 ) && ( rng < 10.0 ) ) // show if there is more than 10% difference in ranges, etc...
-                    {
-                if( nrng < 10.0 ) srng.Printf( _T("%5.2f/%5.2f"), rng, nrng );
-                else
-                    srng.Printf( _T("%5.1f/%5.1f"), rng, nrng );
-            } else {
-                if( rng < 10.0 ) srng.Printf( _T("%6.2f"), rng );
-                else
-                    srng.Printf( _T("%6.1f"), rng );
-            }
-
-            if( !m_bShowRouteTotal ) pRNG->SetAValue( srng );
-
-//    Brg
+            // Brg to the next waypoint
             float dcog = g_pRouteMan->GetCurrentBrgToActivePoint();
             if( dcog >= 359.5 )
                 dcog = 0;
@@ -280,92 +267,124 @@ void ConsoleCanvas::UpdateRouteData()
             
             pBRG->SetAValue( cogstr );
 
-//    XTE
-            str_buf.Printf( _T("%6.2f"), g_pRouteMan->GetCurrentXTEToActivePoint() );
-            pXTE->SetAValue( str_buf );
-            if( g_pRouteMan->GetXTEDir() < 0 ) pXTE->SetALabel( wxString( _("XTE         L") ) );
-            else
-                pXTE->SetALabel( wxString( _("XTE         R") ) );
-
-//    VMG
+            // VMG
             // VMG is always to next waypoint, not to end of route
             // VMG is SOG x cosine (difference between COG and BRG to Waypoint)
             double VMG = 0.;
-            if( !wxIsNaN(gCog) && !wxIsNaN(gSog) ) {
+            if( !wxIsNaN(gCog) && !wxIsNaN(gSog) )
+            {
                 double BRG;
                 BRG = g_pRouteMan->GetCurrentBrgToActivePoint();
-                VMG = gSog * cos( ( BRG - gCog ) * PI / 180. );
-                str_buf.Printf( _T("%6.2f"), VMG );
-            } else
+                VMG = gSog * cos( ( BRG - gCog ) * PI / 180. ) ;
+                str_buf.Printf( _T("%6.2f"), toUsrSpeed( VMG ) );
+            }
+            else
                 str_buf = _T("---");
 
             pVMG->SetAValue( str_buf );
 
-//    TTG
-            // In all cases, ttg/eta are declared invalid if VMG <= 0.
-
-            // If showing only "this leg", use VMG for calculation of ttg
-            wxString ttg_s;
-            if( ( VMG > 0. ) && !wxIsNaN(gCog) && !wxIsNaN(gSog) )
-
+            if( !m_bShowRouteTotal )
             {
-                float ttg_sec = ( rng / VMG ) * 3600.;
-                wxTimeSpan ttg_span( 0, 0, long( ttg_sec ), 0 );
-                ttg_s = ttg_span.Format();
-            } else
-                ttg_s = _T("---");
+                float nrng = g_pRouteMan->GetCurrentRngToActiveNormalArrival();
+                wxString srng;
+                double deltarng = fabs( rng - nrng );
+                if( ( deltarng > .01 ) && ( ( deltarng / rng ) > .10 ) && ( rng < 10.0 ) ) // show if there is more than 10% difference in ranges, etc...
+                {
+                    if( nrng < 10.0 )
+                        srng.Printf( _T("%5.2f/%5.2f"), toUsrDistance( rng ), toUsrDistance( nrng ) );
+                    else
+                        srng.Printf( _T("%5.1f/%5.1f"), toUsrDistance( rng ), toUsrDistance( nrng ) );
+                }
+                else
+                {
+                    if( rng < 10.0 )
+                        srng.Printf( _T("%6.2f"), toUsrDistance( rng ) );
+                    else
+                        srng.Printf( _T("%6.1f"), toUsrDistance( rng ) );
+                }
 
-            if( !m_bShowRouteTotal ) pTTG->SetAValue( ttg_s );
+                //RNG to the next WPT
+                pRNG->SetAValue( srng );
+                // XTE
+                str_buf.Printf( _T("%6.2f"), toUsrDistance( g_pRouteMan->GetCurrentXTEToActivePoint() ) );
+                pXTE->SetAValue( str_buf );
+                if( g_pRouteMan->GetXTEDir() < 0 )
+                    pXTE->SetALabel( wxString( _("XTE         L") ) );
+                else
+                    pXTE->SetALabel( wxString( _("XTE         R") ) );
+                // TTG
+                // In all cases, ttg/eta are declared invalid if VMG <= 0.
+                // If showing only "this leg", use VMG for calculation of ttg
+                wxString ttg_s;
+                if( ( VMG > 0. ) && !wxIsNaN(gCog) && !wxIsNaN(gSog) )
+                {
+                    float ttg_sec = ( rng / VMG ) * 3600.;
+                    wxTimeSpan ttg_span( 0, 0, long( ttg_sec ), 0 );
+                    ttg_s = ttg_span.Format();
+                }
+                else
+                    ttg_s = _T("---");
 
-            //    Remainder of route
-            float trng = rng;
-
-            Route *prt = g_pRouteMan->GetpActiveRoute();
-            wxRoutePointListNode *node = ( prt->pRoutePointList )->GetFirst();
-            RoutePoint *prp;
-
-            int n_addflag = 0;
-            while( node ) {
-                prp = node->GetData();
-                if( n_addflag ) trng += prp->m_seg_len;
-
-                if( prp == prt->m_pRouteActivePoint ) n_addflag++;
-
-                node = node->GetNext();
+                pTTG->SetAValue( ttg_s );
             }
-
-//                total rng
-            wxString strng;
-            if( trng < 10.0 ) strng.Printf( _T("%6.2f"), trng );
             else
-                strng.Printf( _T("%6.1f"), trng );
+            {
+                //    Remainder of route
+                float trng = rng;
 
-            if( m_bShowRouteTotal ) pRNG->SetAValue( strng );
+                Route *prt = g_pRouteMan->GetpActiveRoute();
+                wxRoutePointListNode *node = ( prt->pRoutePointList )->GetFirst();
+                RoutePoint *prp;
 
-//                total ttg
-            // If showing total route ttg/ETA, use gSog for calculation
+                int n_addflag = 0;
+                while( node )
+                {
+                    prp = node->GetData();
+                    if( n_addflag )
+                        trng += prp->m_seg_len;
 
-            wxString tttg_s;
-            wxTimeSpan tttg_span;
-            if( VMG > 0. ) {
-                float tttg_sec = ( trng / gSog ) * 3600.;
-                tttg_span = wxTimeSpan::Seconds( (long) tttg_sec );
-                tttg_s = tttg_span.Format();
-            } else {
-                tttg_span = wxTimeSpan::Seconds( 0 );
-                tttg_s = _T("---");
-            }
+                    if( prp == prt->m_pRouteActivePoint )
+                        n_addflag++;
 
-            if( m_bShowRouteTotal ) pTTG->SetAValue( tttg_s );
+                    node = node->GetNext();
+                }
 
-//                total ETA to be shown on XTE panel
-            if( m_bShowRouteTotal ) {
+    //                total rng
+                wxString strng;
+                if( trng < 10.0 )
+                    strng.Printf( _T("%6.2f"), toUsrDistance( trng ) );
+                else
+                    strng.Printf( _T("%6.1f"), toUsrDistance( trng ) );
+
+                pRNG->SetAValue( strng );
+
+                // total TTG
+                // If showing total route TTG/ETA, use gSog for calculation
+
+                wxString tttg_s;
+                wxTimeSpan tttg_span;
+                if( VMG > 0. )
+                {
+                    float tttg_sec = ( trng / gSog ) * 3600.;
+                    tttg_span = wxTimeSpan::Seconds( (long) tttg_sec );
+                    tttg_s = tttg_span.Format();
+                }
+                else
+                {
+                    tttg_span = wxTimeSpan::Seconds( 0 );
+                    tttg_s = _T("---");
+                }
+
+                pTTG->SetAValue( tttg_s );
+
+    //                total ETA to be shown on XTE panel
                 wxDateTime dtnow, eta;
                 dtnow.SetToCurrent();
                 eta = dtnow.Add( tttg_span );
                 wxString seta;
 
-                if( VMG > 0. ) seta = eta.Format( _T("%H:%M") );
+                if( VMG > 0. )
+                    seta = eta.Format( _T("%H:%M") );
                 else
                     seta = _T("---");
 
@@ -423,7 +442,9 @@ void ConsoleCanvas::UpdateFonts( void )
 //------------------------------------------------------------------------------
 //    AnnunText Implementation
 //------------------------------------------------------------------------------
-BEGIN_EVENT_TABLE(AnnunText, wxWindow) EVT_PAINT(AnnunText::OnPaint)
+BEGIN_EVENT_TABLE(AnnunText, wxWindow)
+EVT_PAINT(AnnunText::OnPaint)
+EVT_MOUSE_EVENTS ( AnnunText::MouseEvent )
 END_EVENT_TABLE()
 
 AnnunText::AnnunText( wxWindow *parent, wxWindowID id, const wxString& LegendElement,
@@ -433,9 +454,9 @@ AnnunText::AnnunText( wxWindow *parent, wxWindowID id, const wxString& LegendEle
     m_label = _T("Label");
     m_value = _T("-----");
 
-    m_plabelFont = wxTheFontList->FindOrCreateFont( 14, wxFONTFAMILY_SWISS, wxNORMAL, wxBOLD, FALSE,
+    m_plabelFont = FontMgr::Get().FindOrCreateFont( 14, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, FALSE,
             wxString( _T("Arial Bold") ) );
-    m_pvalueFont = wxTheFontList->FindOrCreateFont( 24, wxFONTFAMILY_DEFAULT, wxNORMAL, wxBOLD,
+    m_pvalueFont = FontMgr::Get().FindOrCreateFont( 24, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD,
             FALSE, wxString( _T("helvetica") ), wxFONTENCODING_ISO8859_1 );
 
     m_LegendTextElement = LegendElement;
@@ -446,6 +467,22 @@ AnnunText::AnnunText( wxWindow *parent, wxWindowID id, const wxString& LegendEle
 
 AnnunText::~AnnunText()
 {
+}
+void AnnunText::MouseEvent( wxMouseEvent& event )
+{
+#ifdef __OCPN__ANDROID__    
+    if( event.RightDown() ) {
+        qDebug() << "right down";
+        
+        wxContextMenuEvent cevt;
+        cevt.SetPosition( event.GetPosition());
+        
+        ConsoleCanvas *ccp = dynamic_cast<ConsoleCanvas*>(GetParent());
+        if(ccp)
+            ccp->OnContextMenu( cevt );
+        
+    }
+#endif    
 }
 
 void AnnunText::CalculateMinSize( void )
@@ -463,6 +500,12 @@ void AnnunText::CalculateMinSize( void )
 
     wxSize min;
     min.x = wl + wv;
+    
+    // Space is tight on Android....
+#ifdef __OCPN__ANDROID__
+    min.x = wv * 1.2; 
+#endif    
+    
     min.y = (int) ( ( hl + hv ) * 1.2 );
 
     SetMinSize( min );
@@ -471,9 +514,10 @@ void AnnunText::CalculateMinSize( void )
 void AnnunText::SetColorScheme( ColorScheme cs )
 {
     ocpnStyle::Style* style = g_StyleManager->GetCurrentStyle();
-    m_pbackBrush = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("UBLCK") ), wxSOLID );
+    m_backBrush = *wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("UBLCK") ), wxBRUSHSTYLE_SOLID );
 
-    m_text_color = style->consoleFontColor;
+    m_default_text_color = style->consoleFontColor;
+    RefreshFonts();
 }
 
 void AnnunText::RefreshFonts()
@@ -481,7 +525,30 @@ void AnnunText::RefreshFonts()
     m_plabelFont = FontMgr::Get().GetFont( m_LegendTextElement );
     m_pvalueFont = FontMgr::Get().GetFont( m_ValueTextElement );
 
+    m_legend_color = FontMgr::Get().GetFontColor( _("Console Legend") );
+    m_val_color = FontMgr::Get().GetFontColor( _("Console Value") );
+    
     CalculateMinSize();
+    
+    // Make sure that the background color and the text colors are not too close, for contrast
+    if(m_backBrush.IsOk()){
+        wxColour back_color = m_backBrush.GetColour();
+    
+        wxColour legend_color = m_legend_color;
+        if( (abs(legend_color.Red() - back_color.Red()) < 5) &&
+                (abs(legend_color.Green() - back_color.Blue()) < 5) &&
+                (abs(legend_color.Blue() - back_color.Blue()) < 5))
+            m_legend_color = m_default_text_color;
+            
+        wxColour value_color = m_val_color;
+        if( (abs(value_color.Red() - back_color.Red()) < 5) &&
+            (abs(value_color.Green() - back_color.Blue()) < 5) &&
+            (abs(value_color.Blue() - back_color.Blue()) < 5))
+            m_val_color = m_default_text_color;
+            
+    }
+    
+        
 
 }
 
@@ -517,24 +584,22 @@ void AnnunText::OnPaint( wxPaintEvent& event )
 
     wxBitmap m_bitmap( sx, sy, -1 );
     mdc.SelectObject( m_bitmap );
-    mdc.SetBackground( *m_pbackBrush );
+    mdc.SetBackground( m_backBrush );
     mdc.Clear();
 
     if( style->consoleTextBackground.IsOk() ) mdc.DrawBitmap( style->consoleTextBackground, 0, 0 );
 
-    mdc.SetTextForeground( m_text_color );
+    mdc.SetTextForeground( m_default_text_color );
 
     if( m_plabelFont ) {
         mdc.SetFont( *m_plabelFont );
-        if ( m_pbackBrush->GetColour() != FontMgr::Get().GetFontColor( _("Console Legend") ) )
-            mdc.SetTextForeground( FontMgr::Get().GetFontColor( _("Console Legend") ) );
+        mdc.SetTextForeground( m_legend_color );
         mdc.DrawText( m_label, 5, 2 );
     }
 
     if( m_pvalueFont ) {
         mdc.SetFont( *m_pvalueFont );
-        if ( m_pbackBrush->GetColour() != FontMgr::Get().GetFontColor( _("Console Value") ) )
-            mdc.SetTextForeground( FontMgr::Get().GetFontColor( _("Console Value") ) );
+        mdc.SetTextForeground( m_val_color );
 
         int w, h;
         mdc.GetTextExtent( m_value, &w, &h );
@@ -546,12 +611,14 @@ void AnnunText::OnPaint( wxPaintEvent& event )
 
     wxPaintDC dc( this );
     dc.Blit( 0, 0, sx, sy, &mdc, 0, 0 );
-
+    
 }
 //------------------------------------------------------------------------------
 //    CDI Implementation
 //------------------------------------------------------------------------------
-BEGIN_EVENT_TABLE(CDI, wxWindow) EVT_PAINT(CDI::OnPaint)
+BEGIN_EVENT_TABLE(CDI, wxWindow)
+EVT_PAINT(CDI::OnPaint)
+EVT_MOUSE_EVENTS ( CDI::MouseEvent )
 END_EVENT_TABLE()
 
 CDI::CDI( wxWindow *parent, wxWindowID id, long style, const wxString& name ) :
@@ -561,11 +628,28 @@ CDI::CDI( wxWindow *parent, wxWindowID id, long style, const wxString& name ) :
     SetMinSize( wxSize( 10, 150 ) );
 }
 
+void CDI::MouseEvent( wxMouseEvent& event )
+{
+#ifdef    __OCPN__ANDROID__
+    if( event.RightDown() ) {
+        qDebug() << "right down";
+         
+        wxContextMenuEvent cevt;
+        cevt.SetPosition( event.GetPosition());
+        
+        ConsoleCanvas *ccp = dynamic_cast<ConsoleCanvas*>(GetParent());
+        if(ccp)
+            ccp->OnContextMenu( cevt );
+        
+    }
+#endif    
+}
+
 void CDI::SetColorScheme( ColorScheme cs )
 {
-    m_pbackBrush = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("DILG2") ), wxSOLID );
-    m_proadBrush = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("DILG1") ), wxSOLID );
-    m_proadPen = wxThePenList->FindOrCreatePen( GetGlobalColor( _T("CHBLK") ), 1, wxSOLID );
+    m_pbackBrush = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("DILG2") ), wxBRUSHSTYLE_SOLID );
+    m_proadBrush = wxTheBrushList->FindOrCreateBrush( GetGlobalColor( _T("DILG1") ), wxBRUSHSTYLE_SOLID );
+    m_proadPen = wxThePenList->FindOrCreatePen( GetGlobalColor( _T("CHBLK") ), 1, wxPENSTYLE_SOLID );
 }
 
 void CDI::OnPaint( wxPaintEvent& event )
@@ -630,7 +714,7 @@ void CDI::OnPaint( wxPaintEvent& event )
         mdc.SetPen( *m_proadPen );
         mdc.DrawPolygon( 4, road, 0, 0, wxODDEVEN_RULE );
 
-        mdc.DrawLine( xc1, yc1, xc2, yc2 );
+///        mdc.DrawLine( xc1, yc1, xc2, yc2 );
 
         mdc.DrawLine( 0, yp, sx, yp );
         mdc.DrawCircle( xp, yp, 6 );

@@ -38,16 +38,26 @@
 #include "ocpn_plugin.h"
 #include "chart1.h"                 // for MyFrame
 #include "chcanv.h"                 // for ViewPort
-#include "datastream.h"             // for GenericPosDat
 #include "OCPN_Sound.h"
+#include "chartimg.h"
+
+#ifdef USE_S57
 #include "s52s57.h"
 #include "s57chart.h"               // for Object list
+#endif
 
 //For widgets...
 #include "wx/hyperlink.h"
 #include <wx/choice.h>
 #include <wx/tglbtn.h>
 #include <wx/bmpcbox.h>
+
+#ifndef __OCPN__ANDROID__
+#ifdef __OCPN_USE_CURL__
+#include "wx/curl/http.h"
+#include "wx/curl/dialog.h"
+#endif
+#endif
 
 //    Include wxJSON headers
 //    We undefine MIN/MAX so avoid warning of redefinition coming from
@@ -80,8 +90,14 @@ typedef struct {
 } BlackListedPlugin;
 
 const BlackListedPlugin PluginBlacklist[] = {
-    { _T("aisradar_pi"), 0, 95, false, true },
-    { _T("radar_pi"), 0, 95, false, true },             // GCC alias for aisradar_pi
+    { _T("aisradar_pi"), 0, 95, true, true },
+    { _T("radar_pi"), 0, 95, true, true },             // GCC alias for aisradar_pi
+    { _T("watchdog_pi"), 1, 00, true, true },
+    { _T("squiddio_pi"), 0, 2, true, true },
+    { _T("objsearch_pi"), 0, 3, true, true },
+#ifdef __WXOSX__
+    { _T("s63_pi"), 0, 6, true, true },
+#endif    
 };
 
 //----------------------------------------------------------------------------
@@ -142,6 +158,8 @@ class PlugInContainer
             bool              m_bToolboxPanel;
             int               m_cap_flag;             // PlugIn Capabilities descriptor
             wxString          m_plugin_file;          // The full file path
+            wxString          m_plugin_filename;      // The short file path
+            wxDateTime        m_plugin_modification;  // used to detect upgraded plugins
             destroy_t         *m_destroy_fn;
             wxDynamicLibrary  *m_plibrary;
             wxString          m_common_name;            // A common name string for the plugin
@@ -183,8 +201,10 @@ class PlugInToolbarToolContainer
             wxBitmap          *bitmap_day;
             wxBitmap          *bitmap_dusk;
             wxBitmap          *bitmap_night;
-            wxBitmap          *bitmap_Rollover;
-
+            wxBitmap          *bitmap_Rollover_day;
+            wxBitmap          *bitmap_Rollover_dusk;
+            wxBitmap          *bitmap_Rollover_night;
+            
             wxItemKind        kind;
             wxString          shortHelp;
             wxString          longHelp;
@@ -193,7 +213,10 @@ class PlugInToolbarToolContainer
             bool              b_viz;
             bool              b_toggle;
             int               tool_sel;
-
+            wxString          pluginNormalIconSVG;
+            wxString          pluginRolloverIconSVG;
+            wxString          pluginToggledIconSVG;
+            
 };
 
 //    Define an array of PlugIn ToolbarTool Containers
@@ -207,14 +230,14 @@ WX_DEFINE_ARRAY_PTR(PlugInToolbarToolContainer *, ArrayOfPlugInToolbarTools);
 //
 //-----------------------------------------------------------------------------------------------------
 
-class PlugInManager
+class PlugInManager: public wxEvtHandler
 {
 
 public:
       PlugInManager(MyFrame *parent);
       virtual ~PlugInManager();
 
-      bool LoadAllPlugIns(const wxString &plugin_dir);
+      bool LoadAllPlugIns(const wxString &plugin_dir, bool enabled_plugins, bool b_enable_blackdialog = true);
       bool UnLoadAllPlugIns();
       bool DeactivateAllPlugIns();
       bool UpdatePlugIns();
@@ -233,7 +256,7 @@ public:
       void CloseAllPlugInPanels( int );
 
       ArrayOfPlugInToolbarTools &GetPluginToolbarToolArray(){ return m_PlugInToolbarTools; }
-      int AddToolbarTool(wxString label, wxBitmap *bitmap, wxBitmap *bmpDisabled,
+      int AddToolbarTool(wxString label, wxBitmap *bitmap, wxBitmap *bmpRollover,
                          wxItemKind kind, wxString shortHelp, wxString longHelp,
                          wxObject *clientData, int position,
                          int tool_sel, opencpn_plugin *pplugin );
@@ -242,8 +265,19 @@ public:
       void SetToolbarToolViz(int tool_id, bool viz);
       void SetToolbarItemState(int tool_id, bool toggle);
       void SetToolbarItemBitmaps(int item, wxBitmap *bitmap, wxBitmap *bmpDisabled);
+      
+      int AddToolbarTool(wxString label, wxString SVGfile, wxString SVGRolloverfile, wxString SVGToggledfile,
+                         wxItemKind kind, wxString shortHelp, wxString longHelp,
+                         wxObject *clientData, int position,
+                         int tool_sel, opencpn_plugin *pplugin );
+      
+      void SetToolbarItemBitmaps(int item, wxString SVGfile,
+                                 wxString SVGfileRollover,
+                                 wxString SVGfileToggled);
+      
       opencpn_plugin *FindToolOwner(const int id);
       wxString GetToolOwnerCommonName(const int id);
+      void ShowDeferredBlacklistMessages();
 
       ArrayOfPlugInMenuItems &GetPluginContextMenuItemArray(){ return m_PlugInMenuItems; }
       int AddCanvasContextMenuItem(wxMenuItem *pitem, opencpn_plugin *pplugin );
@@ -256,12 +290,21 @@ public:
       void SendAISSentenceToAllPlugIns(const wxString &sentence);
       void SendJSONMessageToAllPlugins(const wxString &message_id, wxJSONValue v);
       void SendMessageToAllPlugins(const wxString &message_id, const wxString &message_body);
-
+      int GetJSONMessageTargetCount();
+      
       void SendResizeEventToAllPlugIns(int x, int y);
       void SetColorSchemeForAllPlugIns(ColorScheme cs);
       void NotifyAuiPlugIns(void);
       bool CallLateInit(void);
+      
+      bool IsPlugInAvailable(wxString commonName);
+      bool IsAnyPlugInChartEnabled();
+      
+      void SendVectorChartObjectInfo(const wxString &chart, const wxString &feature, const wxString &objname, double &lat, double &lon, double &scale, int &nativescale);
 
+      bool SendMouseEventToPlugins( wxMouseEvent &event);
+      bool SendKeyEventToPlugins( wxKeyEvent &event);
+      
       wxArrayString GetPlugInChartClassNameArray(void);
 
       ListOfPI_S57Obj *GetPlugInObjRuleListAtLatLon( ChartPlugInWrapper *target, float zlat, float zlon,
@@ -295,8 +338,32 @@ private:
       int               m_plugin_menu_item_id_next;
       wxBitmap          m_cached_overlay_bm;
 
+      bool              m_benable_blackdialog;
+      wxArrayString     m_deferred_blacklist_messages;
+      
+      wxArrayString     m_plugin_order;
+      void SetPluginOrder( wxString serialized_names );
+      wxString GetPluginOrder();
+    
+#ifndef __OCPN__ANDROID__
+#ifdef __OCPN_USE_CURL__
+      
+public:
+      wxCurlDownloadThread *m_pCurlThread;
+      // returns true if the error can be ignored
+      bool            HandleCurlThreadError(wxCurlThreadError err, wxCurlBaseThread *p,
+                               const wxString &url = wxEmptyString);
+      void            OnEndPerformCurlDownload(wxCurlEndPerformEvent &ev);
+      void            OnCurlDownload(wxCurlDownloadEvent &ev);
+      
+      wxEvtHandler   *m_download_evHandler;
+      long           *m_downloadHandle;
+      bool m_last_online;
+      long m_last_online_chk;
+#endif
+#endif
 
-
+DECLARE_EVENT_TABLE()
 };
 
 WX_DEFINE_ARRAY_PTR(PluginPanel *, ArrayOfPluginPanel);
@@ -308,13 +375,17 @@ public:
       ~PluginListPanel();
 
       void SelectPlugin( PluginPanel *pi );
+      void MoveUp( PluginPanel *pi );
+      void MoveDown( PluginPanel *pi );
       void UpdateSelections();
-      
+      void UpdatePluginsOrder();
 
 private:
       ArrayOfPlugIns     *m_pPluginArray;
       ArrayOfPluginPanel  m_PluginItems;
       PluginPanel        *m_PluginSelected;
+      
+      wxBoxSizer         *m_pitemBoxSizer01;
 };
 
 class PluginPanel: public wxPanel
@@ -327,8 +398,11 @@ public:
       void SetSelected( bool selected );
       void OnPluginPreferences( wxCommandEvent& event );
       void OnPluginEnable( wxCommandEvent& event );
+      void OnPluginUp( wxCommandEvent& event );
+      void OnPluginDown( wxCommandEvent& event );
       void SetEnabled( bool enabled );
       bool GetSelected(){ return m_bSelected; }
+      PlugInContainer* GetPluginPtr() { return m_pPlugin; };
 
 private:
       PluginListPanel *m_PluginListPanel;
@@ -337,15 +411,20 @@ private:
       wxStaticText    *m_pName;
       wxStaticText    *m_pVersion;
       wxStaticText    *m_pDescription;
-//      wxBoxSizer      *m_pButtons;
       wxFlexGridSizer      *m_pButtons;
       wxButton        *m_pButtonEnable;
       wxButton        *m_pButtonPreferences;
+      
+      wxBoxSizer      *m_pButtonsUpDown;
+      wxButton        *m_pButtonUp;
+      wxButton        *m_pButtonDown;    
 };
 
 
 //  API 1.11 adds access to S52 Presentation library
 //  These are some wrapper conversion utilities
+
+#ifdef USE_S57
 
 class S52PLIB_Context
 {
@@ -356,6 +435,9 @@ public:
         bFText_Added = false;
         CSrules = NULL;
         FText = NULL;
+        ChildRazRules = NULL;
+        MPSRulesList = NULL;
+        LUP = NULL;
         };
         
     ~S52PLIB_Context(){};
@@ -371,12 +453,15 @@ public:
     wxRect                  rText;
     
     LUPrec                  *LUP;
+    ObjRazRules             *ChildRazRules;
+    mps_container           *MPSRulesList;
 };
 
 
 
-void CreateCompatibleS57Object( PI_S57Obj *pObj, S57Obj *cobj );
+void CreateCompatibleS57Object( PI_S57Obj *pObj, S57Obj *cobj, chart_context *pctx );
 void UpdatePIObjectPlibContext( PI_S57Obj *pObj, S57Obj *cobj );
+#endif
 
 #endif            // _PLUGINMGR_H_
 

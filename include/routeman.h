@@ -66,7 +66,7 @@ public:
       Routeman(MyApp *parent);
       ~Routeman();
 
-      void DeleteRoute(Route *pRoute);
+      bool DeleteRoute(Route *pRoute);
       void DeleteAllRoutes(void);
       void DeleteAllTracks(void);
 
@@ -96,10 +96,12 @@ public:
       double GetCurrentBrgToActivePoint(){ return CurrentBrgToActivePoint;}
       double GetCurrentRngToActiveNormalArrival(){ return CurrentRangeToActiveNormalCrossing;}
       double GetCurrentXTEToActivePoint(){ return CurrentXTEToActivePoint;}
+      void   ZeroCurrentXTEToActivePoint();
       double GetCurrentSegmentCourse(){ return CurrentSegmentCourse;}
       int   GetXTEDir(){ return XTEDir;}
 
       wxPen   * GetRoutePen(void){return m_pRoutePen;}
+      wxPen   * GetTrackPen(void){return m_pTrackPen;}
       wxPen   * GetSelectedRoutePen(void){return m_pSelectedRoutePen;}
       wxPen   * GetActiveRoutePen(void){return m_pActiveRoutePen;}
       wxPen   * GetActiveRoutePointPen(void){return m_pActiveRoutePointPen;}
@@ -134,6 +136,7 @@ private:
       int         XTEDir;
       bool        m_bArrival;
       wxPen       *m_pRoutePen;
+      wxPen       *m_pTrackPen;
       wxPen       *m_pSelectedRoutePen;
       wxPen       *m_pActiveRoutePen;
       wxPen       *m_pActiveRoutePointPen;
@@ -163,6 +166,7 @@ public:
       WayPointman();
       ~WayPointman();
       wxBitmap *GetIconBitmap(const wxString& icon_key);
+      unsigned int GetIconTexture( const wxBitmap *pmb, int &glw, int &glh );
       int GetIconIndex(const wxBitmap *pbm);
       int GetXIconIndex(const wxBitmap *pbm);
       int GetNumIcons(void){ return m_pIconArray->Count(); }
@@ -176,7 +180,7 @@ public:
       void DestroyWaypoint(RoutePoint *pRp, bool b_update_changeset = true);
       void ClearRoutePointFonts(void);
       void ProcessIcons( ocpnStyle::Style* style );
-
+      
       bool DoesIconExist(const wxString & icon_key) const;
       wxBitmap *GetIconBitmap(int index);
       wxString *GetIconDescription(int index);
@@ -190,6 +194,7 @@ public:
 
       void ProcessIcon(wxBitmap pimage, const wxString & key, const wxString & description);
 private:
+      void ProcessUserIcons( ocpnStyle::Style* style );
       RoutePointList    *m_pWayPointList;
       wxBitmap *CreateDimBitmap(wxBitmap *pBitmap, double factor);
 

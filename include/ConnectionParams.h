@@ -21,6 +21,10 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  **************************************************************************/
 
+#ifndef __DSPORTTYPE_H__
+#include <dsPortType.h>
+#endif
+
 #ifndef __CONNECTIONPARAMS_H__
 #define __CONNECTIONPARAMS_H__
 
@@ -31,14 +35,17 @@
 typedef enum
 {
     SERIAL = 0,
-    NETWORK = 1
+    NETWORK = 1,
+    INTERNAL_GPS = 2,
+    INTERNAL_BT = 3
 } ConnectionType;
 
 typedef enum
 {
     TCP = 0,
     UDP = 1,
-    GPSD = 2
+    GPSD = 2,
+    PROTO_UNDEFINED = 3
 } NetworkProtocol;
 
 typedef enum
@@ -80,7 +87,7 @@ public:
     bool            Garmin;
     bool            GarminUpload;
     bool            FurunoGP3X;
-    bool            Output;
+    dsPortType      IOSelect;
     ListType        InputSentenceListType;
     wxArrayString   InputSentenceList;
     ListType        OutputSentenceListType;
@@ -94,15 +101,19 @@ public:
     wxString GetSourceTypeStr();
     wxString GetAddressStr();
     wxString GetParametersStr();
-    wxString GetOutputValueStr();
+    wxString GetIOTypeValueStr();
     wxString GetFiltersStr();
     wxString GetDSPort();
     wxString GetLastDSPort();
+    wxString GetPortStr(){ return Port; }
+    void SetPortStr( wxString str ){ Port = str; }
+    
     
     bool            Valid;
     bool            b_IsSetup;
 private:
     wxString FilterTypeToStr(ListType type, FilterDirection dir);
+    
 };
 
 WX_DEFINE_ARRAY(ConnectionParams *, wxArrayOfConnPrm);

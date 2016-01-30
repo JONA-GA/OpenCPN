@@ -44,8 +44,11 @@ public:
     wxString Get_vessel_type_string(bool b_short = false);
     wxString Get_class_string(bool b_short = false);
     wxString GetFullName( void );
+    wxString GetCountryCode(bool b_CntryLongStr);
     void Toggle_AIS_CPA(void);
     void ToggleShowTrack(void);
+    void CloneFrom( AIS_Target_Data* q );
+    
 
     int                       MID;
     int                       MMSI;
@@ -95,16 +98,22 @@ public:
     int                       RecentPeriod;
     bool                      b_active;
     bool                      b_lost;
-    ais_alarm_type            n_alarm_state;
+    ais_alert_type            n_alert_state;
     bool                      b_suppress_audio;
     bool                      b_positionDoubtful;
     bool                      b_positionOnceValid;
     bool                      b_nameValid;
+
+    //                     MMSI Properties
+    bool                      b_NoTrack;
     bool                      b_OwnShip;
+    bool                      b_PersistTrack;
 
     int                       m_utc_hour;
     int                       m_utc_min;
     int                       m_utc_sec;
+    wxString                  m_date_string;
+    
     wxDateTime                m_ack_time;
     bool                      b_in_ack_timeout;
 
@@ -127,6 +136,9 @@ public:
     AIS_Area_Notice_Hash     area_notices;
     bool                     b_SarAircraftPosnReport;
     int                      altitude;                  // Metres, from special position report(9)
+    bool                     b_nameFromCache;
+    float                    importance;
+    float                    last_scale;
     
 };
 

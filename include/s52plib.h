@@ -31,10 +31,9 @@
 #include "s52s57.h"                 //types
 
 class wxGLContext;
-#ifdef ocpnUSE_GL
-#include <wx/glcanvas.h>
-#endif
 
+#include "LLRegion.h"
+#include "ocpn_types.h"
 
 #include <wx/dcgraph.h>         // supplemental, for Mac
 
@@ -43,99 +42,36 @@ class wxGLContext;
 class RuleHash;
 
 WX_DECLARE_HASH_MAP( wxString, Rule*, wxStringHash, wxStringEqual, RuleHash );
+WX_DECLARE_HASH_MAP( int, wxString, wxIntegerHash, wxIntegerEqual, MyNatsurHash );
 
 WX_DEFINE_SORTED_ARRAY( LUPrec *, wxArrayOfLUPrec );
 
 WX_DECLARE_LIST( S52_TextC, TextObjList );
 
-WX_DECLARE_STRING_HASH_MAP( int, CARC_Hash );
+struct CARC_Buffer {
+    unsigned char color[3][4];
+    float line_width[3];
+    int steps;
+
+    int size;
+    float *data;
+};
+WX_DECLARE_STRING_HASH_MAP( CARC_Buffer, CARC_Hash );
+WX_DECLARE_STRING_HASH_MAP( int, CARC_DL_Hash );
 
 class ViewPort;
 class PixelCache;
 
-#ifdef ocpnUSE_GL
-/* Copyright (c) Mark J. Kilgard, 1997. */
-
-/* This program is freely distributable without licensing fees  and is
- provided without guarantee or warrantee expressed or  implied. This
- program is -not- in the public domain. */
-
-/*  Heavily edited for OpenCPN by David S. Register    */
-
-#ifndef __TEXFONT_H__
-#define __TEXFONT_H__
-
-//#include <GL/gl.h>
-
-#define TXF_FORMAT_BYTE       0
-#define TXF_FORMAT_BITMAP     1
-
-typedef struct {
-    unsigned short c; /* Potentially support 16-bit glyphs. */
-    unsigned char width;
-    unsigned char height;
-    signed char xoffset;
-    signed char yoffset;
-    signed char advance;
-    char dummy; /* Space holder for alignment reasons. */
-    short x;
-    short y;
-} TexGlyphInfo;
-
-typedef struct {
-    GLfloat t0[2];
-    GLshort v0[2];
-    GLfloat t1[2];
-    GLshort v1[2];
-    GLfloat t2[2];
-    GLshort v2[2];
-    GLfloat t3[2];
-    GLshort v3[2];
-    GLfloat advance;
-} TexGlyphVertexInfo;
-
-typedef struct {
-    GLuint texobj;
-    int tex_width;
-    int tex_height;
-    int max_ascent;
-    int max_descent;
-    int num_glyphs;
-    int min_glyph;
-    int range;
-    unsigned char *teximage;
-    TexGlyphInfo *tgi;
-    TexGlyphVertexInfo *tgvi;
-    TexGlyphVertexInfo **lut;
-} TexFont;
-
-extern char *txfErrorString( void );
-
-extern TexFont *txfLoadFont( char *filename );
-
-extern void txfUnloadFont( TexFont * txf );
-
-extern GLuint txfEstablishTexture( TexFont * txf, GLuint texobj, GLboolean setupMipmaps );
-
-extern void txfBindFontTexture( TexFont * txf );
-
-extern void txfGetStringMetrics( TexFont * txf, char *string, int len, int *width, int *max_ascent, int *max_descent );
-
-extern void txfRenderGlyph( TexFont * txf, int c );
-
-extern void txfRenderString( TexFont * txf, char *string, int len );
-
-extern void txfRenderFancyString( TexFont * txf, char *string, int len );
-
-#endif /* __TEXFONT_H__ */
-
-#else
-typedef struct {} TexFont;
-
-#endif
-
 class RenderFromHPGL;
+class TexFont;
 
+class noshow_element
+{
+public:
+    char obj[7];
+};
+
+WX_DECLARE_OBJARRAY(noshow_element, ArrayOfNoshow);
 
 //-----------------------------------------------------------------------------
 //      LUP Array container, and friends
@@ -170,7 +106,7 @@ public:
      s52plib( const wxString& PLib, bool b_forceLegacy = false );
     ~s52plib();
 
-    void SetPPMM( float ppmm ) { canvas_pix_per_mm = ppmm; 	}
+    void SetPPMM( float ppmm ) { canvas_pix_per_mm = ppmm;}
     float GetPPMM() { return canvas_pix_per_mm; }
 
     LUPrec *S52_LUPLookup( LUPname LUP_name, const char * objectName,
@@ -186,6 +122,7 @@ public:
     long GetStateHash() { return m_state_hash;  }
 
     void SetPLIBColorScheme( wxString scheme );
+    void SetPLIBColorScheme( ColorScheme cs );
     wxString GetPLIBColorScheme( void ) { return m_ColorScheme; }
 
     void SetGLRendererString(const wxString &renderer);
@@ -233,22 +170,32 @@ public:
     void SetShowLdisText( bool f ) { m_bShowLdisText = f; }
     void SetExtendLightSectors( bool f ) { m_bExtendLightSectors = f; }
 
+    void SetDisplayCategory( enum _DisCat cat );
+    DisCat GetDisplayCategory(){ return m_nDisplayCategory; }
+    
     wxArrayOfLUPrec* SelectLUPARRAY( LUPname TNAM );
     LUPArrayContainer *SelectLUPArrayContainer( LUPname TNAM );
         
     void DestroyPatternRuleNode( Rule *pR );
     void DestroyRuleNode( Rule *pR );
-
-//#ifdef ocpnUSE_GL
+    void DestroyRulesChain( Rules *top );
+    
     //    For OpenGL
-    int RenderObjectToGL( const wxGLContext &glcc, ObjRazRules *rzRules,
-                          ViewPort *vp, wxRect &render_rect );
-    int RenderAreaToGL( const wxGLContext &glcc, ObjRazRules *rzRules,
-                        ViewPort *vp, wxRect &render_rect );
-//#endif
+    int RenderObjectToGL( const wxGLContext &glcc, ObjRazRules *rzRules, ViewPort *vp );
+    int RenderAreaToGL( const wxGLContext &glcc, ObjRazRules *rzRules, ViewPort *vp );
+   
+    void RenderPolytessGL( ObjRazRules *rzRules, ViewPort *vp,double z_clip_geom, wxPoint *ptp );
+    
+    bool EnableGLLS(bool benable);
+
+    bool IsObjNoshow( const char *objcl);
+    void AddObjNoshow( const char *objcl);
+    void RemoveObjNoshow( const char *objcl);
+    void ClearNoshow(void);
+    void SaveObjNoshow() { m_saved_noshow = m_noshow_array; };
+    void RestoreObjNoshow() { m_noshow_array = m_saved_noshow; };
     
     //Todo accessors
-    DisCat m_nDisplayCategory;
     LUPname m_nSymbolStyle;
     LUPname m_nBoundaryStyle;
     bool m_bOK;
@@ -289,9 +236,12 @@ public:
     std::vector<wxString> OBJLDescriptions;
 
     RuleHash *_symb_sym; // symbol symbolisation rules
+    MyNatsurHash m_natsur_hash;     // hash table for cacheing NATSUR string values from int attributes
 
+    wxRect m_last_clip_rect;
+    
 private:
-      int S52_load_Plib( const wxString& PLib, bool b_forceLegacy );
+    int S52_load_Plib( const wxString& PLib, bool b_forceLegacy );
     bool S52_flush_Plib();
 
     bool PreloadOBJLFromCSV(const wxString &csv_file);
@@ -315,14 +265,19 @@ private:
     int RenderMPS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp );
     int RenderCARC( ObjRazRules *rzRules, Rules *rules, ViewPort *vp );
     char *RenderCS( ObjRazRules *rzRules, Rules *rules );
-
+    int RenderGLLS( ObjRazRules *rzRules, Rules *rules, ViewPort *vp );
+    int RenderGLLC( ObjRazRules *rzRules, Rules *rules, ViewPort *vp );
+    
+    int RenderCARC_DisplayList( ObjRazRules *rzRules, Rules *rules, ViewPort *vp );
+    int RenderCARC_VBO( ObjRazRules *rzRules, Rules *rules, ViewPort *vp );
+    
     void UpdateOBJLArray( S57Obj *obj );
 
     render_canvas_parms* CreatePatternBufferSpec( ObjRazRules *rzRules,
         Rules *rules, ViewPort *vp, bool b_revrgb, bool b_pot = false );
 
     void RenderToBufferFilledPolygon( ObjRazRules *rzRules, S57Obj *obj,
-        S52color *c, wxBoundingBox &BBView, render_canvas_parms *pb_spec,
+        S52color *c, render_canvas_parms *pb_spec,
         render_canvas_parms *patt_spec, ViewPort *vp );
 
     void draw_lc_poly( wxDC *pdc, wxColor &color, int width, wxPoint *ptp,
@@ -389,22 +344,23 @@ private:
 
     TextObjList m_textObjList;
 
-    double m_display_pix_per_mm;
-
     wxString m_ColorScheme;
 
     long m_state_hash;
-
-    wxRect m_render_rect;
 
     bool m_txf_ready;
     int m_txf_avg_char_width;
     int m_txf_avg_char_height;
     CARC_Hash m_CARC_hashmap;
+    CARC_DL_Hash m_CARC_DL_hashmap;
     RenderFromHPGL* HPGL;
 
     TexFont *m_txf;
     
+    bool m_benableGLLS;
+    DisCat m_nDisplayCategory;
+    ArrayOfNoshow m_noshow_array;
+    ArrayOfNoshow m_saved_noshow;
 };
 
 
@@ -416,7 +372,9 @@ public:
 
     void SetTargetDC( wxDC* pdc );
     void SetTargetOpenGl();
+#if wxUSE_GRAPHICS_CONTEXT
     void SetTargetGCDC( wxGCDC* gdc );
+#endif
     bool Render(char *str, char *col, wxPoint &r, wxPoint &pivot, double rot_angle = 0);
 
 private:
@@ -432,7 +390,9 @@ private:
     int scaleFactor;
 
     wxDC* targetDC;
+#if wxUSE_GRAPHICS_CONTEXT
     wxGCDC* targetGCDC;
+#endif
 
     wxColor penColor;
     wxPen* pen;
@@ -446,7 +406,6 @@ private:
     bool renderToDC;
     bool renderToOpenGl;
     bool renderToGCDC;
-    bool havePushedOpenGlAttrib;
 };
 
 #endif //_S52PLIB_H_

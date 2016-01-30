@@ -24,8 +24,8 @@
  ***************************************************************************
  */
 
-#ifndef __GRIBUIDIALOG_H__
-#define __GRIBUIDIALOG_H__
+#ifndef __GRIBUICTRLBAR_H__
+#define __GRIBUICTRLBAR_H__
 
 #include "wx/wxprec.h"
 
@@ -36,21 +36,28 @@
 #include <wx/glcanvas.h>
 
 #include "GribUIDialogBase.h"
+#include "CursorData.h"
 #include "GribSettingsDialog.h"
+#include "GribRequestDialog.h"
 #include "GribReader.h"
 #include "GribRecordSet.h"
 #include "IsoLine.h"
+#include "GrabberWin.h"
 
 #ifndef PI
 #define PI        3.1415926535897931160E0      /* pi */
 #endif
 
+class GRIBUICtrlBar;
+class GRIBUICData;
 class GRIBFile;
 class GRIBRecord;
 class GribRecordTree;
 class GRIBOverlayFactory;
 class GribRecordSet;
 class GribRequestSetting;
+class GribGrabberWin;
+class GribSpacerWin;
 
 class wxFileConfig;
 class grib_pi;
@@ -58,10 +65,13 @@ class wxGraphicsContext;
 
 WX_DECLARE_OBJARRAY( GribRecordSet, ArrayOfGribRecordSets );
 
+enum ZoneSelection { AUTO_SELECTION, SAVED_SELECTION, START_SELECTION, DRAW_SELECTION, COMPLETE_SELECTION };
+
 class GribTimelineRecordSet : public GribRecordSet
 {
 public:
-    GribTimelineRecordSet(GribRecordSet &GRS1, GribRecordSet &GRS2, double interp_const);
+    GribTimelineRecordSet();
+//    GribTimelineRecordSet(GribRecordSet &GRS1, GribRecordSet &GRS2, double interp_const);
     ~GribTimelineRecordSet();
 
     void ClearCachedData();
@@ -71,81 +81,106 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------
-//    GRIB Selector/Control Dialog Specification
+//    GRIB CtrlBar Specification
 //----------------------------------------------------------------------------------------------------------
-class GRIBUIDialog: public GRIBUIDialogBase {
+class GRIBUICtrlBar: public GRIBUICtrlBarBase {
 public:
 
-    GRIBUIDialog(wxWindow *parent, grib_pi *ppi);
-    ~GRIBUIDialog();
+    GRIBUICtrlBar(wxWindow *parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ,grib_pi *ppi );
+    ~GRIBUICtrlBar();
 
     void OpenFile( bool newestFile = false );
-    
+
     void ContextMenuItemCallback(int id);
-    void SetCursorLatLon( double lat, double lon );
-    void SetFactoryOptions( bool set_val = false );
-    void PopulateTrackingControls( void );
+    void SetFactoryOptions();
 
     wxDateTime TimelineTime();
     GribTimelineRecordSet* GetTimeLineRecordSet(wxDateTime time);
+    void StopPlayBack();
     void TimelineChanged();
     void CreateActiveFileFromName( wxString filename );
     void PopulateComboDataList();
     void ComputeBestForecastForNow();
     void SetViewPort( PlugIn_ViewPort *vp );
+    void SetDataBackGroundColor();
+    void SetTimeLineMax( bool SetValue );
+	void SetCursorLatLon( double lat, double lon );
+    void UpdateTrackingControl();
+	void SetDialogsStyleSizePosition( bool force_recompute = false );
+    void SetRequestBitmap( int type );
+    void OnMouseEvent( wxMouseEvent& event );
+    GRIBUICData *GetCDataDialog() { return m_gGRIBUICData; }
+    bool InDataPlot (int id) { return id > wxID_ANY && id < (int)GribOverlaySettings::GEO_ALTITUDE; }
+    void SetScaledBitmap( double factor );
+	wxBitmap GetScaledBitmap(wxBitmap bitmap, const wxString svgFileName, double scale_factor);
 
+    wxWindow *pParent;
     GribOverlaySettings m_OverlaySettings;
 
-    wxTimer m_tPlayStop;
+	GribTimelineRecordSet *m_pTimelineSet;
 
-    grib_pi             *pPlugIn;
+    wxTimer         m_tPlayStop;
+    grib_pi         *pPlugIn;
     GribRequestSetting  *pReq_Dialog;
     GRIBFile        *m_bGRIBActiveFile;
-    double m_cursor_lat, m_cursor_lon;
-
+	bool            m_bDataPlot[GribOverlaySettings::GEO_ALTITUDE];  //only for no altitude parameters
+	bool            m_CDataIsShown;
+    int             m_ZoneSelAllowed;
+    int             m_old_DialogStyle;
+	double			m_ScaledFactor;
 private:
     void OnClose( wxCloseEvent& event );
-    void OnMove( wxMoveEvent& event );
     void OnSize( wxSizeEvent& event );
+    void OnPaint( wxPaintEvent& event );
     void OnSettings( wxCommandEvent& event );
     void OnPlayStop( wxCommandEvent& event );
-    void OnPlayStopTimer( wxTimerEvent & );
-
-    void AddTrackingControl( wxControl *ctrl1,  wxControl *ctrl2,  wxControl *ctrl3, bool show );
-    void UpdateTrackingControls( void );
-
+    void OnPlayStopTimer( wxTimerEvent & event);
+	void OnMove( wxMoveEvent& event );
+    void OnMenuEvent( wxMenuEvent& event );
+    void MenuAppend( wxMenu *menu, int id, wxString label, wxItemKind kind, wxBitmap bitmap = wxNullBitmap, wxMenu *submenu = NULL );
     void OnZoomToCenterClick( wxCommandEvent& event );
     void OnPrev( wxCommandEvent& event );
-    void OnRecordForecast( wxCommandEvent& event ) { m_InterpolateMode = false; TimelineChanged(); }
+    void OnRecordForecast( wxCommandEvent& event ) { StopPlayBack(); m_InterpolateMode = false; m_pNowMode = false; TimelineChanged(); }
     void OnNext( wxCommandEvent& event );
-    void OnNow( wxCommandEvent& event ) { ComputeBestForecastForNow(); }
+    void OnNow( wxCommandEvent& event ) { StopPlayBack(); ComputeBestForecastForNow(); }
+    void OnAltitude( wxCommandEvent& event );
     void OnOpenFile( wxCommandEvent& event );
     void OnRequest(  wxCommandEvent& event );
 
     void OnTimeline( wxScrollEvent& event );
-    void OnCBAny( wxCommandEvent& event );
+	void OnShowCursorData( wxCommandEvent& event );
 
     wxDateTime MinTime();
     wxString GetNewestFileInDirectory();
     void SetGribTimelineRecordSet(GribTimelineRecordSet *pTimelineSet);
     int GetNearestIndex(wxDateTime time, int model);
     int GetNearestValue(wxDateTime time, int model);
+    bool GetGribZoneLimits(GribTimelineRecordSet *timelineSet, double *latmin, double *latmax, double *lonmin, double *lonmax);
     wxDateTime GetNow();
+    void RestaureSelectionString();
+    void SaveSelectionString()  { m_SelectionIsSaved = true; m_Selection_index = m_cRecordForecast->GetSelection();
+            m_Selection_label = m_cRecordForecast->GetString( m_Selection_index); }
 
     //    Data
-    wxWindow *pParent;
+	CursorData        *m_gCursorData;
+    GribGrabberWin    *m_gGrabber;
+    GRIBUICData       *m_gGRIBUICData;
 
-    PlugIn_ViewPort  *m_vp;
+    PlugIn_ViewPort   *m_vp;
     int m_lastdatatype;
 
-    GribTimelineRecordSet *m_pTimelineSet;
     int m_TimeLineHours;
+    int m_FileIntervalIndex;
     bool m_InterpolateMode;
     bool m_pNowMode;
+    bool m_HasAltitude;
 
+    bool             m_SelectionIsSaved;
+    int              m_Selection_index;
+    wxString         m_Selection_label;
     wxString         m_file_name;   /* selected file */
     wxString         m_grib_dir;
-    wxBitmap         *m_bPlay;
+	wxSize           m_DialogsOffset;
 };
 
 //----------------------------------------------------------------------------------------------------------
@@ -196,42 +231,20 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------
-//    Request setting Specification
+//    GRIB CursorData Dialog Specification
 //----------------------------------------------------------------------------------------------------------
-class GribRequestSetting : public GribRequestSettingBase
+class GRIBUICData: public GRIBUICDataBase
 {
 public:
-      GribRequestSetting( wxWindow *parent )
-          : GribRequestSettingBase(parent) {};
 
-      ~GribRequestSetting() {}
+    GRIBUICData( GRIBUICtrlBar &parent );
+    ~GRIBUICData() {}
 
-      void InitRequestConfig();
-      void SetVpSize(PlugIn_ViewPort *vp);
-      void OnVpChange(PlugIn_ViewPort *vp);
-
-      wxString m_RequestConfigBase;
-      wxString m_MailToAddresses;
-      int m_LatmaxBase;
-      int m_LatminBase;
-      int m_LonminBase;
-      int m_LonmaxBase;
-    
+    GribGrabberWin      *m_gGrabber;
+    GRIBUICtrlBar       &m_gpparent;
+    CursorData          *m_gCursorData;
 private:
-      void ApplyRequestConfig( unsigned rs, unsigned it, unsigned tr );
-      wxString WriteMail();
-      bool EstimateFileSize();
-
-      void OnTopChange(wxCommandEvent &event);
-      void OnAnyChange( wxCommandEvent& event );
-      void OnTimeRangeChange( wxCommandEvent& event );
-      void OnSendMaiL( wxCommandEvent& event );
-      void OnSaveMail( wxCommandEvent& event );
-
-      int  m_MailError_Nb;
-      int  m_SendMethod;
-      bool m_AllowSend;
+    void OnMove( wxMoveEvent& event );
 };
 
 #endif
-

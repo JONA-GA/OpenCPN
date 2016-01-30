@@ -43,31 +43,38 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 #TODO: Should we use  -fno-stack-protector
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
 IF(NOT WIN32 AND NOT APPLE)
-    ADD_DEFINITIONS( "-Wall -O0 -fexceptions -fvisibility=hidden" )
+    ADD_DEFINITIONS( "-Wall -fexceptions -fvisibility=hidden" )
     SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bsymbolic")
 ENDIF(NOT WIN32 AND NOT APPLE)
 
 IF( APPLE )
-   ADD_DEFINITIONS( "-O0 -fexceptions -fvisibility=hidden" )
+   ADD_DEFINITIONS( "-fexceptions -fvisibility=hidden" )
    ADD_DEFINITIONS("-Wno-unused -Wno-overloaded-virtual")
    SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
 ENDIF( APPLE )
 
 # Add some definitions to satisfy MS
-IF(WIN32)
+IF(MSVC)
     ADD_DEFINITIONS(-D__MSVC__)
     ADD_DEFINITIONS(-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
-ENDIF(WIN32)
+ENDIF(MSVC)
 
+#  QT_ANDROID is a cross-build, so the native FIND_PACKAGE(wxWidgets...) and wxWidgets_USE_FILE are not useful.
+IF(QT_ANDROID)
+    SET_PROPERTY(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS TRUE)
+    SET(BUILD_SHARED_LIBS "ON")
+ELSE(QT_ANDROID)
 IF(NOT DEFINED wxWidgets_USE_FILE)
-  SET(wxWidgets_USE_LIBS base core net xml html adv)
-  SET(BUILD_SHARED_LIBS TRUE)
-  FIND_PACKAGE(wxWidgets REQUIRED)
+    SET(wxWidgets_USE_LIBS base core net xml html adv)
+    SET(BUILD_SHARED_LIBS TRUE)
+    FIND_PACKAGE(wxWidgets REQUIRED)
 ENDIF(NOT DEFINED wxWidgets_USE_FILE)
 
   INCLUDE(${wxWidgets_USE_FILE})
+ENDIF(QT_ANDROID)
 
 FIND_PACKAGE(Gettext REQUIRED)
+
 
 # For convenience we define the sources as a variable. You can add
 # header files and cpp/c files and CMake will sort them out
@@ -80,14 +87,22 @@ SET(SRC_GRIB
             src/GribOverlayFactory.h
             src/GribUIDialogBase.cpp
             src/GribUIDialogBase.h
+            src/GrabberWin.cpp
+            src/GrabberWin.h
             src/GribUIDialog.cpp
             src/GribUIDialog.h
+            src/CursorData.cpp
+            src/CursorData.h
             src/GribSettingsDialog.cpp
             src/GribSettingsDialog.h
+            src/GribRequestDialog.cpp
+            src/GribRequestDialog.h
             src/icons.h
             src/msg.h
             src/email.h
             src/email.cpp
+            src/TexFont.h
+            src/TexFont.cpp
             src/GribTable.h
             src/GribTable.cpp
             src/icons.cpp
@@ -104,7 +119,6 @@ IF(WIN32)
            SET(SRC_GRIB ${SRC_GRIB} src/smapi.h)
            SET(SRC_GRIB ${SRC_GRIB} src/smapi.cpp)
 ENDIF(WIN32)
-ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_GRIB})
 
 IF(NOT UNIX)
     SET(SRC_BZIP
@@ -122,41 +136,126 @@ IF(NOT UNIX)
     INCLUDE_DIRECTORIES(${PLUGIN_SOURCE_DIR}/src/bzip2)
 ENDIF(NOT UNIX)
 
+
+IF(QT_ANDROID)
+    SET(SRC_BZIP_ANDROID
+            src/bzip2/bzlib.c
+            src/bzip2/blocksort.c
+            src/bzip2/compress.c
+            src/bzip2/crctable.c
+            src/bzip2/decompress.c
+            src/bzip2/huffman.c
+            src/bzip2/randtable.c
+    )
+    SET(SRC_GRIB ${SRC_GRIB} ${SRC_BZIP_ANDROID})
+
+    INCLUDE_DIRECTORIES(${PLUGIN_SOURCE_DIR}/src/zlib-1.2.3)
+    INCLUDE_DIRECTORIES(${PLUGIN_SOURCE_DIR}/src/bzip2)
+
+    MESSAGE (STATUS ${SRC_GRIB})
+
+ENDIF(QT_ANDROID)
+
+# On Android, PlugIns need a specific linkage set....
+IF (QT_ANDROID )
+  # These libraries are needed to create PlugIns on Android.
+
+  SET(OCPN_Core_LIBRARIES
+        # Presently, Android Plugins are built in the core tree, so the variables {wxQT_BASE}, etc.
+        # flow to this module from above.  If we want to build Android plugins out-of-core, this will need improvement.
+
+        # TODO This is pretty ugly, but there seems no way to avoid specifying a full path in a cross build....
+        /home/dsr/Projects/opencpn_sf/opencpn/build-opencpn-Android_for_armeabi_v7a_GCC_4_8_Qt_5_5_0-Debug/libopencpn.so
+
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_baseu-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_core-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_html-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_baseu_xml-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_qa-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_adv-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_aui-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_baseu_net-3.1-arm-linux-androideabi.a
+        ${wxQt_Base}/${wxQt_Build}/lib/libwx_qtu_gl-3.1-arm-linux-androideabi.a
+        ${Qt_Base}/android_armv7/lib/libQt5Core.so
+        ${Qt_Base}/android_armv7/lib/libQt5OpenGL.so
+        ${Qt_Base}/android_armv7/lib/libQt5Widgets.so
+        ${Qt_Base}/android_armv7/lib/libQt5Gui.so
+        ${Qt_Base}/android_armv7/lib/libQt5AndroidExtras.so
+
+        ${NDK_Base}/sources/cxx-stl/gnu-libstdc++/4.8/libs/armeabi-v7a/libgnustl_shared.so
+        )
+
+ENDIF(QT_ANDROID)
+
+ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_GRIB})
+
 IF(WIN32)
-  SET(OPENCPN_IMPORT_LIB "../../${CMAKE_CFG_INTDIR}/${PARENT}")
-  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} LIB_BZIP ${OPENCPN_IMPORT_LIB} )
+  IF(MSVC)
+    SET(OPENCPN_IMPORT_LIB "../../${CMAKE_CFG_INTDIR}/${PARENT}")
+  ELSE(MSVC)
+    SET(OPENCPN_IMPORT_LIB "${PARENT}.dll")
+    SET( CMAKE_SHARED_LINKER_FLAGS "-L../../" )
+    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${OPENGL_LIBRARIES}
+#      "-L${wxWidgets_ROOT_DIR}/lib -lwxzlib-3.1-i686-w64-mingw32")
+      "-L${wxWidgets_ROOT_DIR}/lib -lwxzlib-2.8")
+  ENDIF(MSVC)
+
+  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} LIB_BZIP ${OPENCPN_IMPORT_LIB})
   ADD_DEPENDENCIES(${PACKAGE_NAME} ${PARENT})
 ENDIF(WIN32)
 
-TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} )
 
+TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} )
+TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${OCPN_Core_LIBRARIES} )
+
+IF(NOT WIN32)
+TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} "-lz" )
+ENDIF()
 IF(APPLE)
  FIND_PACKAGE(ZLIB REQUIRED)
  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${ZLIB_LIBRARIES} )
 ENDIF(APPLE)
 
-IF(UNIX AND NOT APPLE)
+IF(UNIX AND NOT APPLE AND NOT QT_ANDROID)
     FIND_PACKAGE(BZip2 REQUIRED)
     INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
     FIND_PACKAGE(ZLIB REQUIRED)
     INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR})
     TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${BZIP2_LIBRARIES} ${ZLIB_LIBRARY} )
-ENDIF(UNIX AND NOT APPLE)
+ENDIF(UNIX AND NOT APPLE AND NOT QT_ANDROID)
 
 IF(APPLE)
-      INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/OpenCPN.app/Contents/PlugIns)
+    INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/OpenCPN.app/Contents/PlugIns)
+
+	IF(EXISTS ${PROJECT_SOURCE_DIR}/data)
+		INSTALL(DIRECTORY data DESTINATION ${CMAKE_BINARY_DIR}/OpenCPN.app/Contents/SharedSupport/plugins/${PACKAGE_NAME})
+	ENDIF(EXISTS ${PROJECT_SOURCE_DIR}/data)
+
 ENDIF(APPLE)
 
 IF(UNIX AND NOT APPLE)
-      IF(NOT DEFINED PREFIX_PLUGINS)
-            SET(PREFIX_PLUGINS /usr/local/lib/opencpn)
-      ENDIF(NOT DEFINED PREFIX_PLUGINS)
+    IF(NOT DEFINED PREFIX_PLUGINS)
+		SET(PREFIX_PLUGINS /usr/local/lib/opencpn)
+    ENDIF(NOT DEFINED PREFIX_PLUGINS)
 
-      INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME LIBRARY DESTINATION ${PREFIX_PLUGINS})
+    INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME LIBRARY DESTINATION ${PREFIX_PLUGINS})
+
+	IF(EXISTS ${PROJECT_SOURCE_DIR}/data)
+        SET(PREFIX_PARENTDATA ${PREFIX_DATA}/${PARENT})
+        INSTALL(DIRECTORY data DESTINATION ${PREFIX_PARENTDATA}/plugins/${PACKAGE_NAME})
+	ENDIF(EXISTS ${PROJECT_SOURCE_DIR}/data)
+
 ENDIF(UNIX AND NOT APPLE)
 
 IF(WIN32)
-INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME DESTINATION "plugins")
+	INSTALL(TARGETS ${PACKAGE_NAME} RUNTIME DESTINATION "plugins")
+
+	SET(INSTALL_DIRECTORY "plugins\\\\${PACKAGE_NAME}")
+
+    IF(EXISTS ${PROJECT_SOURCE_DIR}/data)
+		INSTALL(DIRECTORY data DESTINATION "${INSTALL_DIRECTORY}")
+    ENDIF(EXISTS ${PROJECT_SOURCE_DIR}/data)
+
 ENDIF(WIN32)
 
 INCLUDE("../PluginLocalization.cmake")

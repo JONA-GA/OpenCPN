@@ -115,7 +115,9 @@ class Track : public wxEvtHandler, public Route
             int Simplify( double maxDelta );
             double GetXTE(RoutePoint *fm1, RoutePoint *fm2, RoutePoint *to);
             double GetXTE( double fm1Lat, double fm1Lon, double fm2Lat, double fm2Lon, double toLat, double toLon  );
-
+            int GetCurrentTrackSeg(){ return m_CurrentTrackSeg; }
+            void SetCurrentTrackSeg(int seg){ m_CurrentTrackSeg = seg; }
+            
             void AdjustCurrentTrackPoint( RoutePoint *prototype );
             
       private:
@@ -140,7 +142,8 @@ class Track : public wxEvtHandler, public Route
             RoutePoint        *m_fixedTP;
             int               m_track_run;
             double            m_minTrackpoint_delta;
-
+            int               m_CurrentTrackSeg;
+            
             enum eTrackPointState {
                 firstPoint,
                 secondPoint,
@@ -186,7 +189,9 @@ public:
       MyConfig(const wxString &appName, const wxString &vendorName,
                               const wxString &LocalFileName);
 
-      int LoadMyConfig(int iteration);
+      int LoadMyConfig();
+      void LoadS57Config();
+      void LoadNavObjects();
       virtual bool AddNewRoute(Route *pr, int ConfigRouteNum = -1);
       virtual bool UpdateRoute(Route *pr);
       virtual bool DeleteConfigRoute(Route *pr);
@@ -194,7 +199,8 @@ public:
       virtual bool AddNewWayPoint(RoutePoint *pWP, int ConfigRouteNum = -1);
       virtual bool UpdateWayPoint(RoutePoint *pWP);
       virtual bool DeleteWayPoint(RoutePoint *pWP);
-
+      virtual bool AddNewTrackPoint( RoutePoint *pWP, const wxString& parent_GUID );
+      
       virtual void CreateConfigGroups ( ChartGroupArray *pGroupArray );
       virtual void DestroyConfigGroups ( void );
       virtual void LoadConfigGroups ( ChartGroupArray *pGroupArray );
@@ -204,7 +210,6 @@ public:
       virtual bool LoadChartDirArray(ArrayOfCDI &ChartDirArray);
       virtual void UpdateSettings();
       virtual void UpdateNavObj();
-      virtual void StoreNavObjChanges();
 
       bool LoadLayers(wxString &path);
 
@@ -216,7 +221,7 @@ public:
 
       void CreateRotatingNavObjBackup();
 
-      double st_lat, st_lon, st_view_scale;            // startup values
+      double st_lat, st_lon, st_view_scale, st_rotation;      // startup values
       bool  st_bFollow;
 
       wxString                m_gpx_path;
@@ -229,7 +234,7 @@ public:
       bool                    m_bSkipChangeSetUpdate;
       
 //    These members are set/reset in Options dialog
-      bool  m_bShowDebugWindows;
+      bool  m_bShowMenuBar, m_bShowCompassWin;
 
 
 
@@ -326,16 +331,6 @@ class WXDLLEXPORT X11FontPicker : public wxFontDialogBase
                         DECLARE_DYNAMIC_CLASS(X11FontPicker)
 };
 
-//---------------------------------------------------------------------------------
-//      Vector Stuff for Hit Test Algorithm
-//---------------------------------------------------------------------------------
-
-extern "C" double vGetLengthOfNormal(pVector2D a, pVector2D b, pVector2D n);
-extern "C" double vDotProduct(pVector2D v0, pVector2D v1);
-extern "C" pVector2D vAddVectors(pVector2D v0, pVector2D v1, pVector2D v);
-extern "C" pVector2D vSubtractVectors(pVector2D v0, pVector2D v1, pVector2D v);
-extern "C" double vVectorMagnitude(pVector2D v0);
-extern "C" double vVectorSquared(pVector2D v0);
 
 //      Simple and fast CRC32 calculator
 

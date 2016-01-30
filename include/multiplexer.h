@@ -37,6 +37,10 @@
 
 WX_DEFINE_ARRAY(DataStream *, wxArrayOfDataStreams);
 
+//      Garmin interface private error codes
+#define ERR_GARMIN_INITIALIZE           -1
+#define ERR_GARMIN_GENERAL              -2
+
 class Multiplexer : public wxEvtHandler
 {
     public:
@@ -45,6 +49,8 @@ class Multiplexer : public wxEvtHandler
         void AddStream(DataStream *stream);
         void StopAllStreams();
         void ClearStreams();
+        void StartAllStreams();
+        
         DataStream *FindStream(const wxString & port);
         void StopAndRemoveStream( DataStream *stream );
         void SaveStreamProperties( DataStream *stream );
@@ -54,13 +60,15 @@ class Multiplexer : public wxEvtHandler
         void SetAISHandler(wxEvtHandler *handler);
         void SetGPSHandler(wxEvtHandler *handler);
 
-        bool SendRouteToGPS(Route *pr, const wxString &com_name, bool bsend_waypoints, wxGauge *pProgress);
-        bool SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wxGauge *pProgress);
+        int SendRouteToGPS(Route *pr, const wxString &com_name, bool bsend_waypoints, wxGauge *pProgress);
+        int SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wxGauge *pProgress);
 
         void OnEvtStream(OCPN_DataStreamEvent& event);
+        wxString ProcessNMEA4Tags( wxString msg);
+        
         void LogOutputMessage(const wxString &msg, wxString stream_name, bool b_filter);
         void LogOutputMessageColor(const wxString &msg, const wxString & stream_name, const wxString & color);
-        void LogInputMessage(const wxString &msg, const wxString & stream_name, bool b_filter);
+        void LogInputMessage(const wxString &msg, const wxString & stream_name, bool b_filter, bool b_error = false);
 
     private:
         wxArrayOfDataStreams *m_pdatastreams;
@@ -69,6 +77,7 @@ class Multiplexer : public wxEvtHandler
         wxEvtHandler        *m_gpsconsumer;
 
         //      A set of temporarily saved parameters for a DataStream
+        ConnectionType type_save;
         wxString port_save;
         wxString baud_rate_save;
         dsPortType port_type_save;

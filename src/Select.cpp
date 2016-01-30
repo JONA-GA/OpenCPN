@@ -38,6 +38,7 @@ Select::Select()
     wxDisplaySize( &w, &h );
     if( h > 800 ) pixelRadius = 10;
     if( h > 1024 ) pixelRadius = 12;
+    
 }
 
 Select::~Select()
@@ -46,6 +47,22 @@ Select::~Select()
     pSelectList->Clear();
     delete pSelectList;
 
+}
+
+bool Select::IsSelectableRoutePointValid(RoutePoint *pRoutePoint )
+{
+    SelectItem *pFindSel;
+
+//    Iterate on the select list
+    wxSelectableItemListNode *node = pSelectList->GetFirst();
+
+    while( node ) {
+        pFindSel = node->GetData();
+        if( pFindSel->m_seltype == SELTYPE_ROUTEPOINT  && (RoutePoint *) pFindSel->m_pData1 == pRoutePoint)
+            return true;
+        node = node->GetNext();
+    }
+    return false;
 }
 
 bool Select::AddSelectableRoutePoint( float slat, float slon, RoutePoint *pRoutePointAdd )
@@ -331,13 +348,13 @@ bool Select::DeleteAllSelectableTypePoints( int SeltypeToDelete )
     while( node ) {
         pFindSel = node->GetData();
         if( pFindSel->m_seltype == SeltypeToDelete ) {
-            delete pFindSel;
             delete node;
             
             if( SELTYPE_ROUTEPOINT == SeltypeToDelete ){
                 RoutePoint *prp = (RoutePoint *)pFindSel->m_pData1;
                 prp->SetSelectNode( NULL );
             }
+            delete pFindSel;
             
             node = pSelectList->GetFirst();
             goto got_next_node;
@@ -568,6 +585,21 @@ SelectItem *Select::FindSelection( float slat, float slon, int fseltype )
 
 bool Select::IsSelectableSegmentSelected( float slat, float slon, SelectItem *pFindSel )
 {
+    bool valid = false;
+    wxSelectableItemListNode *node = pSelectList->GetFirst();
+
+    while( node ) {
+        if( pFindSel == node->GetData() ) {
+            valid = true;
+            break;
+        }
+        node = node->GetNext();
+    }
+
+    if (valid == false) {
+        // not in the list anymore
+        return false;
+    }
     CalcSelectRadius();
 
     float a = pFindSel->m_slat;

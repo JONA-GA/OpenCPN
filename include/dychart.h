@@ -99,14 +99,14 @@
       #define __min(a,b)  (((a) < (b)) ? (a) : (b))
 #endif
 
-#ifdef __WXMSW__
+#ifdef __MSVC__
       #define fmin __min
       #define fmax __max
 
-//      #define round(x) floor(x)
+      #define round(x) round_msvc(x)
+
 #endif
 
-#define round(x) round_msvc(x)
 //------------------------------------------------------------------------------
 //          Some Build constants
 //------------------------------------------------------------------------------
@@ -138,12 +138,12 @@
 
 
 
-#ifdef __MSVC__66
+#ifdef __MSVC__
         #ifdef _DEBUG
             #define _CRTDBG_MAP_ALLOC
             #include <crtdbg.h>
-//            #define DEBUG_NEW new(_NORMAL_BLOCK, __FILE__, __LINE__ )
-//            #define new DEBUG_NEW
+            #define DEBUG_NEW new(_NORMAL_BLOCK, __FILE__, __LINE__ )
+            #define new DEBUG_NEW
         #endif
 #endif
 
@@ -196,34 +196,31 @@
 #define __POSIX__
 #endif
 
-
-/***********************************************************************
- * Enable GTK Display Optimization
- * Note this requires libgtk+2-devel
- * which is not often available on basic systems.
- * On standard linux platforms, configure will set
- * ocpnUSE_GTK_OPTIMIZE if possible, i.e. if libgtk+2-devel is installed
- */
-
-#ifdef __WXGTK__
-#ifdef ocpnUSE_GTK_OPTIMIZE
-    #include <gtk/gtk.h>
-#endif
-#endif
-
 #ifndef OCPN_GL_INCLUDES
 #define OCPN_GL_INCLUDES 1
 
+
 #ifdef __WXMSW__
-#include "GL/gl.h"            // local copy for Windows
-#include "GL/glu.h"
+    #include "GL/gl.h"            // local copy for Windows
+    #include "GL/glu.h"
 #else
-//#include <GL/glew.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glext.h>
+    #ifndef __OCPN__ANDROID__
+        #include <GL/gl.h>
+        #include <GL/glu.h>
+        #include <GL/glext.h>
+    #else
+        #include <qopengl.h>
+        #include <GL/gl_private.h>              // this is a cut-down version of gl.h
+                                                // which allows use of gl functions with gles2 headers
+                                                // to be included as well, and avoids colisions.
+    #endif
+
 #endif
 
 #endif      //OCPN_GL_INCLUDES
+
+#ifdef __OCPN__ANDROID__
+#include "qdebug.h"
+#endif
 
 #endif      // __FILE__

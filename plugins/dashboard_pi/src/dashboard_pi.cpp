@@ -30,6 +30,10 @@
 #ifndef  WX_PRECOMP
 #include "wx/wx.h"
 #endif //precompiled headers
+
+// xw 2.8
+#include <wx/filename.h>
+
 #include <typeinfo>
 #include "dashboard_pi.h"
 #include "icons.h"
@@ -78,7 +82,8 @@ enum {
     ID_DBP_I_DPT, ID_DBP_D_DPT, ID_DBP_I_TMP, ID_DBP_I_VMG, ID_DBP_D_VMG, ID_DBP_I_RSA,
     ID_DBP_D_RSA, ID_DBP_I_SAT, ID_DBP_D_GPS, ID_DBP_I_PTR, ID_DBP_I_CLK, ID_DBP_I_SUN,
     ID_DBP_D_MON, ID_DBP_I_ATMP, ID_DBP_I_AWA, ID_DBP_I_TWA, ID_DBP_I_TWD, ID_DBP_I_TWS,
-    ID_DBP_D_TWD, ID_DBP_I_HDM, ID_DBP_D_HDT, ID_DBP_D_WDH, ID_DBP_I_VLW1, ID_DBP_I_VLW2, ID_DBP_D_MDA, ID_DBP_I_MDA,ID_DBP_D_BPH,
+    ID_DBP_D_TWD, ID_DBP_I_HDM, ID_DBP_D_HDT, ID_DBP_D_WDH, ID_DBP_I_VLW1, ID_DBP_I_VLW2, ID_DBP_D_MDA, ID_DBP_I_MDA,ID_DBP_D_BPH, ID_DBP_I_FOS,
+	ID_DBP_M_COG, ID_DBP_I_PITCH, ID_DBP_I_HEEL, ID_DBP_D_AWA_TWA,
     ID_DBP_LAST_ENTRY //this has a reference in one of the routines; defining a "LAST_ENTRY" and setting the reference to it, is one codeline less to change (and find) when adding new instruments :-)
 };
 
@@ -100,6 +105,8 @@ wxString getInstrumentCaption( unsigned int id )
             return _("Speedometer");
         case ID_DBP_I_COG:
             return _("COG");
+        case ID_DBP_M_COG:
+            return _("Mag COG");
         case ID_DBP_D_COG:
             return _("GPS Compass");
         case ID_DBP_D_HDT:
@@ -113,6 +120,8 @@ wxString getInstrumentCaption( unsigned int id )
         case ID_DBP_D_AW:
         case ID_DBP_D_AWA:
             return _("App. Wind Angle & Speed");
+		case ID_DBP_D_AWA_TWA:
+			return _("App & True Wind Angle");
         case ID_DBP_I_AWS:
             return _("App. Wind Speed");
         case ID_DBP_D_AWS:
@@ -169,6 +178,12 @@ wxString getInstrumentCaption( unsigned int id )
             return _("Trip Log");
         case ID_DBP_I_VLW2:
             return _("Sum Log");
+        case ID_DBP_I_FOS:
+            return _("From Ownship");
+		case ID_DBP_I_PITCH:
+			return _("Pitch");
+		case ID_DBP_I_HEEL:
+			return _("Heel");
     }
     return _T("");
 }
@@ -181,6 +196,7 @@ void getListItemForInstrument( wxListItem &item, unsigned int id )
         case ID_DBP_I_POS:
         case ID_DBP_I_SOG:
         case ID_DBP_I_COG:
+        case ID_DBP_M_COG:
         case ID_DBP_I_STW:
         case ID_DBP_I_HDT:
         case ID_DBP_I_HDM:
@@ -201,6 +217,9 @@ void getListItemForInstrument( wxListItem &item, unsigned int id )
         case ID_DBP_I_SUN:
         case ID_DBP_I_VLW1:
         case ID_DBP_I_VLW2:
+        case ID_DBP_I_FOS:
+		case ID_DBP_I_PITCH:
+		case ID_DBP_I_HEEL:
             item.SetImage( 0 );
             break;
         case ID_DBP_D_SOG:
@@ -209,6 +228,7 @@ void getListItemForInstrument( wxListItem &item, unsigned int id )
         case ID_DBP_D_AWA:
         case ID_DBP_D_AWS:
         case ID_DBP_D_TW:
+		case ID_DBP_D_AWA_TWA:
         case ID_DBP_D_TWD:
         case ID_DBP_D_DPT:
     	case ID_DBP_D_MDA:
@@ -332,9 +352,29 @@ int dashboard_pi::Init( void )
     LoadConfig();
 
     //    This PlugIn needs a toolbar icon
-    m_toolbar_item_id = InsertPlugInTool( _T(""), _img_dashboard, _img_dashboard, wxITEM_CHECK,
-            _("Dashboard"), _T(""), NULL, DASHBOARD_TOOL_POSITION, 0, this );
-
+//    m_toolbar_item_id = InsertPlugInTool( _T(""), _img_dashboard, _img_dashboard, wxITEM_CHECK,
+//            _("Dashboard"), _T(""), NULL, DASHBOARD_TOOL_POSITION, 0, this );
+    
+    wxString shareLocn =*GetpSharedDataLocation() +
+                _T("plugins") + wxFileName::GetPathSeparator() +
+                _T("dashboard_pi") + wxFileName::GetPathSeparator()
+                +_T("data") + wxFileName::GetPathSeparator();
+    
+     wxString normalIcon = shareLocn + _T("Dashboard.svg");
+     wxString toggledIcon = shareLocn + _T("Dashboard_toggled.svg");
+     wxString rolloverIcon = shareLocn + _T("Dashboard_rollover.svg");
+     
+     //  For journeyman styles, we prefer the built-in raster icons which match the rest of the toolbar.
+     if(GetActiveStyleName().Lower() != _T("traditional")){
+         normalIcon = _T("");
+         toggledIcon = _T("");
+         rolloverIcon = _T("");
+     }
+         
+      m_toolbar_item_id = InsertPlugInToolSVG( _T(""), normalIcon, rolloverIcon, toggledIcon, wxITEM_CHECK,
+             _("Dashboard"), _T(""), NULL, DASHBOARD_TOOL_POSITION, 0, this );
+    
+    
     ApplyConfig();
 
     //  If we loaded a version 1 config setup, convert now to version 2
@@ -351,6 +391,7 @@ int dashboard_pi::Init( void )
 
 bool dashboard_pi::DeInit( void )
 {
+    SaveConfig();
     if( IsRunning() ) // Timer started?
     Stop(); // Stop timer
 
@@ -695,10 +736,10 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
 
                  */
 
-                SendSentenceToAllInstruments( OCPN_DBP_STC_MDA, m_NMEA0183.Mda.Pressure *1000,
-
-                       _T("hPa") ); //Convert to hpa befor sending to instruments.
-
+                if( m_NMEA0183.Mda.Pressure > .8 && m_NMEA0183.Mda.Pressure < 1.1 ) {
+                    SendSentenceToAllInstruments( OCPN_DBP_STC_MDA, m_NMEA0183.Mda.Pressure *1000,
+                           _T("hPa") ); //Convert to hpa befor sending to instruments.
+                }
 
             }
 
@@ -741,6 +782,8 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
                             _T("\u00B0M") );
                 }
 
+                SendSentenceToAllInstruments( OCPN_DBP_STC_TWS, toUsrSpeed_Plugin( m_NMEA0183.Mwd.WindSpeedKnots, g_iDashWindSpeedUnit ),
+                                              getUsrSpeedUnit_Plugin( g_iDashWindSpeedUnit ) );
                 SendSentenceToAllInstruments( OCPN_DBP_STC_TWS2, toUsrSpeed_Plugin( m_NMEA0183.Mwd.WindSpeedKnots, g_iDashWindSpeedUnit ),
                         getUsrSpeedUnit_Plugin( g_iDashWindSpeedUnit ) );
                 //m_NMEA0183.Mwd.WindSpeedms
@@ -750,26 +793,53 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
         else if( m_NMEA0183.LastSentenceIDReceived == _T("MWV") ) {
             if( m_NMEA0183.Parse() ) {
                 if( m_NMEA0183.Mwv.IsDataValid == NTrue ) {
+                    //MWV windspeed has different units. Form it to knots to fit "toUsrSpeed_Plugin()"
+                    double m_wSpeedFactor = 1.0; //knots ("N")
+                    if (m_NMEA0183.Mwv.WindSpeedUnits == _T("K") ) m_wSpeedFactor = 0.53995 ; //km/h > knots
+                    if (m_NMEA0183.Mwv.WindSpeedUnits == _T("M") ) m_wSpeedFactor = 1.94384 ; //m/s > knots
+
                     if( m_NMEA0183.Mwv.Reference == _T("R") ) // Relative (apparent wind)
                     {
                         if( mPriAWA >= 1 ) {
                             mPriAWA = 1;
-
+							wxString m_awaunit;
+							double m_awaangle;
+							if (m_NMEA0183.Mwv.WindAngle >180) {
+								m_awaunit = _T("\u00B0L");
+								m_awaangle = 180.0 - (m_NMEA0183.Mwv.WindAngle - 180.0);
+							}
+							else {
+								m_awaunit = _T("\u00B0R");
+								m_awaangle = m_NMEA0183.Mwv.WindAngle;
+							}
                             SendSentenceToAllInstruments( OCPN_DBP_STC_AWA,
-                                    m_NMEA0183.Mwv.WindAngle, _T("\u00B0") );
-                            //  4) Wind Speed Units, K/M/N
+								m_awaangle, m_awaunit);
                             SendSentenceToAllInstruments( OCPN_DBP_STC_AWS,
-                                    m_NMEA0183.Mwv.WindSpeed, m_NMEA0183.Mwv.WindSpeedUnits );
+                                    toUsrSpeed_Plugin( m_NMEA0183.Mwv.WindSpeed * m_wSpeedFactor, g_iDashWindSpeedUnit ),
+                                    getUsrSpeedUnit_Plugin( g_iDashWindSpeedUnit ) );
                         }
                     } else if( m_NMEA0183.Mwv.Reference == _T("T") ) // Theoretical (aka True)
                     {
                         if( mPriTWA >= 1 ) {
                             mPriTWA = 1;
+							wxString m_twaunit;
+							double m_twaangle;
+							if (m_NMEA0183.Mwv.WindAngle >180) {
+								m_twaunit = _T("\u00B0L");
+								m_twaangle = 180.0 - (m_NMEA0183.Mwv.WindAngle - 180.0);
+							}
+							else {
+								m_twaunit = _T("\u00B0R");
+								m_twaangle = m_NMEA0183.Mwv.WindAngle;
+							}
                             SendSentenceToAllInstruments( OCPN_DBP_STC_TWA,
-                                    m_NMEA0183.Mwv.WindAngle, _T("\u00B0") );
-                            //  4) Wind Speed Units, K/M/N
+								m_twaangle, m_twaunit);
                             SendSentenceToAllInstruments( OCPN_DBP_STC_TWS,
-                                    m_NMEA0183.Mwv.WindSpeed, m_NMEA0183.Mwv.WindSpeedUnits );
+                                    toUsrSpeed_Plugin( m_NMEA0183.Mwv.WindSpeed * m_wSpeedFactor, g_iDashWindSpeedUnit ),
+                                    getUsrSpeedUnit_Plugin( g_iDashWindSpeedUnit ) );
+                            SendSentenceToAllInstruments( OCPN_DBP_STC_TWS2,
+                                    toUsrSpeed_Plugin( m_NMEA0183.Mwv.WindSpeed * m_wSpeedFactor, g_iDashWindSpeedUnit ),
+                                    getUsrSpeedUnit_Plugin( g_iDashWindSpeedUnit ) );
                         }
                     }
                 }
@@ -810,6 +880,21 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
                         if( m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue < 999. ) {
                             SendSentenceToAllInstruments( OCPN_DBP_STC_COG,
                                     m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue, _T("\u00B0") );
+                        } else {
+                            //->SetData(_T("---"));
+                        }
+                        if( m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue < 999. && m_NMEA0183.Rmc.MagneticVariation < 999.) {
+                            double dMagneticCOG;
+                            if (m_NMEA0183.Rmc.MagneticVariationDirection == East) {
+                                dMagneticCOG = m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue - m_NMEA0183.Rmc.MagneticVariation;
+                                if ( dMagneticCOG < 0.0 ) dMagneticCOG = 360.0 + dMagneticCOG;
+                            }
+                            else {
+                                dMagneticCOG = m_NMEA0183.Rmc.TrackMadeGoodDegreesTrue + m_NMEA0183.Rmc.MagneticVariation;
+                                if ( dMagneticCOG > 360.0 ) dMagneticCOG = dMagneticCOG - 360.0;
+                            }
+                            SendSentenceToAllInstruments( OCPN_DBP_STC_MCOG,
+                                    dMagneticCOG, _T("\u00B0M") );
                         } else {
                             //->SetData(_T("---"));
                         }
@@ -943,8 +1028,55 @@ void dashboard_pi::SetNMEASentence( wxString &sentence )
                 }
             }
         }
+		else if (m_NMEA0183.LastSentenceIDReceived == _T("XDR")) {  //Transducer measurement
+			if (m_NMEA0183.Parse())
+			{   //SendSentenceToAllInstruments( OCPN_DBP_STC_ATMP, m_NMEA0183.Xdr.TransducerCnt,_T("\u00B0") );
+				wxString xdrunit;
+				double xdrdata;
+				for (int i = 0; i<m_NMEA0183.Xdr.TransducerCnt; i++){
 
-        else if( m_NMEA0183.LastSentenceIDReceived == _T("ZDA") ) {
+					xdrdata = m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData;
+					// NKE style of XDR Airtemp
+					if (m_NMEA0183.Xdr.TransducerInfo[i].TransducerName == _T("AirTemp")){  
+						SendSentenceToAllInstruments(OCPN_DBP_STC_ATMP, m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData, m_NMEA0183.Xdr.TransducerInfo[i].UnitOfMeasurement);
+					} //Nasa style air temp
+					if (m_NMEA0183.Xdr.TransducerInfo[i].TransducerName == _T("ENV_OUTAIR_T") || m_NMEA0183.Xdr.TransducerInfo[i].TransducerName == _T("ENV_OUTSIDE_T") ){
+						SendSentenceToAllInstruments(OCPN_DBP_STC_ATMP, m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData, m_NMEA0183.Xdr.TransducerInfo[i].UnitOfMeasurement);
+					}
+					// NKE style of XDR Pitch (=Nose up/down)
+					if (m_NMEA0183.Xdr.TransducerInfo[i].TransducerName == _T("PTCH")) {
+						if (m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData > 0){
+							xdrunit = _T("\u00B0 Nose up");
+						}
+						else if (m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData < 0) {
+							xdrunit = _T("\u00B0 Nose down");
+							xdrdata *= -1;
+						}
+						else {
+							xdrunit = _T("\u00B0");
+						}
+						SendSentenceToAllInstruments(OCPN_DBP_STC_PITCH, xdrdata, xdrunit);
+					}
+					// NKE style of XDR Heel
+					if (m_NMEA0183.Xdr.TransducerInfo[i].TransducerName == _T("ROLL")) {
+						if (m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData > 0)
+							xdrunit = _T("\u00B0R");
+						else if (m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData < 0) {
+							xdrunit = _T("\u00B0L");
+							xdrdata *= -1;
+						}
+						else
+							xdrunit = _T("\u00B0");
+						SendSentenceToAllInstruments(OCPN_DBP_STC_HEEL, xdrdata, xdrunit);
+					} //Nasa style water temp
+					if (m_NMEA0183.Xdr.TransducerInfo[i].TransducerName == _T("ENV_WATER_T")){
+						SendSentenceToAllInstruments(OCPN_DBP_STC_TMP, m_NMEA0183.Xdr.TransducerInfo[i].MeasurementData,m_NMEA0183.Xdr.TransducerInfo[i].UnitOfMeasurement);
+					}
+				}
+
+			}
+		}
+		else if (m_NMEA0183.LastSentenceIDReceived == _T("ZDA")) {
             if( m_NMEA0183.Parse() ) {
                 if( mPriDateTime >= 2 ) {
                     mPriDateTime = 2;
@@ -995,9 +1127,14 @@ void dashboard_pi::SetPositionFix( PlugIn_Position_Fix &pfix )
         SendSentenceToAllInstruments( OCPN_DBP_STC_LON, pfix.Lon, _T("SDMM") );
     }
     if( mPriCOGSOG >= 1 ) {
+        double dMagneticCOG;
         mPriCOGSOG = 1;
         SendSentenceToAllInstruments( OCPN_DBP_STC_SOG, toUsrSpeed_Plugin( pfix.Sog, g_iDashSpeedUnit ), getUsrSpeedUnit_Plugin( g_iDashSpeedUnit ) );
         SendSentenceToAllInstruments( OCPN_DBP_STC_COG, pfix.Cog, _T("\u00B0") );
+        dMagneticCOG = pfix.Cog - pfix.Var;
+        if ( dMagneticCOG < 0.0 ) dMagneticCOG = 360.0 + dMagneticCOG;
+        if ( dMagneticCOG > 360.0 ) dMagneticCOG = dMagneticCOG - 360.0;
+        SendSentenceToAllInstruments( OCPN_DBP_STC_MCOG, dMagneticCOG , _T("\u00B0M") );
     }
     if( mPriVar >= 1 ) {
         if( !wxIsNaN( pfix.Var ) ){
@@ -1190,8 +1327,8 @@ void dashboard_pi::OnToolbarToolCallback( int id )
                     if( b_anyviz )
                         pane.Show( cont->m_bIsVisible );
                     else {
-                       cont->m_bIsVisible = true;
-                       pane.Show( true );       // show all if none are marked visible and none are shown
+                       cont->m_bIsVisible = cont->m_bPersVisible;
+                       pane.Show( cont->m_bIsVisible );
                     }
                 else
                     pane.Show( false );
@@ -1299,7 +1436,9 @@ bool dashboard_pi::LoadConfig( void )
                 pConf->Read( _T("Orientation"), &orient, _T("V") );
                 int i_cnt;
                 pConf->Read( _T("InstrumentCount"), &i_cnt, -1 );
-
+                bool b_persist;
+                pConf->Read( _T("Persistence"), &b_persist, 1 );
+                
                 wxArrayInt ar;
                 for( int i = 0; i < i_cnt; i++ ) {
                     int id;
@@ -1307,8 +1446,11 @@ bool dashboard_pi::LoadConfig( void )
                     if( id != -1 ) ar.Add( id );
                 }
 // TODO: Do not add if GetCount == 0
-                m_ArrayOfDashboardWindow.Add(
-                        new DashboardWindowContainer( NULL, name, caption, orient, ar ) );
+
+                DashboardWindowContainer *cont = new DashboardWindowContainer( NULL, name, caption, orient, ar );
+                cont->m_bPersVisible = b_persist;
+
+                m_ArrayOfDashboardWindow.Add(cont);
 
             }
         }
@@ -1343,7 +1485,8 @@ bool dashboard_pi::SaveConfig( void )
             pConf->Write( _T("Name"), cont->m_sName );
             pConf->Write( _T("Caption"), cont->m_sCaption );
             pConf->Write( _T("Orientation"), cont->m_sOrientation );
-
+            pConf->Write( _T("Persistence"), cont->m_bPersVisible );
+            
             pConf->Write( _T("InstrumentCount"), (int) cont->m_aInstrumentList.GetCount() );
             for( unsigned int j = 0; j < cont->m_aInstrumentList.GetCount(); j++ )
                 pConf->Write( wxString::Format( _T("Instrument%d"), j + 1 ),
@@ -1383,10 +1526,14 @@ void dashboard_pi::ApplyConfig( void )
             if(sz.x == 0)
                 sz.IncTo( wxSize( 160, 388) );
 #endif
-            m_pauimgr->AddPane( cont->m_pDashboardWindow,
-                wxAuiPaneInfo().Name( cont->m_sName ).Caption( cont->m_sCaption ).CaptionVisible( true ).TopDockable(
-                !vertical ).BottomDockable( !vertical ).LeftDockable( vertical ).RightDockable( vertical ).MinSize(
-                sz ).BestSize( sz ).FloatingSize( sz ).FloatingPosition( 100, 100 ).Float().Show( cont->m_bIsVisible ) );
+                wxAuiPaneInfo p = wxAuiPaneInfo().Name( cont->m_sName ).Caption( cont->m_sCaption ).CaptionVisible( false ).TopDockable(
+                    !vertical ).BottomDockable( !vertical ).LeftDockable( vertical ).RightDockable( vertical ).MinSize(
+                        sz ).BestSize( sz ).FloatingSize( sz ).FloatingPosition( 100, 100 ).Float().Show( cont->m_bIsVisible ).Gripper(false) ;
+                        
+            m_pauimgr->AddPane( cont->m_pDashboardWindow, p);
+                //wxAuiPaneInfo().Name( cont->m_sName ).Caption( cont->m_sCaption ).CaptionVisible( false ).TopDockable(
+               // !vertical ).BottomDockable( !vertical ).LeftDockable( vertical ).RightDockable( vertical ).MinSize(
+               // sz ).BestSize( sz ).FloatingSize( sz ).FloatingPosition( 100, 100 ).Float().Show( cont->m_bIsVisible ) );
         } else {
             wxAuiPaneInfo& pane = m_pauimgr->GetPane( cont->m_pDashboardWindow );
             pane.Caption( cont->m_sCaption ).Show( cont->m_bIsVisible );
@@ -1407,7 +1554,7 @@ void dashboard_pi::PopulateContextMenu( wxMenu* menu )
 {
     for( size_t i = 0; i < m_ArrayOfDashboardWindow.GetCount(); i++ ) {
         DashboardWindowContainer *cont = m_ArrayOfDashboardWindow.Item( i );
-        wxMenuItem* item = menu->AppendCheckItem( i, cont->m_sCaption );
+        wxMenuItem* item = menu->AppendCheckItem( i+1, cont->m_sCaption );
         item->Check( cont->m_bIsVisible );
     }
 }
@@ -1418,6 +1565,7 @@ void dashboard_pi::ShowDashboard( size_t id, bool visible )
         DashboardWindowContainer *cont = m_ArrayOfDashboardWindow.Item( id );
         m_pauimgr->GetPane( cont->m_pDashboardWindow ).Show( visible );
         cont->m_bIsVisible = visible;
+        cont->m_bPersVisible = visible;
         m_pauimgr->Update();
     }
 }
@@ -1965,7 +2113,7 @@ void DashboardWindow::OnContextMenu( wxContextMenuEvent& event )
 void DashboardWindow::OnContextMenuSelect( wxCommandEvent& event )
 {
     if( event.GetId() < ID_DASH_PREFS ) { // Toggle dashboard visibility
-        m_plugin->ShowDashboard( event.GetId(), event.IsChecked() );
+        m_plugin->ShowDashboard( event.GetId()-1, event.IsChecked() );
         if( m_plugin )
             SetToolbarItemState( m_plugin->GetToolbarItemId(), m_plugin->GetDashboardWindowShownCount() != 0 );
     }
@@ -1992,6 +2140,12 @@ void DashboardWindow::OnContextMenuSelect( wxCommandEvent& event )
 void DashboardWindow::SetColorScheme( PI_ColorScheme cs )
 {
     DimeWindow( this );
+    
+    //  Improve appearance, especially in DUSK or NIGHT palette
+    wxColour col;
+    GetGlobalColor( _T("DASHL"), &col );
+    SetBackgroundColour( col );
+    
     Refresh( false );
 }
 
@@ -2076,7 +2230,7 @@ void DashboardWindow::SetInstrumentList( wxArrayInt list )
             case ID_DBP_D_SOG:
                 instrument = new DashboardInstrument_Speedometer( this, wxID_ANY,
                         getInstrumentCaption( id ), OCPN_DBP_STC_SOG, 0, g_iDashSpeedMax );
-                ( (DashboardInstrument_Dial *) instrument )->SetOptionLabel( 1,
+                ( (DashboardInstrument_Dial *) instrument )->SetOptionLabel( g_iDashSpeedMax / 20 + 1,
                         DIAL_LABEL_HORIZONTAL );
                 //(DashboardInstrument_Dial *)instrument->SetOptionMarker(0.1, DIAL_MARKER_SIMPLE, 5);
                 ( (DashboardInstrument_Dial *) instrument )->SetOptionMarker( 0.5,
@@ -2087,6 +2241,10 @@ void DashboardWindow::SetInstrumentList( wxArrayInt list )
             case ID_DBP_I_COG:
                 instrument = new DashboardInstrument_Single( this, wxID_ANY,
                         getInstrumentCaption( id ), OCPN_DBP_STC_COG, _T("%.0f") );
+                break;
+            case ID_DBP_M_COG:
+                instrument = new DashboardInstrument_Single( this, wxID_ANY,
+                        getInstrumentCaption( id ), OCPN_DBP_STC_MCOG, _T("%.0f") );
                 break;
             case ID_DBP_D_COG:
                 instrument = new DashboardInstrument_Compass( this, wxID_ANY,
@@ -2154,6 +2312,14 @@ void DashboardWindow::SetInstrumentList( wxArrayInt list )
                 ( (DashboardInstrument_Dial *) instrument )->SetOptionExtraValue(
                         OCPN_DBP_STC_TWS, _T("%.1f"), DIAL_POSITION_INSIDE );
                 break;
+			case ID_DBP_D_AWA_TWA: //App/True Wind angle +-180° on boat axis
+				instrument = new DashboardInstrument_AppTrueWindAngle(this, wxID_ANY,
+					getInstrumentCaption(id), OCPN_DBP_STC_AWA | OCPN_DBP_STC_TWA);
+				((DashboardInstrument_Dial *)instrument)->SetOptionMainValue(_T("%.0f"),
+					DIAL_POSITION_NONE);
+				((DashboardInstrument_Dial *)instrument)->SetOptionExtraValue(
+					OCPN_DBP_STC_TWS | OCPN_DBP_STC_AWS, _T("%.1f"), DIAL_POSITION_NONE);
+				break;
             case ID_DBP_D_TWD: //True Wind direction
                 instrument = new DashboardInstrument_WindCompass( this, wxID_ANY,
                         getInstrumentCaption( id ), OCPN_DBP_STC_TWD );
@@ -2267,12 +2433,23 @@ void DashboardWindow::SetInstrumentList( wxArrayInt list )
             case ID_DBP_D_WDH:
                 instrument = new DashboardInstrument_WindDirHistory(this, wxID_ANY,
                         getInstrumentCaption( id ) );
-                  break;
+                break;
             case ID_DBP_D_BPH:
                 instrument = new DashboardInstrument_BaroHistory(this, wxID_ANY,
                         getInstrumentCaption( id ) );
-                  break;
-        }
+                break;
+            case ID_DBP_I_FOS:
+                instrument = new DashboardInstrument_FromOwnship( this, wxID_ANY,
+                        getInstrumentCaption( id ) );
+                break;
+			case ID_DBP_I_PITCH:
+				instrument = new DashboardInstrument_Single(this, wxID_ANY,
+					getInstrumentCaption(id), OCPN_DBP_STC_PITCH, _T("%2.1f"));
+				break;
+			case ID_DBP_I_HEEL:
+				instrument = new DashboardInstrument_Single(this, wxID_ANY,
+					getInstrumentCaption(id), OCPN_DBP_STC_HEEL, _T("%2.1f"));
+		}
         if( instrument ) {
             instrument->instrumentTypeId = id;
             m_ArrayOfInstrument.Add(

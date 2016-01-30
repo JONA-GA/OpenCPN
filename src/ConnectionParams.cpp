@@ -26,6 +26,11 @@
 
 #include "ConnectionParams.h"
 
+#if !wxUSE_XLOCALE && wxCHECK_VERSION(3,0,0)
+#define wxAtoi(arg) atoi(arg)
+#endif
+
+
 ConnectionParams::ConnectionParams(const wxString &configStr )
 {
     Deserialize( configStr );
@@ -48,7 +53,8 @@ void ConnectionParams::Deserialize(const wxString &configStr)
     Port = prms[5];
     Baudrate = wxAtoi(prms[6]);
     ChecksumCheck = !!wxAtoi(prms[7]);
-    Output = !!wxAtoi(prms[8]);
+    int iotval = wxAtoi(prms[8]);
+    IOSelect=((iotval <= 2)?static_cast <dsPortType>(iotval):DS_TYPE_INPUT);
     InputSentenceListType = (ListType)wxAtoi(prms[9]);
     InputSentenceList = wxStringTokenize(prms[10], _T(","));
     OutputSentenceListType = (ListType)wxAtoi(prms[11]);
@@ -59,6 +65,8 @@ void ConnectionParams::Deserialize(const wxString &configStr)
     FurunoGP3X = !!wxAtoi(prms[16]);
 
     bEnabled = true;
+    LastNetworkPort = 0;
+    b_IsSetup = false;
     if (prms.Count() >= 18)
         bEnabled = !!wxAtoi(prms[17]);
 }
@@ -88,7 +96,7 @@ wxString ConnectionParams::Serialize()
                                      Port.c_str(),
                                      Baudrate,
                                      ChecksumCheck,
-                                     Output,
+                                     IOSelect,
                                      InputSentenceListType,
                                      istcs.c_str(),
                                      OutputSentenceListType,
@@ -115,49 +123,71 @@ ConnectionParams::ConnectionParams()
     ChecksumCheck = true;
     Garmin = false;
     FurunoGP3X = false;
-    Output = false;
+    IOSelect = DS_TYPE_INPUT;
     InputSentenceListType = WHITELIST;
     OutputSentenceListType = WHITELIST;
     Priority = 0;
     Valid = true;
     bEnabled = true;
+    b_IsSetup = false;
 }
 
 wxString ConnectionParams::GetSourceTypeStr()
 {
     if ( Type == SERIAL )
         return _("Serial");
-    else
+    else if ( Type == NETWORK )
         return _("Net");
+    else if ( Type == INTERNAL_GPS )
+        return _("GPS");
+    else if ( Type == INTERNAL_BT )
+        return _("BT");
+    else
+        return _T("");
 }
 
 wxString ConnectionParams::GetAddressStr()
 {
     if ( Type == SERIAL )
         return wxString::Format( _T("%s"), Port.c_str() );
-    else
+    else if ( Type == NETWORK )
         return wxString::Format( _T("%s:%d"), NetworkAddress.c_str(), NetworkPort );
+    else if ( Type == INTERNAL_GPS )
+        return _("Internal");
+    else if ( Type == INTERNAL_BT )
+        return NetworkAddress;
+    else
+        return _T("");
 }
 
 wxString ConnectionParams::GetParametersStr()
 {
     if ( Type == SERIAL )
         return wxString::Format( _T("%d"), Baudrate );
-    else
+    else if ( Type == NETWORK ){
         if ( NetProtocol == TCP )
             return _("TCP");
         else if (NetProtocol == UDP)
             return _("UDP");
         else
             return _("GPSD");
+    }
+    else if ( Type == INTERNAL_GPS )
+        return _T("");
+    else if ( Type == INTERNAL_BT )
+        return Port;
+    else
+        return _T("");
 }
 
-wxString ConnectionParams::GetOutputValueStr()
+wxString ConnectionParams::GetIOTypeValueStr()
 {
-    if ( Output )
-        return _("Yes");
+    if ( IOSelect == DS_TYPE_INPUT )
+        return _("Input");
+    else if ( IOSelect == DS_TYPE_OUTPUT )
+        return _("Output");
     else
-        return _("No");
+        return _("In/Out");
 }
 
 wxString ConnectionParams::FilterTypeToStr(ListType type, FilterDirection dir)
@@ -216,8 +246,7 @@ wxString ConnectionParams::GetDSPort()
 {
     if ( Type == SERIAL )
         return wxString::Format( _T("Serial:%s"), Port.c_str() );
-    else
-    {
+    else if( Type == NETWORK){
         wxString proto;
         if ( NetProtocol == TCP )
             proto = _T("TCP");
@@ -227,6 +256,15 @@ wxString ConnectionParams::GetDSPort()
             proto = _T("GPSD");
         return wxString::Format( _T("%s:%s:%d"), proto.c_str(), NetworkAddress.c_str(), NetworkPort );
     }
+    else if( Type == INTERNAL_BT ){
+        //  GPSD:HOLUX GR-231:0
+        //wxString proto = _T("GPSD");
+        //return wxString::Format( _T("%s:%s:%d"), proto.c_str(), NetworkAddress.c_str(), NetworkPort );
+        return Port;   //mac
+    }
+    else
+        return _T("");
+    
 }
 
 wxString ConnectionParams::GetLastDSPort()

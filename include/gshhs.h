@@ -44,8 +44,10 @@
 
 #include "ocpn_types.h"
 #include "ocpndc.h"
+#include "viewport.h"
+#include "cutil.h"
 
-#ifdef __WXMSW__
+#ifdef __MSVC__
 #pragma warning(disable: 4251)   // relates to std::string fpath
 #endif
 
@@ -59,47 +61,10 @@
 #define M_PI_4     0.785398163397448309616
 #endif
 
-class Projection {
-public:
-    Projection();
-    Projection(int w, int h, double cx, double cy);
-    void SetScreenSize(int w, int h);
-    void SetCenterInMap(double x, double y);
-    void SetScale(double sc);
-    bool isInBounderies( int x, int y ) const;
-    double getXmin() const { return xW; }
-    double getXmax() const { return xE; }
-    double getYmin() const { return yS; }
-    double getYmax() const { return yN; }
-    void map2screen( double wx, double wy, int* x, int* y ) const;
-    void map2screenDouble( double wx, double wy, double* x, double* y ) const;
-    bool intersect( double w, double e, double s, double n ) const;
-    int getW() { return W; }
-    int getH() { return H; }
-    double getCoefremp() { return coefremp; }
-    double degToRad( double d ) const;
-    double radToDeg( double r ) const;
-
-
-private:
-    void updateBoundaries();
-
-    int W, H;
-    double CX, CY;
-    double xW, xE, yN, yS;  // fenetre visible (repere longitude/latitude)
-    double PX,PY;       // center in mercator projection
-    double scale;       // Echelle courante
-    double scalemax;    // Echelle maxi
-    double scaleall;    // Echelle pour afficher le monde entier
-    double coefremp;       // Coefficient de remplissage (surface_visible/pixels)
-    bool frozen;
-    bool useTempo;
-};
-
 //-------------------------------------------------------------------------
-class QLineF {
+class wxLineF {
 public:
-    QLineF( double x1, double y1, double x2, double y2 ) {
+    wxLineF( double x1, double y1, double x2, double y2 ) {
         m_p1 = wxRealPoint( x1, y1 );
         m_p2 = wxRealPoint( x2, y2 );
     }
@@ -107,10 +72,6 @@ public:
     wxRealPoint& p2() { return m_p2; }
     wxRealPoint m_p1, m_p2;
 };
-
-#define GSHHS_SCL    1.0e-6    /* Convert micro-degrees to degrees */
-#  define INTER_MAX_LIMIT 1.0000001
-#  define INTER_MIN_LIMIT -0.0000001
 
 struct PolygonFileHeader {
     int version;
@@ -129,21 +90,29 @@ struct PolygonFileHeader {
 
 typedef std::vector<wxRealPoint> contour;
 typedef std::vector<contour> contour_list;
+#define GSSH_SUBM 16 // divide each cell to 16x16 sub cells
 
 //==========================================================================
+
 
 class GshhsPolyCell {
 public:
 
-    GshhsPolyCell( FILE *fpoly, int x0, int y0, Projection *proj, PolygonFileHeader *header );
+    GshhsPolyCell( FILE *fpoly, int x0, int y0, PolygonFileHeader *header );
     ~GshhsPolyCell();
 
-    void drawMapPlain( ocpnDC &pnt, double dx, Projection *proj, wxColor seaColor,
-            wxColor landColor );
+    void ClearPolyV();
 
-    void drawSeaBorderLines( ocpnDC &pnt, double dx, Projection *proj );
-    std::vector<QLineF> * getCoasts() { return &coasts; }
+    void drawMapPlain( ocpnDC &pnt, double dx, ViewPort &vp, wxColor seaColor,
+                       wxColor landColor, bool idl );
+
+    void drawSeaBorderLines( ocpnDC &pnt, double dx, ViewPort &vp );
+    std::vector<wxLineF> * getCoasts() { return &coasts; }
     contour_list &getPoly1() { return poly1; }
+
+    /* we remap the segments into a high resolution map to
+       greatly reduce intersection testing time */
+    std::vector<wxLineF> *high_res_map[GSSH_SUBM*GSSH_SUBM];
 
 private:
     int nbpoints;
@@ -151,18 +120,23 @@ private:
 
     FILE *fpoly;
 
-    std::vector<QLineF> coasts;
-    Projection *proj;
+    std::vector<wxLineF> coasts;
     PolygonFileHeader *header;
     contour_list poly1, poly2, poly3, poly4, poly5;
 
-    void DrawPolygonFilled( ocpnDC &pnt, contour_list * poly, double dx, Projection *proj,
-            wxColor color );
-    void DrawPolygonContour( ocpnDC &pnt, contour_list * poly, double dx, Projection *proj );
+    // used for opengl vertex cache
+    float_2Dpt *polyv[6];
+    int polyc[6];
 
-    void ReadPolygonFile( FILE *polyfile, int x, int y, int pas_x, int pas_y, contour_list *p1,
-            contour_list *p2, contour_list *p3, contour_list *p4, contour_list *p5 );
+    void DrawPolygonFilled( ocpnDC &pnt, contour_list * poly, double dx, ViewPort &vp,
+            wxColor const &color );
+#ifdef ocpnUSE_GL        
+    void DrawPolygonFilledGL( contour_list * p, float_2Dpt **pv, int *pvc, ViewPort &vp,  wxColor const &color, bool idl );
+#endif
+    void DrawPolygonContour( ocpnDC &pnt, contour_list * poly, double dx, ViewPort &vp );
 
+    void ReadPoly( contour_list &poly );
+    void ReadPolygonFile( );
 };
 
 class GshhsPolyReader {
@@ -170,19 +144,14 @@ public:
     GshhsPolyReader( int quality );
     ~GshhsPolyReader();
 
-    void drawGshhsPolyMapPlain( ocpnDC &pnt, Projection *proj, wxColor seaColor,
-            wxColor landColor );
+    void drawGshhsPolyMapPlain( ocpnDC &pnt, ViewPort &vp, wxColor const &seaColor,
+            wxColor const &landColor );
 
-    void drawGshhsPolyMapSeaBorders( ocpnDC &pnt, Projection *proj );
+    void drawGshhsPolyMapSeaBorders( ocpnDC &pnt, ViewPort &vp );
 
     void InitializeLoadQuality( int quality ); // 5 levels: 0=low ... 4=full
-    bool crossing( QLineF traject, QLineF trajectWorld ) const;
-    bool crossing1( QLineF trajectWorld );
+    bool crossing1( wxLineF trajectWorld );
     int currentQuality;
-    void setProj( Projection * p )
-    {
-        this->proj = p;
-    }
     int ReadPolyVersion();
     int GetPolyVersion() { return polyHeader.version; }
 
@@ -191,75 +160,12 @@ private:
     GshhsPolyCell * allCells[360][180];
 
     PolygonFileHeader polyHeader;
-
-	bool my_intersects( QLineF line1, QLineF line2 ) const;
     void readPolygonFileHeader( FILE *polyfile, PolygonFileHeader *header );
-    bool abortRequested;
-    Projection * proj;
+
+    wxMutex mutex1, mutex2;
+
+    ViewPort last_rendered_vp;
 };
-
-inline bool GshhsPolyReader::crossing( QLineF traject, QLineF trajectWorld ) const
-{
-    if( !proj || proj == NULL ) return false;
-    if( !proj->isInBounderies( traject.p1().x, traject.p1().y )
-            && !proj->isInBounderies( traject.p2().x, traject.p2().y ) ) return false;
-    //wxRealPoint dummy;
-    int cxmin, cxmax, cymax, cymin;
-    cxmin = (int) floor( wxMin( trajectWorld.p1().x, trajectWorld.p2().x ) );
-    cxmax = (int) ceil( wxMax( trajectWorld.p1().x, trajectWorld.p2().x ) );
-    cymin = (int) floor( wxMin( trajectWorld.p1().y, trajectWorld.p2().y ) );
-    cymax = (int) ceil( wxMax( trajectWorld.p1().y, trajectWorld.p2().y ) );
-    int cx, cxx, cy;
-    GshhsPolyCell *cel;
-
-    for( cx = cxmin; cx < cxmax; cx++ ) {
-        cxx = cx;
-        while( cxx < 0 )
-            cxx += 360;
-        while( cxx >= 360 )
-            cxx -= 360;
-
-        for( cy = cymin; cy < cymax; cy++ ) {
-            if( this->abortRequested ) return false;
-            if( cxx >= 0 && cxx <= 359 && cy >= -90 && cy <= 89 ) {
-                if( this->abortRequested ) return false;
-                if( allCells[cxx][cy + 90] == NULL ) continue;
-                cel = allCells[cxx][cy + 90];
-                std::vector < QLineF > *coasts = cel->getCoasts();
-                if( coasts->empty() ) continue;
-                for( unsigned int cs = 0; cs < coasts->size(); cs++ ) {
-                    if( this->abortRequested ) {
-                        return false;
-                    }
-                    if( my_intersects( traject, coasts->at( cs ) ) )
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
-}
-
-inline bool GshhsPolyReader::my_intersects( QLineF line1, QLineF line2 ) const
-{
-    // implementation is based on Graphics Gems III's "Faster Line Segment Intersection"
-    wxRealPoint a = line1.p2() - line1.p1();
-    wxRealPoint b = line2.p1() - line2.p2();
-    wxRealPoint c = line1.p1() - line2.p1();
-
-    const double denominator = a.y * b.x - a.x * b.y;
-    if( denominator == 0 ) return false;
-
-    const double reciprocal = 1 / denominator;
-    const double na = ( b.y * c.x - b.x * c.y ) * reciprocal;
-
-    if( na < INTER_MIN_LIMIT || na > INTER_MAX_LIMIT ) return false;
-
-    const double nb = ( a.x * c.y - a.y * c.x ) * reciprocal;
-    if( nb < INTER_MIN_LIMIT || nb > INTER_MAX_LIMIT ) return false;
-
-    return true;
-}
 
 // GSHHS file format:
 //
@@ -320,15 +226,14 @@ protected:
 
 class DECL_EXP GshhsReader {
 public:
-    GshhsReader( Projection* proj );
+    GshhsReader();
     ~GshhsReader();
 
-    void drawBackground( ocpnDC &pnt, Projection *proj, wxColor seaColor, wxColor backgroundColor );
-    void drawContinents( ocpnDC &pnt, Projection *proj, wxColor seaColor, wxColor landColor );
+    void drawContinents( ocpnDC &pnt, ViewPort &vp, wxColor const &seaColor, wxColor const &landColor );
 
-    void drawSeaBorders( ocpnDC &pnt, Projection *proj );
-    void drawBoundaries( ocpnDC &pnt, Projection *proj );
-    void drawRivers( ocpnDC &pnt, Projection *proj );
+    void drawSeaBorders( ocpnDC &pnt, ViewPort &vp );
+    void drawBoundaries( ocpnDC &pnt, ViewPort &vp );
+    void drawRivers( ocpnDC &pnt, ViewPort &vp );
 
     int GetPolyVersion() { return gshhsPoly_reader->GetPolyVersion(); }
 
@@ -340,16 +245,17 @@ public:
 
     int getQuality() { return quality; }
 
-    bool crossing( QLineF traject, QLineF trajectWorld ) const;
-    bool crossing1( QLineF trajectWorld );
-    void setProj( Projection * p ) { this->gshhsPoly_reader->setProj( p ); }
+    //    bool crossing( wxLineF traject, wxLineF trajectWorld ) const;
+    bool crossing1( wxLineF trajectWorld );
     int ReadPolyVersion();
     bool qualityAvailable[6];
 
+    void LoadQuality( int quality );
+
 private:
     int quality;  // 5 levels: 0=low ... 4=full
-    void LoadQuality( int quality );
-    int selectBestQuality( Projection *proj );
+    int selectBestQuality( void );
+    int selectBestQuality( ViewPort &vp );
 
     std::string fpath;     // directory containing gshhs files
 
@@ -362,22 +268,19 @@ private:
     std::vector<GshhsPolygon*> & getList_rivers();
     //-----------------------------------------------------
 
-    int GSHHS_scaledPoints( GshhsPolygon *pol, wxPoint *pts, double decx, Projection *proj );
+    int GSHHS_scaledPoints( GshhsPolygon *pol, wxPoint *pts, double decx, ViewPort &vp );
 
-    void GsshDrawLines( ocpnDC &pnt, std::vector<GshhsPolygon*> &lst, Projection *proj,
+    void GsshDrawLines( ocpnDC &pnt, std::vector<GshhsPolygon*> &lst, ViewPort &vp,
             bool isClosed );
     void clearLists();
 };
 
-inline bool GshhsReader::crossing( QLineF traject, QLineF trajectWorld ) const
-{
-    return this->gshhsPoly_reader->crossing( traject, trajectWorld );
-}
 
-inline bool GshhsReader::crossing1(QLineF trajectWorld )
+inline bool GshhsReader::crossing1(wxLineF trajectWorld )
 {
     return this->gshhsPoly_reader->crossing1(trajectWorld );
 }
+#define GSHHS_SCL    1.0e-6    /* Convert micro-degrees to degrees */
 
 //-------------------------------------------------------------------------------
 
@@ -388,13 +291,14 @@ public:
     void SetColorScheme( ColorScheme scheme );
     void RenderViewOnDC( ocpnDC& dc, ViewPort& VPoint );
 
-private:
-    Projection* proj;
-    GshhsReader* reader;
     wxColor land;
     wxColor water;
+
+private:
+    GshhsReader* reader;
 };
 
+void gshhsCrossesLandInit();
 bool gshhsCrossesLand(double lat1, double lon1, double lat2, double lon2);
 
 #endif

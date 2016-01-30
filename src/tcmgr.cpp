@@ -33,6 +33,7 @@
 #include <math.h>
 #include <time.h>
 
+#include "chart1.h"
 #include "dychart.h"
 #include "tcmgr.h"
 #include "georef.h"
@@ -755,7 +756,11 @@ TC_Error_Code TCMgr::LoadDataSources(wxArrayString &sources)
     }
 
     bTCMReady = true;
-
+    
+    if (m_Combined_IDX_array.Count() <= 1)
+        OCPNMessageBox( NULL, _("It seems you have no tide/current harmonic data installed."),
+                        _("OpenCPN Info"), wxOK | wxCENTER );
+        
     return  TC_NO_ERROR ;
 }
 
@@ -975,6 +980,16 @@ int TCMgr::GetStationTimeOffset(IDX_entry *pIDX)
     return pIDX->IDX_time_zone;
 }
 
+double  TCMgr::GetStationLat(IDX_entry *pIDX)
+{
+    return pIDX->IDX_lat;
+}
+
+double  TCMgr::GetStationLon(IDX_entry *pIDX)
+{
+    return pIDX->IDX_lon;
+}
+
 int TCMgr::GetNextBigEvent(time_t *tm, int idx)
 {
     float tcvalue[1];
@@ -1141,7 +1156,7 @@ int TCMgr::GetStationIDXbyNameType(const wxString & prefix, double xlat, double 
 #define INFERRED_SEMI_DIURNAL_COUNT                 10
 #define INFERRED_DIURNAL_COUNT                      10
 
-#ifdef __WXMSW__
+#ifdef __MSVC__
 #pragma warning (disable : 4305)                // conversion loss, double to float
 #endif
 
@@ -4446,10 +4461,9 @@ static NV_INT32 read_partial_tide_record (NV_INT32 num, TIDE_RECORD *rec)
     /* DWF 2007-12-02:  This is the one place where a short read would not
        necessarily mean catastrophe.  We don't know how long the partial
        record actually is yet, and it's possible that the full record will
-       be shorter than maximum_possible_size.  So the return of fread is
-       deliberately unchecked. */
-    (void) fread (buf, maximum_possible_size, 1, fp);
-    unpack_partial_tide_record (buf, maximum_possible_size, rec, &pos);
+       be shorter than maximum_possible_size. */
+    size_t size = fread (buf, 1, maximum_possible_size, fp);
+    unpack_partial_tide_record (buf, size, rec, &pos);
     free (buf);
     return (num);
 }

@@ -5,7 +5,7 @@
  * Author:   Sean D'Epagnier
  *
  ***************************************************************************
- *   Copyright (C) 2013 by Sean D'Epagnier                                 *
+ *   Copyright (C) 2014 by Sean D'Epagnier                                 *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -45,22 +45,27 @@ struct GribOverlaySettings
     double CalibrationFactor(int settings, double input, bool reverse = false);
     double CalibrateValue(int settings, double input)
         { return (input+CalibrationOffset(settings))*CalibrationFactor(settings, input); }
+    int GetMinFromIndex( int index );
+    wxString GetAltitudeFromIndex( int index, int unit );
     double GetmstobfFactor(double input);
     double GetbftomsFactor(double input);
     wxString GetUnitSymbol(int settings);
     double GetMin(int settings);
     double GetMax(int settings);
-    // settings options
+    // playback options
     bool m_bInterpolate;
     bool m_bLoopMode;
     int m_LoopStartPoint;
     int m_SlicesPerUpdate;
     int m_UpdatesPerSecond;
-    int m_HourDivider;
+	//display
     int m_iOverlayTransparency;
+    //gui
+    int m_iCtrlandDataStyle;
+    wxString m_iCtrlBarCtrlVisible[2];
 
     enum SettingsType {WIND, WIND_GUST, PRESSURE, WAVE, CURRENT, PRECIPITATION, CLOUD, 
-                       AIR_TEMPERATURE, SEA_TEMPERATURE, CAPE, SETTINGS_COUNT};
+                       AIR_TEMPERATURE, SEA_TEMPERATURE, CAPE, GEO_ALTITUDE, REL_HUMIDITY, SETTINGS_COUNT};
     enum Units0 {KNOTS, M_S, MPH, KPH, BFS};
     enum Units1 {MILLIBARS, MMHG, INHG};
     enum Units2 {METERS, FEET};
@@ -74,43 +79,59 @@ struct GribOverlaySettings
         bool m_bBarbedArrows;
         bool m_iBarbedVisibility;
         int m_iBarbedColour;
+		bool m_bBarbArrFixSpac;
+		int m_iBarbArrSpacing;
         bool m_bIsoBars;
         bool m_iIsoBarVisibility;
         double m_iIsoBarSpacing;
         bool m_bDirectionArrows;
         int m_iDirectionArrowForm;
+		bool m_bDirArrFixSpac;
         int m_iDirectionArrowSize;
+		int m_iDirArrSpacing;
         bool m_bOverlayMap;
         int m_iOverlayMapColors;
         bool m_bNumbers;
+		bool m_bNumFixSpac;
         int m_iNumbersSpacing;
+        bool m_bParticles;
+        double m_dParticleDensity;
 
     } Settings[SETTINGS_COUNT];
 };
 
-class GRIBUIDialog;
+class GRIBUICtrlBar;
 
 class GribSettingsDialog : public GribSettingsDialogBase
 {
 public:
-    GribSettingsDialog(GRIBUIDialog &parent, GribOverlaySettings &extSettings, int &lastdatatype);
+    GribSettingsDialog(GRIBUICtrlBar &parent, GribOverlaySettings &extSettings, int &lastdatatype, int fileIntervalIndex);
     void WriteSettings();
+
+	void SetSettingsDialogSize();
+	void SaveLastPage();
+	int  GetPageIndex() { return m_SetBookpageIndex; }
 
 private:
     void SetDataTypeSettings(int settings);
     void ReadDataTypeSettings(int settings);
     void PopulateUnits(int settings);
     void ShowFittingSettings (int settings);
-    void ShowSettings( int params );
+    void ShowSettings( int params, bool show = true );
     void OnDataTypeChoice( wxCommandEvent& event );
+	void OnUnitChange( wxCommandEvent& event );
     void OnTransparencyChange( wxScrollEvent& event  );
     void OnApply( wxCommandEvent& event );
     void OnIntepolateChange( wxCommandEvent& event );
+	void OnSpacingModeChange( wxCommandEvent& event );
+	void OnPageChange( wxNotebookEvent& event );
+	void OnCtrlandDataStyleChanged( wxCommandEvent& event );
 
-    GRIBUIDialog &m_parent;
+    GRIBUICtrlBar &m_parent;
 
     GribOverlaySettings m_Settings, &m_extSettings;
     int &m_lastdatatype;
+	int m_SetBookpageIndex;
 };
 
 #endif

@@ -205,6 +205,7 @@ class S57Reader
     int                 bAttrWarningIssued;
     
     int                 Nall;
+    int                 Aall;
     
 
   public:
@@ -225,7 +226,7 @@ class S57Reader
     int                 GetCSCL() { return nCSCL; }
 
     int                 Ingest(CallBackFunction pcallback = NULL);
-    int                 ApplyUpdates( DDFModule * );
+    int                 ApplyUpdates( DDFModule *, int );
     int                 FindAndApplyUpdates( const char *pszPath=NULL );
 
     void                Rewind();
@@ -243,7 +244,10 @@ class S57Reader
     OGRErr              GetExtent( OGREnvelope *psExtent, int bForce );
     
     int                 GetNall(){ return Nall; }
+    int                 GetAall(){ return Aall; }
 
+    int                 GetFeatureCount() { return oFE_Index.GetCount(); }
+    
  };
 
 /************************************************************************/

@@ -33,9 +33,28 @@
 #ifndef __OCPNTYPES_H__
 #define __OCPNTYPES_H__
 
-#include "bbox.h"
-//#include "OCPNRegion.h"
-class OCPNRegion;
+
+typedef struct _S52color{
+    char colName[20];
+    unsigned char  R;
+    unsigned char  G;
+    unsigned char  B;
+}S52color;
+
+WX_DECLARE_STRING_HASH_MAP( wxColour, wxColorHashMap );
+WX_DECLARE_STRING_HASH_MAP( S52color, colorHashMap );
+
+typedef struct _colTable {
+    wxString *tableName;
+    wxString rasterFileName;
+    wxArrayPtrVoid *color;
+    colorHashMap colors;
+    wxColorHashMap wxColors;
+} colTable;
+
+
+
+WX_DEFINE_ARRAY_INT(int, ArrayOfInts);
 
 //    ChartType constants
 typedef enum ChartTypeEnum
@@ -70,61 +89,6 @@ typedef enum ColorScheme
 }_ColorScheme;
 
 
-//----------------------------------------------------------------------------
-// ViewPort
-//    Implementation is in chcanv.cpp
-//----------------------------------------------------------------------------
-class ViewPort
-{
-      public:
-            ViewPort();
-
-            wxPoint GetPixFromLL(double lat, double lon) const;
-            void GetLLFromPix(const wxPoint &p, double *lat, double *lon);
-            wxPoint2DDouble GetDoublePixFromLL(double lat, double lon);
-
-            OCPNRegion GetVPRegionIntersect( const OCPNRegion &Region, size_t n, float *llpoints, int chart_native_scale, wxPoint *ppoints = NULL );
-            wxRect GetVPRectIntersect( size_t n, float *llpoints );
-            
-            void SetBoxes(void);
-
-//  Accessors
-            void Invalidate() { bValid = false; }
-            void Validate() { bValid = true; }
-            bool IsValid() const { return bValid; }
-
-            void SetRotationAngle(double angle_rad) { rotation = angle_rad;}
-            void SetProjectionType(int type){ m_projection_type = type; }
-
-            LLBBox &GetBBox() { return vpBBox; }
-            void SetBBoxDirect( double latmin, double lonmin, double latmax, double lonmax);
-            
-//  Generic
-            double   clat;                   // center point
-            double   clon;
-            double   view_scale_ppm;
-            double   skew;
-            double   rotation;
-
-            double    chart_scale;            // conventional chart displayed scale
-
-            int      pix_width;
-            int      pix_height;
-
-            bool     b_quilt;
-            bool     b_FullScreenQuilt;
-
-            int      m_projection_type;
-            bool     b_MercatorProjectionOverride;
-            wxRect   rv_rect;
-
-      private:
-            LLBBox   vpBBox;                // An un-skewed rectangular lat/lon bounding box
-                                            // which contains the entire vieport
-
-            bool     bValid;                 // This VP is valid
-};
-
 
 //----------------------------------------------------------------------------
 // ocpn Toolbar stuff
@@ -133,14 +97,18 @@ class ChartBase;
 class wxSocketEvent;
 class ocpnToolBarSimple;
 
-typedef struct {
-    wxPoint2DDouble pos;
-    double sector1, sector2;
-    double range;
-    wxColor color;
-    bool iswhite;
-    bool isleading;
-} s57Sector_t;
 
+//    A generic Position Data structure
+typedef struct {
+    double kLat;
+    double kLon;
+    double kCog;
+    double kSog;
+    double kVar;            // Variation, typically from RMC message
+    double kHdm;            // Magnetic heading
+    double kHdt;            // true heading
+    time_t FixTime;
+    int    nSats;
+} GenericPosDatEx;
 
 #endif

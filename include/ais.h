@@ -46,7 +46,6 @@
 
 #include "dychart.h"
 #include "chart1.h"
-#include "datastream.h"         // For GenericPosDatEx
 #include "navutil.h"
 #include "OCPN_Sound.h"
 #include "AIS_Bitstring.h"
@@ -61,11 +60,6 @@
 
 #define TIMER_AIS_MSEC      998
 #define TIMER_AIS_AUDIO_MSEC 2000
-
-#define ID_ACKNOWLEDGE        10001
-#define ID_SILENCE            10002
-#define ID_AIS_TARGET_LIST    10003
-#define ID_JUMPTO             10004
 
 enum {
     tlTRK = 0,
@@ -140,12 +134,11 @@ typedef enum ais_transponder_class
     AIS_APRS    // APRS position report
 }_ais_transponder_class;
 
-//    Describe AIS Alarm state
-typedef enum ais_alarm_type
+//    Describe AIS Alert state
+typedef enum ais_alert_type
 {
-      AIS_NO_ALARM = 0,
-      AIS_ALARM_SET,
-//      AIS_ALARM_ACKNOWLEDGED
+      AIS_NO_ALERT = 0,
+      AIS_ALERT_SET,
 
 }_ais_alarm_type;
 
@@ -234,5 +227,12 @@ wxString trimAISField( char *data );
 wxString ais_get_status(int index);
 wxString ais_get_type(int index);
 wxString ais_get_short_type(int index);
+
+void AISDrawAreaNotices (ocpnDC& dc );
+void AISDraw(ocpnDC& dc);
+bool AnyAISTargetsOnscreen( ViewPort &vp );
+
+
+WX_DECLARE_HASH_MAP( int, wxString, wxIntegerHash, wxIntegerEqual, AIS_Target_Name_Hash );
 
 #endif

@@ -31,6 +31,7 @@
 #include <ctype.h>
 
 #include "cutil.h"
+#include "vector2D.h"
 
 
 int Intersect(MyPoint, MyPoint, MyPoint, MyPoint) ;
@@ -403,3 +404,62 @@ extern int mysnprintf( char *buffer, int count, const char *format, ... )
       return ret;
 }
 #endif
+
+int oldNextPow2(int size)
+{
+    /* compute dimensions needed as next larger power of 2 */
+    int a = size;
+    int p = 0;
+    while( a ) {
+        a = a >> 1;
+        p++;
+    }
+    return 1 << p;
+}
+
+int NextPow2(int size)
+{
+    int n = size-1;          // compute dimensions needed as next larger power of 2
+    int shift = 1;
+    while ((n+1) & n){
+        n |= n >> shift;
+        shift <<= 1;
+    }
+    
+    return n + 1;
+}
+
+void DouglasPeucker(double *PointList, int fp, int lp, double epsilon, wxArrayInt *keep)
+{
+    // Find the point with the maximum distance
+    double dmax = 0;
+    int index = 0;
+    
+    vector2D va(PointList[2*fp] - PointList[2*lp],
+                PointList[2*fp+1] - PointList[2*lp+1]);
+    
+    double da = va.x*va.x + va.y*va.y;
+    for(int i = fp+1 ; i < lp ; ++i) {
+        vector2D vb(PointList[2*i] - PointList[2*fp],
+                    PointList[2*i + 1] - PointList[2*fp+1]);
+        
+        double dab = va.x*vb.x + va.y*vb.y;
+        double db = vb.x*vb.x + vb.y*vb.y;
+        double d = da - dab*dab/db;
+        if ( d > dmax ) {
+            index = i;
+            dmax = d;
+        }
+    }
+    // If max distance is greater than epsilon, recursively simplify
+    if ( dmax > epsilon*epsilon ) {
+        keep->Add(index);
+        
+        // Recursive call
+        DouglasPeucker(PointList, fp, index, epsilon, keep);
+        DouglasPeucker(PointList, index, lp, epsilon, keep);
+        
+    }
+}
+
+    

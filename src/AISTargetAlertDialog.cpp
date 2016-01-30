@@ -29,6 +29,9 @@
 #include "AIS_Target_Data.h"
 #include "FontMgr.h"
 #include "ocpn_types.h"
+#include "Select.h"
+#include "routemanagerdialog.h"
+#include "OCPNPlatform.h"
 
 extern ColorScheme global_color_scheme;
 extern bool g_bopengl;
@@ -39,6 +42,13 @@ extern int g_ais_alert_dialog_x;
 extern int g_ais_alert_dialog_y;
 extern int g_ais_alert_dialog_sx;
 extern int g_ais_alert_dialog_sy;
+extern bool g_bAIS_CPA_Alert_Audio;
+extern wxString g_default_wp_icon;
+extern Select *pSelect;
+extern MyConfig *pConfig;
+extern RouteManagerDialog *pRouteManagerDialog;
+extern ChartCanvas *cc1;
+extern OCPNPlatform  *g_Platform;
 
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -106,6 +116,7 @@ BEGIN_EVENT_TABLE ( AISTargetAlertDialog, wxDialog )
     EVT_BUTTON( ID_ACKNOWLEDGE, AISTargetAlertDialog::OnIdAckClick )
     EVT_BUTTON( ID_SILENCE, AISTargetAlertDialog::OnIdSilenceClick )
     EVT_BUTTON( ID_JUMPTO, AISTargetAlertDialog::OnIdJumptoClick )
+    EVT_BUTTON( ID_WPT_CREATE, AISTargetAlertDialog::OnIdCreateWPClick )
     EVT_MOVE( AISTargetAlertDialog::OnMove )
     EVT_SIZE( AISTargetAlertDialog::OnSize )
 END_EVENT_TABLE()
@@ -122,17 +133,25 @@ AISTargetAlertDialog::~AISTargetAlertDialog()
 void AISTargetAlertDialog::Init()
 {
     m_target_mmsi = 0;
+    m_max_nline = 20;
+    m_adj_height = 0;
+    m_bsizeSet = false;
+    
 }
 
 
-bool AISTargetAlertDialog::Create( int target_mmsi, wxWindow *parent, AIS_Decoder *pdecoder, bool b_jumpto,
-             wxWindowID id,  const wxString& caption,  const wxPoint& pos,const wxSize& size, long style )
+bool AISTargetAlertDialog::Create( int target_mmsi, wxWindow *parent, AIS_Decoder *pdecoder,
+                                   bool b_jumpto, bool b_createWP, bool b_ack,
+                                   wxWindowID id,  const wxString& caption,
+                                   const wxPoint& pos,const wxSize& size, long style )
                      
 {
     
     OCPN_AlertDialog::Create(parent, id, caption, pos, size, style);
     m_bjumpto = b_jumpto;
-
+    m_back = b_ack;
+    m_bcreateWP = b_createWP;
+    
     m_target_mmsi = target_mmsi;
     m_pdecoder = pdecoder;
 
@@ -142,7 +161,7 @@ bool AISTargetAlertDialog::Create( int target_mmsi, wxWindow *parent, AIS_Decode
 #ifdef __WXGTK__
     face = _T("Monospace");
 #endif
-    wxFont *fp_font = wxTheFontList->FindOrCreateFont( font_size, wxFONTFAMILY_MODERN,
+    wxFont *fp_font = FontMgr::Get().FindOrCreateFont( font_size, wxFONTFAMILY_MODERN,
             wxFONTSTYLE_NORMAL, dFont->GetWeight(), false, face );
 
     SetFont( *fp_font );
@@ -150,7 +169,10 @@ bool AISTargetAlertDialog::Create( int target_mmsi, wxWindow *parent, AIS_Decode
     CreateControls();
     if( !g_bopengl && CanSetTransparent() ) SetTransparent( 192 );
     DimeControl( this );
-
+    wxColor bg = GetBackgroundColour();
+    m_pAlertTextCtl->SetBackgroundColour( bg );
+    SetBackgroundColour( bg );
+    
     return true;
 }
 
@@ -160,7 +182,11 @@ void AISTargetAlertDialog::CreateControls()
     SetSizer( topSizer );
 
     m_pAlertTextCtl = new wxHtmlWindow( this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-            wxHW_SCROLLBAR_AUTO );
+                                        wxHW_SCROLLBAR_AUTO | wxHW_NO_SELECTION);
+    #ifdef __OCPN__ANDROID__
+    m_pAlertTextCtl->GetHandle()->setStyleSheet( getQtStyleSheet());
+    #endif
+    
     m_pAlertTextCtl->SetBorders( 5 );
 
     topSizer->Add( m_pAlertTextCtl, 1, wxALIGN_CENTER_HORIZONTAL | wxALL | wxEXPAND, 5 );
@@ -170,22 +196,35 @@ void AISTargetAlertDialog::CreateControls()
     topSizer->Add( AckBox, 0, wxALIGN_CENTER_HORIZONTAL | wxALL, 5 );
 
     // The Silence button
-    wxButton* silence = new wxButton( this, ID_SILENCE, _( "&Silence Alert" ), wxDefaultPosition,
+    if( g_bAIS_CPA_Alert_Audio ){
+        wxButton* silence = new wxButton( this, ID_SILENCE, _( "&Silence Alert" ), wxDefaultPosition,
             wxDefaultSize, 0 );
-    AckBox->Add( silence, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
+        AckBox->Add( silence, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
+    }
 
     // The Ack button
-    wxButton* ack = new wxButton( this, ID_ACKNOWLEDGE, _( "&Acknowledge" ), wxDefaultPosition,
+    if( m_back ) {
+        wxButton* ack = new wxButton( this, ID_ACKNOWLEDGE, _( "&Acknowledge" ), wxDefaultPosition,
             wxDefaultSize, 0 );
-    AckBox->Add( ack, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
+        AckBox->Add( ack, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
+    }
 
     if( m_bjumpto ) {
         wxButton* jumpto = new wxButton( this, ID_JUMPTO, _( "&Jump To" ), wxDefaultPosition,
                 wxDefaultSize, 0 );
         AckBox->Add( jumpto, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
     }
+    
+    if( m_bcreateWP ) {
+        wxButton *createWptBtn = new wxButton( this, ID_WPT_CREATE, _("Create Waypoint"), wxDefaultPosition, wxDefaultSize, 0 );
+        AckBox->Add( createWptBtn, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5 );
+    }
+    
 
     UpdateText();
+    
+    RecalculateSize();
+    
 }
 
 bool AISTargetAlertDialog::GetAlertText()
@@ -206,10 +245,8 @@ bool AISTargetAlertDialog::GetAlertText()
 void AISTargetAlertDialog::UpdateText()
 {
     if( GetAlertText() ) {
-        wxColor bg = GetBackgroundColour();
-        m_pAlertTextCtl->SetBackgroundColour( bg );
-
-        wxFont *dFont = FontMgr::Get().GetFont( _("AISTargetQuery"), 12 );
+        
+        wxFont *dFont = FontMgr::Get().GetFont( _("AISTargetAlert"), 12 );
         wxString face = dFont->GetFaceName();
         int sizes[7];
         for( int i = -2; i < 5; i++ ) {
@@ -217,35 +254,92 @@ void AISTargetAlertDialog::UpdateText()
         }
 
         wxString html;
-        html.Printf( _T("<html><body bgcolor=#%02x%02x%02x><center>"), bg.Red(), bg.Blue(),
-                bg.Green() );
-
+        wxColor bg = GetBackgroundColour();
+        
+        html.Printf( _T("<html><body bgcolor=#%02x%02x%02x><center>"), bg.Red(), bg.Green(), bg.Blue() );
+        
         html << m_alert_text;
         html << _T("</center></font></body></html>");
 
         m_pAlertTextCtl->SetFonts( face, face, sizes );
         m_pAlertTextCtl->SetPage( html );
 
-        // Try to create a min size that works across font sizes.
-        wxSize sz;
-        if( !IsShown() ) {
-            sz = m_pAlertTextCtl->GetVirtualSize();
-            sz.x = 300;
-            m_pAlertTextCtl->SetSize( sz );
-        }
-        m_pAlertTextCtl->Layout();
-        wxSize ir( m_pAlertTextCtl->GetInternalRepresentation()->GetWidth(),
-                m_pAlertTextCtl->GetInternalRepresentation()->GetHeight() );
-        sz.x = wxMax( m_pAlertTextCtl->GetSize().x, ir.x );
-        sz.y = wxMax( m_pAlertTextCtl->GetSize().y, ir.y );
-        m_pAlertTextCtl->SetMinSize( sz );
-        Fit();
-        sz -= wxSize( 200, 200 );
-        m_pAlertTextCtl->SetMinSize( sz );
+        RecalculateSize();
+    }
+    
+    SetColorScheme();
+    if( !g_bopengl && CanSetTransparent() )
+        SetTransparent( 192 );
+}
+
+void AISTargetAlertDialog::RecalculateSize( void )
+{
+    //  Count the lines in the currently displayed text string
+    unsigned int i=0;
+    int nline = 0;
+    while(i < m_alert_text.Length() ){
+        if(m_alert_text[i] == '\n')
+            nline++;
+        i++;
     }
 
+    if(nline > m_max_nline)
+        m_max_nline = nline;
+    
+    wxSize esize;
+    esize.x = GetCharWidth() * 45;
+    esize.y = GetCharHeight() * (m_max_nline + 4);
+//    SetSize(esize);
+
+    int height = m_pAlertTextCtl->GetInternalRepresentation()->GetHeight();
+    int adj_height = height + (GetCharHeight() * 4);
+    m_adj_height = wxMax(m_adj_height, adj_height);
+    
+    esize.y = wxMin(esize.y, m_adj_height);
+///  SetClientSize(esize);
+    
+/*    
+    wxSize dsize = GetParent()->GetClientSize();
+    
+    wxSize fsize = GetSize();
+    fsize.y = wxMin(fsize.y, dsize.y - (1 * GetCharHeight()));
+    fsize.x = wxMin(fsize.x, dsize.x - (1 * GetCharHeight()));
+    SetSize(fsize);
+    */
+
+    
+    if(!m_bsizeSet){
+        Fit();          // Sets the horizontal size OK
+        m_bsizeSet = true;
+    }
+
+        wxSize gSize = GetClientSize();
+        if(gSize.y != esize.y)
+            SetClientSize(gSize.x, esize.y);
+        
+    
+    g_Platform->PositionAISAlert( this );
+    
+}
+
+void AISTargetAlertDialog::SetColorScheme( void )
+{
     DimeControl( this );
-    if( !g_bopengl && CanSetTransparent() ) SetTransparent( 192 );
+    wxColor bg = GetBackgroundColour();
+    m_pAlertTextCtl->SetBackgroundColour( bg );
+    SetBackgroundColour( bg );                  // This looks like non-sense, but is needed for __WXGTK__
+    // to get colours to propagate down the control's family tree.
+    
+#ifdef __WXQT__    
+    //  wxQT has some trouble clearing the background of HTML window...
+    wxBitmap tbm( GetSize().x, GetSize().y, -1 );
+    wxMemoryDC tdc( tbm );
+    //    wxColour cback = GetGlobalColor( _T("YELO1") );
+    tdc.SetBackground( bg );
+    tdc.Clear();
+    m_pAlertTextCtl->SetBackgroundImage(tbm);
+#endif
+    
 }
 
 void AISTargetAlertDialog::OnClose( wxCloseEvent& event )
@@ -254,7 +348,7 @@ void AISTargetAlertDialog::OnClose( wxCloseEvent& event )
     if( m_pdecoder ) {
         AIS_Target_Data *td = m_pdecoder->Get_Target_Data_From_MMSI( Get_Dialog_MMSI() );
         if( td ) {
-            if( AIS_ALARM_SET == td->n_alarm_state ) {
+            if( AIS_ALERT_SET == td->n_alert_state ) {
                 td->m_ack_time = wxDateTime::Now();
                 td->b_in_ack_timeout = true;
             }
@@ -271,7 +365,7 @@ void AISTargetAlertDialog::OnIdAckClick( wxCommandEvent& event )
     if( m_pdecoder ) {
         AIS_Target_Data *td = m_pdecoder->Get_Target_Data_From_MMSI( Get_Dialog_MMSI() );
         if( td ) {
-            if( AIS_ALARM_SET == td->n_alarm_state ) {
+            if( AIS_ALERT_SET == td->n_alert_state ) {
                 td->m_ack_time = wxDateTime::Now();
                 td->b_in_ack_timeout = true;
             }
@@ -280,6 +374,29 @@ void AISTargetAlertDialog::OnIdAckClick( wxCommandEvent& event )
     Destroy();
     g_pais_alert_dialog_active = NULL;
 }
+void AISTargetAlertDialog::OnIdCreateWPClick( wxCommandEvent& event )
+{
+    if( m_pdecoder ) { 
+        AIS_Target_Data *td =  m_pdecoder->Get_Target_Data_From_MMSI( Get_Dialog_MMSI() );
+        if( td ) {
+            RoutePoint *pWP = new RoutePoint( td->Lat, td->Lon, g_default_wp_icon, wxEmptyString, GPX_EMPTY_STRING );
+            pWP->m_bIsolatedMark = true;                      // This is an isolated mark
+            pSelect->AddSelectableRoutePoint( td->Lat, td->Lon, pWP );
+            pConfig->AddNewWayPoint( pWP, -1 );    // use auto next num
+            
+            if( pRouteManagerDialog && pRouteManagerDialog->IsShown() )
+                pRouteManagerDialog->UpdateWptListCtrl();
+            if(cc1){
+                cc1->undo->BeforeUndoableAction( Undo_CreateWaypoint, pWP, Undo_HasParent, NULL );
+                cc1->undo->AfterUndoableAction( NULL );
+                cc1->InvalidateGL();
+            }
+            Refresh( false );
+        }
+    }
+    
+}
+
 
 void AISTargetAlertDialog::OnIdSilenceClick( wxCommandEvent& event )
 {
@@ -301,9 +418,8 @@ void AISTargetAlertDialog::OnIdJumptoClick( wxCommandEvent& event )
 void AISTargetAlertDialog::OnMove( wxMoveEvent& event )
 {
     //    Record the dialog position
-    wxPoint p = event.GetPosition();
-    g_ais_alert_dialog_x = p.x;
-    g_ais_alert_dialog_y = p.y;
+    g_ais_alert_dialog_x = GetPosition().x;
+    g_ais_alert_dialog_y = GetPosition().y;
 
     event.Skip();
 }

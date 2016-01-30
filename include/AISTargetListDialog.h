@@ -26,6 +26,9 @@
 #define __AISTARGETLISTDIALOG_H__
 
 #include <wx/panel.h>
+#include <wx/checkbox.h>
+
+#define ID_AIS_TARGET_LIST    10003
 
 class OCPNListCtrl;
 class AIS_Decoder;
@@ -50,11 +53,14 @@ class AISTargetListDialog: public wxPanel
             AISTargetListDialog( wxWindow *parent, wxAuiManager *auimgr, AIS_Decoder *pdecoder );
            ~AISTargetListDialog( );
 
+            void Shutdown( void );
             void OnClose(wxCloseEvent &event);
             void Disconnect_decoder();
 
+            void RecalculateSize( void );
             void SetColorScheme( );
             void UpdateAISTargetList( );     // Rebuild AIS target list
+            void UpdateNVAISTargetList( );
             AIS_Target_Data   *GetpTarget(unsigned int list_item);
 
             OCPNListCtrl      *m_pListCtrlAISTargets;
@@ -63,6 +69,8 @@ class AISTargetListDialog: public wxPanel
             ArrayOfMMSI       *m_pMMSI_array;
 
       private:
+            void CreateControls( void );
+           
             void OnPaneClose( wxAuiManagerEvent& event );
             void UpdateButtons();
             void OnTargetSelected( wxListEvent &event );
@@ -76,7 +84,9 @@ class AISTargetListDialog: public wxPanel
             void OnHideAllTracks( wxCommandEvent& event );
             void OnToggleTrack( wxCommandEvent& event );
             void OnLimitRange( wxCommandEvent& event );
-
+            void OnCloseButton( wxCommandEvent& event );
+            void OnAutosortCB( wxCommandEvent &event );
+            
             wxWindow          *m_pparent;
             wxAuiManager      *m_pAuiManager;
             wxButton          *m_pButtonInfo;
@@ -89,7 +99,11 @@ class AISTargetListDialog: public wxPanel
             wxSpinCtrl        *m_pSpinCtrlRange;
             wxStaticText      *m_pStaticTextCount;
             wxTextCtrl        *m_pTextTargetCount;
-
+            wxButton          *m_pButtonOK;
+            wxCheckBox        *m_pCBAutosort;
+            
+            bool              m_bautosort_force;
+            
             DECLARE_EVENT_TABLE()
 
 };

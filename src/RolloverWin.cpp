@@ -144,22 +144,22 @@ void RolloverWin::SetBestPosition( int x, int y, int off_x, int off_y, int rollo
     switch( rollover ) {
 
     case AIS_ROLLOVER:
-        dFont = FontMgr::Get().GetFont( _("AISRollover"), 12 );
+        dFont = FontMgr::Get().GetFont( _("AISRollover") );
         break;
 
     case TC_ROLLOVER:
-        dFont = FontMgr::Get().GetFont( _("TideCurrentGraphRollover"), 12 );
+        dFont = FontMgr::Get().GetFont( _("TideCurrentGraphRollover") );
         break;
 
     default:
     case LEG_ROLLOVER:
-        dFont = FontMgr::Get().GetFont( _("RouteLegInfoRollover"), 12 );
+        dFont = FontMgr::Get().GetFont( _("RouteLegInfoRollover") );
         break;
 
     }
 
     int font_size = wxMax(8, dFont->GetPointSize());
-    m_plabelFont = wxTheFontList->FindOrCreateFont( font_size, dFont->GetFamily(),
+    m_plabelFont = FontMgr::Get().FindOrCreateFont( font_size, dFont->GetFamily(),
                          dFont->GetStyle(), dFont->GetWeight(), false, dFont->GetFaceName() );
 
     if(m_plabelFont && m_plabelFont->IsOk()) {

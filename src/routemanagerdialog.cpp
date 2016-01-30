@@ -44,6 +44,8 @@
 #include "Layer.h"
 #include "SendToGpsDlg.h"
 #include "TrackPropDlg.h"
+#include "AIS_Decoder.h"
+#include "OCPNPlatform.h"
 
 #define DIALOG_MARGIN 3
 
@@ -134,11 +136,13 @@ extern double           gLat, gLon;
 extern double           gCog, gSog;
 extern bool             g_bShowLayers;
 extern wxString         g_default_wp_icon;
+extern AIS_Decoder      *g_pAIS;
+extern bool             g_bresponsive;
 
 // sort callback. Sort by route name.
 int sort_route_name_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortRoutesOnName(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortRoutesOnName(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortRoutesOnName(long item1, long item2, long list)
 #endif
@@ -167,7 +171,7 @@ int wxCALLBACK SortRoutesOnName(long item1, long item2, long list)
 // sort callback. Sort by route Destination.
 int sort_route_to_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortRoutesOnTo(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortRoutesOnTo(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortRoutesOnTo(long item1, long item2, long list)
 #endif
@@ -195,7 +199,7 @@ int wxCALLBACK SortRoutesOnTo(long item1, long item2, long list)
 // sort callback. Sort by track name.
 int sort_track_name_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortTracksOnName(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortTracksOnName(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortTracksOnName(long item1, long item2, long list)
 #endif
@@ -224,7 +228,7 @@ int wxCALLBACK SortTracksOnName(long item1, long item2, long list)
 // sort callback. Sort by track length.
 int sort_track_len_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortTracksOnDistance(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortTracksOnDistance(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortTracksOnDistance(long item1, long item2, long list)
 #endif
@@ -263,7 +267,7 @@ int sort_wp_key;
 // sort callback. Sort by wpt name.
 int sort_wp_name_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortWaypointsOnName(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortWaypointsOnName(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortWaypointsOnName(long item1, long item2, long list)
 #endif
@@ -288,7 +292,7 @@ int wxCALLBACK SortWaypointsOnName(long item1, long item2, long list)
 // sort callback. Sort by wpt distance.
 int sort_wp_len_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortWaypointsOnDistance(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortWaypointsOnDistance(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortWaypointsOnDistance(long item1, long item2, long list)
 #endif
@@ -326,7 +330,7 @@ int wxCALLBACK SortWaypointsOnDistance(long item1, long item2, long list)
 // sort callback. Sort by layer name.
 int sort_layer_name_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortLayersOnName(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortLayersOnName(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortLayersOnName(long item1, long item2, long list)
 #endif
@@ -355,7 +359,7 @@ int wxCALLBACK SortLayersOnName(long item1, long item2, long list)
 // sort callback. Sort by layer size.
 int sort_layer_len_dir;
 #if wxCHECK_VERSION(2, 9, 0)
-int wxCALLBACK SortLayersOnSize(long item1, long item2, wxIntPtr list)
+int wxCALLBACK SortLayersOnSize(wxIntPtr item1, wxIntPtr item2, wxIntPtr list)
 #else
 int wxCALLBACK SortLayersOnSize(long item1, long item2, long list)
 #endif
@@ -389,10 +393,12 @@ int wxCALLBACK SortLayersOnSize(long item1, long item2, long list)
 
 }
 
-// event table. Empty, because I find it much easier to see what is connected to what
+// event table. Mostly empty, because I find it much easier to see what is connected to what
 // using Connect() where possible, so that it is visible in the code.
 BEGIN_EVENT_TABLE(RouteManagerDialog, wxDialog)
 EVT_NOTEBOOK_PAGE_CHANGED(wxID_ANY, RouteManagerDialog::OnTabSwitch) // This should work under Windows :-(
+EVT_CLOSE(RouteManagerDialog::OnClose)
+EVT_COMMAND(wxID_OK, wxEVT_COMMAND_BUTTON_CLICKED, RouteManagerDialog::OnOK)
 END_EVENT_TABLE()
 
 void RouteManagerDialog::OnTabSwitch( wxNotebookEvent &event )
@@ -413,6 +419,25 @@ void RouteManagerDialog::OnTabSwitch( wxNotebookEvent &event )
 }
 
 // implementation
+
+bool RouteManagerDialog::instanceFlag = false;
+RouteManagerDialog* RouteManagerDialog::single = NULL;
+
+RouteManagerDialog* RouteManagerDialog::getInstance(wxWindow *parent)
+{
+    if(! instanceFlag)
+    {
+        single = new RouteManagerDialog(parent);
+        instanceFlag = true;
+        return single;
+    }
+    else
+    {
+        return single;
+    }
+}
+
+
 RouteManagerDialog::RouteManagerDialog( wxWindow *parent )
 {
     long style = wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER;
@@ -420,8 +445,11 @@ RouteManagerDialog::RouteManagerDialog( wxWindow *parent )
     style |= wxSTAY_ON_TOP;
 #endif
 
-    wxDialog::Create( parent, -1, wxString( _("Route Manager") ), wxDefaultPosition, wxDefaultSize,
+    wxDialog::Create( parent, -1, wxString( _("Route & Mark Manager") ), wxDefaultPosition, wxDefaultSize,
             style );
+    
+    wxFont *qFont = GetOCPNScaledFont(_("Dialog"));
+    SetFont( *qFont );
 
     m_lastWptItem = -1;
     m_lastTrkItem = -1;
@@ -437,20 +465,26 @@ RouteManagerDialog::RouteManagerDialog( wxWindow *parent )
 
 void RouteManagerDialog::Create()
 {
+    //  Get a text height metric for reference
+    int char_width, char_height;
+    GetTextExtent(_T("W"), &char_width, &char_height);
+    m_charWidth = char_width;
+        
     wxBoxSizer* itemBoxSizer1 = new wxBoxSizer( wxVERTICAL );
     SetSizer( itemBoxSizer1 );
-
+    
     m_pNotebook = new wxNotebook( this, wxID_ANY, wxDefaultPosition, wxSize( -1, -1 ), wxNB_TOP );
     itemBoxSizer1->Add( m_pNotebook, 1,
-            wxALIGN_CENTER_HORIZONTAL | wxALIGN_CENTER_VERTICAL | wxALL | wxEXPAND, 5 );
-
+                        wxALIGN_CENTER_HORIZONTAL | wxALIGN_CENTER_VERTICAL | wxALL | wxEXPAND, 5 );
+    
     //  Create "Routes" panel
     m_pPanelRte = new wxPanel( m_pNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-            wxNO_BORDER | wxTAB_TRAVERSAL );
+                               wxNO_BORDER | wxTAB_TRAVERSAL);
+    
     wxBoxSizer *sbsRoutes = new wxBoxSizer( wxHORIZONTAL );
     m_pPanelRte->SetSizer( sbsRoutes );
     m_pNotebook->AddPage( m_pPanelRte, _("Routes") );
-
+    
     sort_wp_len_dir = 1;
     sort_wp_name_dir = 0;
     sort_track_len_dir = 1;
@@ -459,314 +493,349 @@ void RouteManagerDialog::Create()
     sort_route_name_dir = 0;
     sort_layer_name_dir = 0;
     sort_layer_len_dir = 1;
-
+    
     // Setup GUI
-    m_pRouteListCtrl = new wxListCtrl( m_pPanelRte, -1, wxDefaultPosition, wxSize( 400, -1 ),
-            wxLC_REPORT  | wxLC_SORT_ASCENDING | wxLC_HRULES
-                    | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    m_pRouteListCtrl = new wxListCtrl( m_pPanelRte, -1, wxDefaultPosition, wxSize(-1, -1),
+                                       wxLC_REPORT  | wxLC_SORT_ASCENDING | wxLC_HRULES
+                                       | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    #ifdef __OCPN__ANDROID__    
+    m_pRouteListCtrl->GetHandle()->setStyleSheet(getQtStyleSheet());
+    #endif    
+    
     m_pRouteListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_SELECTED,
-            wxListEventHandler(RouteManagerDialog::OnRteSelected), NULL, this );
+                               wxListEventHandler(RouteManagerDialog::OnRteSelected), NULL, this );
     m_pRouteListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_DESELECTED,
-            wxListEventHandler(RouteManagerDialog::OnRteSelected), NULL, this );
+                               wxListEventHandler(RouteManagerDialog::OnRteSelected), NULL, this );
     m_pRouteListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_ACTIVATED,
-            wxListEventHandler(RouteManagerDialog::OnRteDefaultAction), NULL, this );
+                               wxListEventHandler(RouteManagerDialog::OnRteDefaultAction), NULL, this );
     m_pRouteListCtrl->Connect( wxEVT_LEFT_DOWN,
-            wxMouseEventHandler(RouteManagerDialog::OnRteToggleVisibility), NULL, this );
+                               wxMouseEventHandler(RouteManagerDialog::OnRteToggleVisibility), NULL, this );
     m_pRouteListCtrl->Connect( wxEVT_COMMAND_LIST_COL_CLICK,
-            wxListEventHandler(RouteManagerDialog::OnRteColumnClicked), NULL, this );
+                               wxListEventHandler(RouteManagerDialog::OnRteColumnClicked), NULL, this );
     sbsRoutes->Add( m_pRouteListCtrl, 1, wxEXPAND | wxALL, DIALOG_MARGIN );
-
+    
     // Columns: visibility ctrl, name
     // note that under MSW for SetColumnWidth() to work we need to create the
     // items with images initially even if we specify dummy image id
-
-    m_pRouteListCtrl->InsertColumn( rmVISIBLE, _("Show"), wxLIST_FORMAT_LEFT, 40 );
-    m_pRouteListCtrl->InsertColumn( rmROUTENAME, _("Route Name"), wxLIST_FORMAT_LEFT, 120 );
-    m_pRouteListCtrl->InsertColumn( rmROUTEDESC, _("To"), wxLIST_FORMAT_LEFT, 230 );
-    /*Seth
-     wxListItem itemCol;
-     itemCol.SetImage(-1);
-     m_pRouteListCtrl->InsertColumn(rmVISIBLE, itemCol);
-     //     m_pRouteListCtrl->InsertColumn(rmVISIBLE, wxT(""));
-     m_pRouteListCtrl->SetColumnWidth(rmVISIBLE, 28);
-
-     m_pRouteListCtrl->InsertColumn(rmROUTENAME, _("Route Name"));
-     m_pRouteListCtrl->InsertColumn(rmROUTEDESC, _("To"));
-     */
-
+    m_pRouteListCtrl->InsertColumn( rmVISIBLE, _("Show"), wxLIST_FORMAT_LEFT, 10 /*4 * char_width*/ );
+    m_pRouteListCtrl->InsertColumn( rmROUTENAME, _("Route Name"), wxLIST_FORMAT_LEFT, 15 * char_width );
+    m_pRouteListCtrl->InsertColumn( rmROUTEDESC, _("From <-> To"), wxLIST_FORMAT_LEFT, 10 * char_width );
+    
     // Buttons: Delete, Properties...
     wxBoxSizer *bsRouteButtons = new wxBoxSizer( wxVERTICAL );
-    sbsRoutes->Add( bsRouteButtons, 0, wxALIGN_RIGHT );
-
-    btnRteProperties = new wxButton( m_pPanelRte, -1, _("&Properties...") );
-    bsRouteButtons->Add( btnRteProperties, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+    sbsRoutes->Add( bsRouteButtons, 0, wxALIGN_RIGHT | wxEXPAND );
+    
+    wxScrolledWindow *winr = new wxScrolledWindow( m_pPanelRte, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                   wxNO_BORDER | wxTAB_TRAVERSAL | wxVSCROLL);
+    winr->SetScrollRate(0,5);
+    
+    bsRouteButtons->Add( winr, 1, wxALL | wxEXPAND, DIALOG_MARGIN );
+    
+    wxBoxSizer *bsRouteButtonsInner = new wxBoxSizer( wxVERTICAL );
+    winr->SetSizer(bsRouteButtonsInner);
+    
+    btnRteProperties = new wxButton( winr, -1, _("&Properties...") );
+    bsRouteButtonsInner->Add( btnRteProperties, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteProperties->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRtePropertiesClick), NULL, this );
-
-    btnRteActivate = new wxButton( m_pPanelRte, -1, _("&Activate") );
-    bsRouteButtons->Add( btnRteActivate, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                               wxCommandEventHandler(RouteManagerDialog::OnRtePropertiesClick), NULL, this );
+    
+    btnRteActivate = new wxButton( winr, -1, _("&Activate") );
+    bsRouteButtonsInner->Add( btnRteActivate, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteActivate->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteActivateClick), NULL, this );
+                             wxCommandEventHandler(RouteManagerDialog::OnRteActivateClick), NULL, this );
     btnRteActivate->Connect( wxEVT_LEFT_DOWN,
-            wxMouseEventHandler(RouteManagerDialog::OnRteBtnLeftDown), NULL, this );
-
-    btnRteZoomto = new wxButton( m_pPanelRte, -1, _("&Center View") );
-    bsRouteButtons->Add( btnRteZoomto, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                             wxMouseEventHandler(RouteManagerDialog::OnRteBtnLeftDown), NULL, this );
+    
+    btnRteZoomto = new wxButton( winr, -1, _("&Center View") );
+    bsRouteButtonsInner->Add( btnRteZoomto, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteZoomto->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteZoomtoClick), NULL, this );
+                           wxCommandEventHandler(RouteManagerDialog::OnRteZoomtoClick), NULL, this );
     btnRteZoomto->Connect( wxEVT_LEFT_DOWN,
-            wxMouseEventHandler(RouteManagerDialog::OnRteBtnLeftDown), NULL, this );
-
-    btnRteReverse = new wxButton( m_pPanelRte, -1, _("&Reverse") );
-    bsRouteButtons->Add( btnRteReverse, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxMouseEventHandler(RouteManagerDialog::OnRteBtnLeftDown), NULL, this );
+    
+    btnRteReverse = new wxButton( winr, -1, _("&Reverse") );
+    bsRouteButtonsInner->Add( btnRteReverse, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteReverse->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteReverseClick), NULL, this );
-
-    btnRteDelete = new wxButton( m_pPanelRte, -1, _("&Delete") );
-    bsRouteButtons->Add( btnRteDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                            wxCommandEventHandler(RouteManagerDialog::OnRteReverseClick), NULL, this );
+    
+    btnRteDelete = new wxButton( winr, -1, _("&Delete") );
+    bsRouteButtonsInner->Add( btnRteDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteDelete->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteDeleteClick), NULL, this );
-
-    btnRteExport = new wxButton( m_pPanelRte, -1, _("&Export selected...") );
-    bsRouteButtons->Add( btnRteExport, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnRteDeleteClick), NULL, this );
+    
+    btnRteExport = new wxButton( winr, -1, _("&Export selected...") );
+    bsRouteButtonsInner->Add( btnRteExport, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteExport->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteExportClick), NULL, this );
-
-    btnRteSendToGPS = new wxButton( m_pPanelRte, -1, _("&Send to GPS") );
-    bsRouteButtons->Add( btnRteSendToGPS, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnRteExportClick), NULL, this );
+    
+    btnRteSendToGPS = new wxButton( winr, -1, _("&Send to GPS") );
+    bsRouteButtonsInner->Add( btnRteSendToGPS, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteSendToGPS->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteSendToGPSClick), NULL, this );
-
-    bsRouteButtons->AddSpacer( 10 );
-
-    btnRteDeleteAll = new wxButton( m_pPanelRte, -1, _("&Delete All") );
-    bsRouteButtons->Add( btnRteDeleteAll, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                              wxCommandEventHandler(RouteManagerDialog::OnRteSendToGPSClick), NULL, this );
+    
+    bsRouteButtonsInner->AddSpacer( 10 );
+    
+    btnRteDeleteAll = new wxButton( winr, -1, _("&Delete All") );
+    bsRouteButtonsInner->Add( btnRteDeleteAll, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnRteDeleteAll->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnRteDeleteAllClick), NULL, this );
-
+                              wxCommandEventHandler(RouteManagerDialog::OnRteDeleteAllClick), NULL, this );
+    
     //  Create "Tracks" panel
     m_pPanelTrk = new wxPanel( m_pNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-            wxNO_BORDER | wxTAB_TRAVERSAL );
+                               wxNO_BORDER | wxTAB_TRAVERSAL );
     wxBoxSizer* itemBoxSizer3 = new wxBoxSizer( wxHORIZONTAL );
     m_pPanelTrk->SetSizer( itemBoxSizer3 );
     m_pNotebook->AddPage( m_pPanelTrk, _("Tracks") );
-
-    m_pTrkListCtrl = new wxListCtrl( m_pPanelTrk, -1, wxDefaultPosition, wxSize( 400, -1 ),
-            wxLC_REPORT | wxLC_SORT_ASCENDING | wxLC_HRULES | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    
+    m_pTrkListCtrl = new wxListCtrl( m_pPanelTrk, -1, wxDefaultPosition, wxDefaultSize,
+                                     wxLC_REPORT | wxLC_SORT_ASCENDING | wxLC_HRULES | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    
+    #ifdef __OCPN__ANDROID__    
+    m_pTrkListCtrl->GetHandle()->setStyleSheet(getQtStyleSheet());
+    #endif    
+    
     m_pTrkListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_SELECTED,
-            wxListEventHandler(RouteManagerDialog::OnTrkSelected), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnTrkSelected), NULL, this );
     m_pTrkListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_DESELECTED,
-            wxListEventHandler(RouteManagerDialog::OnTrkSelected), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnTrkSelected), NULL, this );
     m_pTrkListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_ACTIVATED,
-            wxListEventHandler(RouteManagerDialog::OnTrkDefaultAction), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnTrkDefaultAction), NULL, this );
     m_pTrkListCtrl->Connect( wxEVT_LEFT_DOWN,
-            wxMouseEventHandler(RouteManagerDialog::OnTrkToggleVisibility), NULL, this );
+                             wxMouseEventHandler(RouteManagerDialog::OnTrkToggleVisibility), NULL, this );
     m_pTrkListCtrl->Connect( wxEVT_COMMAND_LIST_COL_CLICK,
-            wxListEventHandler(RouteManagerDialog::OnTrkColumnClicked), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnTrkColumnClicked), NULL, this );
     m_pTrkListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_RIGHT_CLICK,
-            wxListEventHandler(RouteManagerDialog::OnTrkRightClick), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnTrkRightClick), NULL, this );
     this->Connect( wxEVT_COMMAND_MENU_SELECTED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkMenuSelected), NULL, this );
-
+                   wxCommandEventHandler(RouteManagerDialog::OnTrkMenuSelected), NULL, this );
+    
     itemBoxSizer3->Add( m_pTrkListCtrl, 1, wxEXPAND | wxALL, DIALOG_MARGIN );
-
-    m_pTrkListCtrl->InsertColumn( colTRKVISIBLE, _("Show"), wxLIST_FORMAT_LEFT, 40 );
-    m_pTrkListCtrl->InsertColumn( colTRKNAME, _("Track Name"), wxLIST_FORMAT_LEFT, 250 );
-    m_pTrkListCtrl->InsertColumn( colTRKLENGTH, _("Length"), wxLIST_FORMAT_LEFT, 100 );
-
+    
+    m_pTrkListCtrl->InsertColumn( colTRKVISIBLE, _("Show"), wxLIST_FORMAT_LEFT, 4 * char_width );
+    m_pTrkListCtrl->InsertColumn( colTRKNAME, _("Track Name"), wxLIST_FORMAT_LEFT, 20 * char_width );
+    m_pTrkListCtrl->InsertColumn( colTRKLENGTH, _("Length"), wxLIST_FORMAT_LEFT, 5 * char_width );
+    
     wxBoxSizer *bsTrkButtons = new wxBoxSizer( wxVERTICAL );
-    itemBoxSizer3->Add( bsTrkButtons, 0, wxALIGN_RIGHT );
-
-    btnTrkNew = new wxButton( m_pPanelTrk, -1, _("&Start Track") );
-    bsTrkButtons->Add( btnTrkNew, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+    itemBoxSizer3->Add( bsTrkButtons, 0, wxALIGN_RIGHT | wxEXPAND );
+    
+    wxScrolledWindow *wint = new wxScrolledWindow( m_pPanelTrk, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                   wxNO_BORDER | wxTAB_TRAVERSAL | wxVSCROLL);
+    wint->SetScrollRate(0,5);
+    
+    bsTrkButtons->Add( wint, 1, wxALL | wxEXPAND, DIALOG_MARGIN );
+    
+    wxBoxSizer *bsTrkButtonsInner = new wxBoxSizer( wxVERTICAL );
+    wint->SetSizer(bsTrkButtonsInner);
+    
+    btnTrkNew = new wxButton( wint, -1, _("&Start Track") );
+    bsTrkButtonsInner->Add( btnTrkNew, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnTrkNew->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkNewClick), NULL, this );
-
-    btnTrkProperties = new wxButton( m_pPanelTrk, -1, _("&Properties") );
-    bsTrkButtons->Add( btnTrkProperties, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                        wxCommandEventHandler(RouteManagerDialog::OnTrkNewClick), NULL, this );
+    
+    btnTrkProperties = new wxButton( wint, -1, _("&Properties") );
+    bsTrkButtonsInner->Add( btnTrkProperties, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnTrkProperties->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkPropertiesClick), NULL, this );
-
-    btnTrkDelete = new wxButton( m_pPanelTrk, -1, _("&Delete") );
-    bsTrkButtons->Add( btnTrkDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                               wxCommandEventHandler(RouteManagerDialog::OnTrkPropertiesClick), NULL, this );
+    
+    btnTrkDelete = new wxButton( wint, -1, _("&Delete") );
+    bsTrkButtonsInner->Add( btnTrkDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnTrkDelete->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkDeleteClick), NULL, this );
-
-    btnTrkExport = new wxButton( m_pPanelTrk, -1, _("&Export selected...") );
-    bsTrkButtons->Add( btnTrkExport, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnTrkDeleteClick), NULL, this );
+    
+    btnTrkExport = new wxButton( wint, -1, _("&Export selected...") );
+    bsTrkButtonsInner->Add( btnTrkExport, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnTrkExport->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkExportClick), NULL, this );
-
-    btnTrkRouteFromTrack = new wxButton( m_pPanelTrk, -1, _("Route from Track") );
-    bsTrkButtons->Add( btnTrkRouteFromTrack, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnTrkExportClick), NULL, this );
+    
+    btnTrkRouteFromTrack = new wxButton( wint, -1, _("Route from Track") );
+    bsTrkButtonsInner->Add( btnTrkRouteFromTrack, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnTrkRouteFromTrack->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkRouteFromTrackClick), NULL, this );
-
-    bsTrkButtons->AddSpacer( 10 );
-
-    btnTrkDeleteAll = new wxButton( m_pPanelTrk, -1, _("&Delete All") );
-    bsTrkButtons->Add( btnTrkDeleteAll, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                                   wxCommandEventHandler(RouteManagerDialog::OnTrkRouteFromTrackClick), NULL, this );
+    
+    bsTrkButtonsInner->AddSpacer( 10 );
+    
+    btnTrkDeleteAll = new wxButton( wint, -1, _("&Delete All") );
+    bsTrkButtonsInner->Add( btnTrkDeleteAll, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnTrkDeleteAll->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnTrkDeleteAllClick), NULL, this );
-
+                              wxCommandEventHandler(RouteManagerDialog::OnTrkDeleteAllClick), NULL, this );
+    
     //  Create "Waypoints" panel
     m_pPanelWpt = new wxPanel( m_pNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-            wxNO_BORDER | wxTAB_TRAVERSAL );
+                               wxNO_BORDER | wxTAB_TRAVERSAL );
     wxBoxSizer* itemBoxSizer4 = new wxBoxSizer( wxHORIZONTAL );
     m_pPanelWpt->SetSizer( itemBoxSizer4 );
     m_pNotebook->AddPage( m_pPanelWpt, _("Waypoints") );
-
-    m_pWptListCtrl = new wxListCtrl( m_pPanelWpt, -1, wxDefaultPosition, wxSize( 400, -1 ),
-            wxLC_REPORT | wxLC_SORT_ASCENDING | wxLC_HRULES | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    
+    m_pWptListCtrl = new wxListCtrl( m_pPanelWpt, -1, wxDefaultPosition, wxDefaultSize,
+                                     wxLC_REPORT | wxLC_SORT_ASCENDING | wxLC_HRULES | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    #ifdef __OCPN__ANDROID__    
+    m_pWptListCtrl->GetHandle()->setStyleSheet(getQtStyleSheet());
+    #endif    
+    
     m_pWptListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_SELECTED,
-            wxListEventHandler(RouteManagerDialog::OnWptSelected), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnWptSelected), NULL, this );
     m_pWptListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_DESELECTED,
-            wxListEventHandler(RouteManagerDialog::OnWptSelected), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnWptSelected), NULL, this );
     m_pWptListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_ACTIVATED,
-            wxListEventHandler(RouteManagerDialog::OnWptDefaultAction), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnWptDefaultAction), NULL, this );
     m_pWptListCtrl->Connect( wxEVT_LEFT_DOWN,
-            wxMouseEventHandler(RouteManagerDialog::OnWptToggleVisibility), NULL, this );
+                             wxMouseEventHandler(RouteManagerDialog::OnWptToggleVisibility), NULL, this );
     m_pWptListCtrl->Connect( wxEVT_COMMAND_LIST_COL_CLICK,
-            wxListEventHandler(RouteManagerDialog::OnWptColumnClicked), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnWptColumnClicked), NULL, this );
     itemBoxSizer4->Add( m_pWptListCtrl, 1, wxEXPAND | wxALL, DIALOG_MARGIN );
-
-    m_pWptListCtrl->InsertColumn( colWPTICON, _("Icon"), wxLIST_FORMAT_LEFT, 44 );
-    m_pWptListCtrl->InsertColumn( colWPTNAME, _("Waypoint Name"), wxLIST_FORMAT_LEFT, 180 );
-    m_pWptListCtrl->InsertColumn( colWPTDIST, _("Distance from Ownship"), wxLIST_FORMAT_LEFT, 180 );
-
+    
+    m_pWptListCtrl->InsertColumn( colWPTICON, _("Icon"), wxLIST_FORMAT_LEFT, 4 * char_width );
+    m_pWptListCtrl->InsertColumn( colWPTNAME, _("Waypoint Name"), wxLIST_FORMAT_LEFT, 15 * char_width );
+    m_pWptListCtrl->InsertColumn( colWPTDIST, _("Distance from Ownship"), wxLIST_FORMAT_LEFT, 14 * char_width );
+    
     wxBoxSizer *bsWptButtons = new wxBoxSizer( wxVERTICAL );
-    itemBoxSizer4->Add( bsWptButtons, 0, wxALIGN_RIGHT );
-
-    btnWptNew = new wxButton( m_pPanelWpt, -1, _("&New") );
-    bsWptButtons->Add( btnWptNew, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+    itemBoxSizer4->Add( bsWptButtons, 0, wxALIGN_RIGHT | wxEXPAND );
+    
+    wxScrolledWindow *winw = new wxScrolledWindow( m_pPanelWpt, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                   wxNO_BORDER | wxTAB_TRAVERSAL | wxVSCROLL);
+    winw->SetScrollRate(0,5);
+    
+    bsWptButtons->Add( winw, 1, wxALL | wxEXPAND, DIALOG_MARGIN );
+    
+    wxBoxSizer *bsWptButtonsInner = new wxBoxSizer( wxVERTICAL );
+    winw->SetSizer(bsWptButtonsInner);
+    
+    btnWptNew = new wxButton( winw, -1, _("&New") );
+    bsWptButtonsInner->Add( btnWptNew, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptNew->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptNewClick), NULL, this );
-
-    btnWptProperties = new wxButton( m_pPanelWpt, -1, _("&Properties") );
-    bsWptButtons->Add( btnWptProperties, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                        wxCommandEventHandler(RouteManagerDialog::OnWptNewClick), NULL, this );
+    
+    btnWptProperties = new wxButton( winw, -1, _("&Properties") );
+    bsWptButtonsInner->Add( btnWptProperties, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptProperties->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptPropertiesClick), NULL, this );
-
-    btnWptZoomto = new wxButton( m_pPanelWpt, -1, _("&Center View") );
-    bsWptButtons->Add( btnWptZoomto, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                               wxCommandEventHandler(RouteManagerDialog::OnWptPropertiesClick), NULL, this );
+    
+    btnWptZoomto = new wxButton( winw, -1, _("&Center View") );
+    bsWptButtonsInner->Add( btnWptZoomto, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptZoomto->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptZoomtoClick), NULL, this );
-
-    btnWptDelete = new wxButton( m_pPanelWpt, -1, _("&Delete") );
-    bsWptButtons->Add( btnWptDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnWptZoomtoClick), NULL, this );
+    
+    btnWptDelete = new wxButton( winw, -1, _("&Delete") );
+    bsWptButtonsInner->Add( btnWptDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptDelete->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptDeleteClick), NULL, this );
-
-    btnWptGoTo = new wxButton( m_pPanelWpt, -1, _("&Go To") );
-    bsWptButtons->Add( btnWptGoTo, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnWptDeleteClick), NULL, this );
+    
+    btnWptGoTo = new wxButton( winw, -1, _("&Go To") );
+    bsWptButtonsInner->Add( btnWptGoTo, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptGoTo->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptGoToClick), NULL, this );
-
-    btnWptExport = new wxButton( m_pPanelWpt, -1, _("&Export selected...") );
-    bsWptButtons->Add( btnWptExport, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                         wxCommandEventHandler(RouteManagerDialog::OnWptGoToClick), NULL, this );
+    
+    btnWptExport = new wxButton( winw, -1, _("&Export selected...") );
+    bsWptButtonsInner->Add( btnWptExport, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptExport->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptExportClick), NULL, this );
-
-    btnWptSendToGPS = new wxButton( m_pPanelWpt, -1, _("&Send to GPS") );
-    bsWptButtons->Add( btnWptSendToGPS, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnWptExportClick), NULL, this );
+    
+    btnWptSendToGPS = new wxButton( winw, -1, _("&Send to GPS") );
+    bsWptButtonsInner->Add( btnWptSendToGPS, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptSendToGPS->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptSendToGPSClick), NULL, this );
-
-    bsWptButtons->AddSpacer( 10 );
-
-    btnWptDeleteAll = new wxButton( m_pPanelWpt, -1, _("Delete All") );
-    bsWptButtons->Add( btnWptDeleteAll, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                              wxCommandEventHandler(RouteManagerDialog::OnWptSendToGPSClick), NULL, this );
+    
+    bsWptButtonsInner->AddSpacer( 10 );
+    
+    btnWptDeleteAll = new wxButton( winw, -1, _("Delete All") );
+    bsWptButtonsInner->Add( btnWptDeleteAll, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnWptDeleteAll->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnWptDeleteAllClick), NULL, this );
-
+                              wxCommandEventHandler(RouteManagerDialog::OnWptDeleteAllClick), NULL, this );
+    
     wxBoxSizer *itemBoxSizer5 = new wxBoxSizer( wxHORIZONTAL );
     itemBoxSizer1->Add( itemBoxSizer5, 0, wxALL | wxEXPAND );
-
+    
     wxBoxSizer *itemBoxSizer6 = new wxBoxSizer( wxHORIZONTAL );
     itemBoxSizer5->Add( itemBoxSizer6, 1, wxALL | wxEXPAND | wxALIGN_LEFT );
-
+    
     btnImport = new wxButton( this, -1, _("I&mport GPX...") );
     itemBoxSizer6->Add( btnImport, 0, wxALL | wxALIGN_LEFT, DIALOG_MARGIN );
     btnImport->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnImportClick), NULL, this );
-/*
-    btnExport = new wxButton( this, -1, _("E&xport All...") );
-    itemBoxSizer6->Add( btnExport, 0, wxALL | wxALIGN_LEFT, DIALOG_MARGIN );
-    btnExport->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnExportClick), NULL, this );
-*/
+                        wxCommandEventHandler(RouteManagerDialog::OnImportClick), NULL, this );
+    /*
+     *    btnExport = new wxButton( this, -1, _("E&xport All...") );
+     *    itemBoxSizer6->Add( btnExport, 0, wxALL | wxALIGN_LEFT, DIALOG_MARGIN );
+     *    btnExport->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
+     *            wxCommandEventHandler(RouteManagerDialog::OnExportClick), NULL, this );
+     */
     btnExportViz = new wxButton( this, -1, _("Export All Visible...") );
     itemBoxSizer6->Add( btnExportViz, 0, wxALL | wxALIGN_LEFT, DIALOG_MARGIN );
     btnExportViz->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-                        wxCommandEventHandler(RouteManagerDialog::OnExportVizClick), NULL, this );
-
+                           wxCommandEventHandler(RouteManagerDialog::OnExportVizClick), NULL, this );
+    
     //  Create "Layers" panel
     m_pPanelLay = new wxPanel( m_pNotebook, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-            wxNO_BORDER | wxTAB_TRAVERSAL );
+                               wxNO_BORDER | wxTAB_TRAVERSAL );
     wxBoxSizer* itemBoxSizer7 = new wxBoxSizer( wxHORIZONTAL );
     m_pPanelLay->SetSizer( itemBoxSizer7 );
     m_pNotebook->AddPage( m_pPanelLay, _("Layers") );
-
-    m_pLayListCtrl = new wxListCtrl( m_pPanelLay, -1, wxDefaultPosition, wxSize( 400, -1 ),
-            wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_SORT_ASCENDING | wxLC_HRULES
-                    | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    
+    m_pLayListCtrl = new wxListCtrl( m_pPanelLay, -1, wxDefaultPosition, wxDefaultSize,
+                                     wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_SORT_ASCENDING | wxLC_HRULES
+                                     | wxBORDER_SUNKEN/*|wxLC_VRULES*/);
+    #ifdef __OCPN__ANDROID__    
+    m_pLayListCtrl->GetHandle()->setStyleSheet(getQtStyleSheet());
+    #endif    
+    
     m_pLayListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_SELECTED,
-            wxListEventHandler(RouteManagerDialog::OnLaySelected), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnLaySelected), NULL, this );
     m_pLayListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_DESELECTED,
-            wxListEventHandler(RouteManagerDialog::OnLaySelected), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnLaySelected), NULL, this );
     m_pLayListCtrl->Connect( wxEVT_COMMAND_LIST_ITEM_ACTIVATED,
-            wxListEventHandler(RouteManagerDialog::OnLayDefaultAction), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnLayDefaultAction), NULL, this );
     m_pLayListCtrl->Connect( wxEVT_LEFT_DOWN,
-            wxMouseEventHandler(RouteManagerDialog::OnLayToggleVisibility), NULL, this );
+                             wxMouseEventHandler(RouteManagerDialog::OnLayToggleVisibility), NULL, this );
     m_pLayListCtrl->Connect( wxEVT_COMMAND_LIST_COL_CLICK,
-            wxListEventHandler(RouteManagerDialog::OnLayColumnClicked), NULL, this );
+                             wxListEventHandler(RouteManagerDialog::OnLayColumnClicked), NULL, this );
     itemBoxSizer7->Add( m_pLayListCtrl, 1, wxEXPAND | wxALL, DIALOG_MARGIN );
-
-    m_pLayListCtrl->InsertColumn( colLAYVISIBLE, _T(""), wxLIST_FORMAT_LEFT, 28 );
-    m_pLayListCtrl->InsertColumn( colLAYNAME, _("Layer Name"), wxLIST_FORMAT_LEFT, 250 );
-    m_pLayListCtrl->InsertColumn( colLAYITEMS, _("No. of items"), wxLIST_FORMAT_LEFT, 100 );
-
+    
+    m_pLayListCtrl->InsertColumn( colLAYVISIBLE, _T(""), wxLIST_FORMAT_LEFT, 4 * char_width );
+    m_pLayListCtrl->InsertColumn( colLAYNAME, _("Layer Name"), wxLIST_FORMAT_LEFT, 10 * char_width );
+    m_pLayListCtrl->InsertColumn( colLAYITEMS, _("No. of items"), wxLIST_FORMAT_LEFT, 10 * char_width );
+    
     wxBoxSizer *bsLayButtons = new wxBoxSizer( wxVERTICAL );
-    itemBoxSizer7->Add( bsLayButtons, 0, wxALIGN_RIGHT );
-
-    btnLayNew = new wxButton( m_pPanelLay, -1, _("Temporary layer") );
-    bsLayButtons->Add( btnLayNew, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+    itemBoxSizer7->Add( bsLayButtons, 0, wxALIGN_RIGHT | wxEXPAND);
+    
+    wxScrolledWindow *winl = new wxScrolledWindow( m_pPanelLay, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                   wxNO_BORDER | wxTAB_TRAVERSAL | wxVSCROLL);
+    winl->SetScrollRate(0,5);
+    
+    bsLayButtons->Add( winl, 1, wxALL | wxEXPAND, DIALOG_MARGIN );
+    
+    wxBoxSizer *bsLayButtonsInner = new wxBoxSizer( wxVERTICAL );
+    winl->SetSizer(bsLayButtonsInner);
+    
+    btnLayNew = new wxButton( winl, -1, _("Temporary layer") );
+    bsLayButtonsInner->Add( btnLayNew, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnLayNew->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnLayNewClick), NULL, this );
-
-    //btnLayProperties = new wxButton(m_pPanelLay, -1, _("&Properties"));
-    //bsLayButtons->Add(btnLayProperties, 0, wxALL|wxEXPAND, DIALOG_MARGIN);
-    //btnLayProperties->Connect(wxEVT_COMMAND_BUTTON_CLICKED,
-    //                     wxCommandEventHandler(RouteManagerDialog::OnLayPropertiesClick), NULL, this);
-
-    btnLayDelete = new wxButton( m_pPanelLay, -1, _("&Delete") );
-    bsLayButtons->Add( btnLayDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                        wxCommandEventHandler(RouteManagerDialog::OnLayNewClick), NULL, this );
+    
+    btnLayDelete = new wxButton( winl, -1, _("&Delete") );
+    bsLayButtonsInner->Add( btnLayDelete, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnLayDelete->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnLayDeleteClick), NULL, this );
-
-    btnLayToggleChart = new wxButton( m_pPanelLay, -1, _("Show on chart") );
-    bsLayButtons->Add( btnLayToggleChart, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                           wxCommandEventHandler(RouteManagerDialog::OnLayDeleteClick), NULL, this );
+    
+    btnLayToggleChart = new wxButton( winl, -1, _("Show on chart") );
+    bsLayButtonsInner->Add( btnLayToggleChart, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnLayToggleChart->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnLayToggleChartClick), NULL, this );
-
-    btnLayToggleNames = new wxButton( m_pPanelLay, -1, _("Show WPT names") );
-    bsLayButtons->Add( btnLayToggleNames, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                                wxCommandEventHandler(RouteManagerDialog::OnLayToggleChartClick), NULL, this );
+    
+    btnLayToggleNames = new wxButton( winl, -1, _("Show WPT names") );
+    bsLayButtonsInner->Add( btnLayToggleNames, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnLayToggleNames->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnLayToggleNamesClick), NULL, this );
-
-    btnLayToggleListing = new wxButton( m_pPanelLay, -1, _("List contents") );
-    bsLayButtons->Add( btnLayToggleListing, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
+                                wxCommandEventHandler(RouteManagerDialog::OnLayToggleNamesClick), NULL, this );
+    
+    btnLayToggleListing = new wxButton( winl, -1, _("List contents") );
+    bsLayButtonsInner->Add( btnLayToggleListing, 0, wxALL | wxEXPAND, DIALOG_MARGIN );
     btnLayToggleListing->Connect( wxEVT_COMMAND_BUTTON_CLICKED,
-            wxCommandEventHandler(RouteManagerDialog::OnLayToggleListingClick), NULL, this );
-
+                                  wxCommandEventHandler(RouteManagerDialog::OnLayToggleListingClick), NULL, this );
+    
     // Dialog buttons
     wxSizer *szButtons = CreateButtonSizer( wxOK );
-
+    
     itemBoxSizer5->Add( szButtons, 0, wxALL | wxALIGN_RIGHT, DIALOG_MARGIN );
-
-    Fit();
-
-    SetMinSize( GetBestSize() );
+    
+    RecalculateSize();
 
     // create a image list for the list with just the eye icon
     wxImageList *imglist = new wxImageList( 20, 20, true, 1 );
@@ -777,17 +846,17 @@ void RouteManagerDialog::Create()
     m_pTrkListCtrl->SetImageList( imglist, wxIMAGE_LIST_SMALL );
     m_pWptListCtrl->SetImageList( pWayPointMan->Getpmarkicon_image_list(), wxIMAGE_LIST_SMALL );
     m_pLayListCtrl->SetImageList( imglist, wxIMAGE_LIST_SMALL );
-
+    
     SetColorScheme();
-
+    
     UpdateRouteListCtrl();
     UpdateTrkListCtrl();
     UpdateWptListCtrl();
     UpdateLayListCtrl();
-
+    
     // This should work under Linux :-(
     //m_pNotebook->Connect(wxEVT_COMMAND_NOTEBOOK_PAGE_CHANGED, wxNotebookEventHandler(RouteManagerDialog::OnTabSwitch), NULL, this);
-
+    
     m_bNeedConfigFlush = false;
 }
 
@@ -834,14 +903,56 @@ RouteManagerDialog::~RouteManagerDialog()
     btnExportViz = NULL;
 
     delete m_pNotebook;
+    instanceFlag = false;
+    
 
-    //    Does not need to be done here at all, since this dialog is autommatically deleted as a child of the frame.
-    //    By that time, the config has already been updated for shutdown.
-
-    // Do this just once!!
-//      if (m_bNeedConfigFlush)
-//            pConfig->UpdateSettings();
 }
+
+void RouteManagerDialog::RecalculateSize()
+{
+    
+    //  All of this dialog layout is expandable, so we need to set a specific size target
+    //  for the onscreen display.
+    //  The size will then be adjusted so that it fits within the parent's client area, with some padding
+    
+    //  Get a text height metric for reference
+    int char_width, char_height;
+    GetTextExtent(_T("W"), &char_width, &char_height);
+    
+    wxSize sz;
+    sz.x = 60 * char_width;
+    sz.y = 30 * char_height;
+    
+    wxSize dsize = GetParent()->GetClientSize();
+    sz.y = wxMin(sz.y, dsize.y - (1 * char_height));
+    sz.x = wxMin(sz.x, dsize.x - (1 * char_height));
+    SetClientSize(sz);
+    
+    wxSize fsize = GetSize();
+    fsize.y = wxMin(fsize.y, dsize.y - (1 * char_height));
+    fsize.x = wxMin(fsize.x, dsize.x - (1 * char_height));
+    SetSize(fsize);
+    
+    CentreOnParent();
+    
+}
+
+void RouteManagerDialog::OnClose(wxCloseEvent& event)
+{
+    Hide();
+    //    pRouteManagerDialog = NULL;
+}
+
+void RouteManagerDialog::OnOK(wxCommandEvent& event)
+{
+    Hide();
+    
+    if(g_bresponsive)
+        gFrame->ShowChartBarIfEnabled();
+    
+}
+
+
 
 void RouteManagerDialog::SetColorScheme()
 {
@@ -862,14 +973,16 @@ void RouteManagerDialog::UpdateRouteListCtrl()
     // then add routes to the listctrl
     RouteList::iterator it;
     int index = 0;
+    int list_index = 0;
     for( it = ( *pRouteList ).begin(); it != ( *pRouteList ).end(); ++it, ++index ) {
         if( ( *it )->m_bIsTrack || !( *it )->IsListed() ) continue;
 
         wxListItem li;
-        li.SetId( index );
+        li.SetId( list_index );
         li.SetImage( ( *it )->IsVisible() ? 0 : 1 );
         li.SetData( index );
         li.SetText( _T("") );
+        li.SetAlign(wxLIST_FORMAT_LEFT);
 
         if( ( *it )->m_bRtIsActive ) {
             wxFont font = *wxNORMAL_FONT;
@@ -884,13 +997,28 @@ void RouteManagerDialog::UpdateRouteListCtrl()
         m_pRouteListCtrl->SetItem( idx, rmROUTENAME, name );
 
         wxString startend = ( *it )->m_RouteStartString;
-        if( !( *it )->m_RouteEndString.IsEmpty() ) startend.append(
-                _(" - ") + ( *it )->m_RouteEndString );
+        if( !( *it )->m_RouteEndString.IsEmpty() )
+            startend.append(_(" - ") + ( *it )->m_RouteEndString );
         m_pRouteListCtrl->SetItem( idx, rmROUTEDESC, startend );
+        
+        wxListItem lic;
+        lic.SetId( list_index );
+        lic.SetColumn(1);
+        lic.SetAlign(wxLIST_FORMAT_LEFT);
+        m_pRouteListCtrl->SetItem( lic );
+        
+        lic.SetColumn(2);
+        lic.SetAlign(wxLIST_FORMAT_LEFT);
+        m_pRouteListCtrl->SetItem( lic );
+        
+        list_index++;
     }
 
-    m_pRouteListCtrl->SortItems( SortRoutesOnName, (long) m_pRouteListCtrl );
+    m_pRouteListCtrl->SortItems( SortRoutesOnName, (wxIntPtr) m_pRouteListCtrl );
 
+    m_pRouteListCtrl->SetColumnWidth(0, 4 * m_charWidth);
+    
+    
     // restore selection if possible
     // NOTE this will select a different item, if one is deleted
     // (the next route will get that index).
@@ -960,8 +1088,9 @@ void RouteManagerDialog::ZoomtoRoute( Route *route )
 {
 
     // Calculate bbox center
-    double clat = route->RBBox.GetMinY() + ( route->RBBox.GetHeight() / 2 );
-    double clon = route->RBBox.GetMinX() + ( route->RBBox.GetWidth() / 2 );
+    wxBoundingBox RBBox = route->GetBBox();
+    double clat = RBBox.GetMinY() + ( RBBox.GetHeight() / 2 );
+    double clon = RBBox.GetMinX() + ( RBBox.GetWidth() / 2 );
 
     if( clon > 180. ) clon -= 360.;
     else
@@ -971,11 +1100,11 @@ void RouteManagerDialog::ZoomtoRoute( Route *route )
     double rw, rh, ppm; // route width, height, final ppm scale to use
     int ww, wh; // chart window width, height
     // route bbox width in nm
-    DistanceBearingMercator( route->RBBox.GetMinY(), route->RBBox.GetMinX(), route->RBBox.GetMinY(),
-            route->RBBox.GetMaxX(), NULL, &rw );
+    DistanceBearingMercator( RBBox.GetMinY(), RBBox.GetMinX(), RBBox.GetMinY(),
+            RBBox.GetMaxX(), NULL, &rw );
     // route bbox height in nm
-    DistanceBearingMercator( route->RBBox.GetMinY(), route->RBBox.GetMinX(), route->RBBox.GetMaxY(),
-            route->RBBox.GetMinX(), NULL, &rh );
+    DistanceBearingMercator( RBBox.GetMinY(), RBBox.GetMinX(), RBBox.GetMaxY(),
+            RBBox.GetMinX(), NULL, &rh );
 
     cc1->GetSize( &ww, &wh );
 
@@ -1085,8 +1214,7 @@ void RouteManagerDialog::OnRtePropertiesClick( wxCommandEvent &event )
     if( !route ) return;
 
     if( !route->m_bIsTrack ) { //TODO: It's a route, we still need the new implementation here
-        if( NULL == pRoutePropDialog )          // There is one global instance of the RouteProp Dialog
-            pRoutePropDialog = new RouteProp( GetParent() );
+        pRoutePropDialog = RouteProp::getInstance( GetParent() );
 
         pRoutePropDialog->SetRouteAndUpdate( route );
         pRoutePropDialog->UpdateProperties();
@@ -1144,21 +1272,22 @@ void RouteManagerDialog::OnRteReverseClick( wxCommandEvent &event )
     if( route->m_bIsInLayer ) return;
 
     int ask_return = OCPNMessageBox( this, g_pRouteMan->GetRouteReverseMessage(), _("Rename Waypoints?"),
-            wxYES_NO );
-    bool rename = ( ask_return == wxID_YES );
+            wxYES_NO | wxCANCEL );
+    if( ask_return != wxID_CANCEL ) {
+        bool rename = ( ask_return == wxID_YES );
 
-    pSelect->DeleteAllSelectableRouteSegments( route );
-    route->Reverse( rename );
-    pSelect->AddAllSelectableRouteSegments( route );
+        pSelect->DeleteAllSelectableRouteSegments( route );
+        route->Reverse( rename );
+        pSelect->AddAllSelectableRouteSegments( route );
 
     // update column 2 - create a UpdateRouteItem(index) instead?
-    wxString startend = route->m_RouteStartString;
-    if( !route->m_RouteEndString.IsEmpty() ) startend.append( _(" - ") + route->m_RouteEndString );
-    m_pRouteListCtrl->SetItem( item, 2, startend );
+        wxString startend = route->m_RouteStartString;
+        if( !route->m_RouteEndString.IsEmpty() ) startend.append( _(" - ") + route->m_RouteEndString );
+        m_pRouteListCtrl->SetItem( item, 2, startend );
 
-    pConfig->UpdateRoute( route );
-//       pConfig->UpdateSettings(); // NOTE done once in destructor
-    cc1->Refresh();
+        pConfig->UpdateRoute( route );
+        cc1->Refresh();
+    }
 
     m_bNeedConfigFlush = true;
 }
@@ -1312,11 +1441,11 @@ void RouteManagerDialog::OnRteColumnClicked( wxListEvent &event )
 {
     if( event.m_col == 1 ) {
         sort_route_name_dir++;
-        m_pRouteListCtrl->SortItems( SortRoutesOnName, (long) m_pRouteListCtrl );
+        m_pRouteListCtrl->SortItems( SortRoutesOnName, (wxIntPtr) m_pRouteListCtrl );
     } else
         if( event.m_col == 2 ) {
             sort_route_to_dir++;
-            m_pRouteListCtrl->SortItems( SortRoutesOnTo, (long) m_pRouteListCtrl );
+            m_pRouteListCtrl->SortItems( SortRoutesOnTo, (wxIntPtr) m_pRouteListCtrl );
         }
 }
 
@@ -1514,6 +1643,7 @@ void RouteManagerDialog::OnTrkMenuSelected( wxCommandEvent &event )
 
             for( unsigned int i = 0; i < deleteList.Count(); i++ ) {
                 Track* deleteTrack = (Track*) deleteList.Item( i );
+                g_pAIS->DeletePersistentTrack( deleteTrack );
                 pConfig->DeleteConfigRoute( deleteTrack );
                 g_pRouteMan->DeleteTrack( deleteTrack );
             }
@@ -1554,12 +1684,13 @@ void RouteManagerDialog::UpdateTrkListCtrl()
     // then add routes to the listctrl
     RouteList::iterator it;
     int index = 0;
+    int list_index = 0;
     for( it = ( *pRouteList ).begin(); it != ( *pRouteList ).end(); ++it, ++index ) {
         Route *trk = (Route *) ( *it );
         if( !trk->m_bIsTrack || !trk->IsListed() ) continue;
 
         wxListItem li;
-        li.SetId( index );
+        li.SetId( list_index );
         li.SetImage( trk->IsVisible() ? 0 : 1 );
         li.SetData( index );
         li.SetText( _T("") );
@@ -1584,10 +1715,26 @@ void RouteManagerDialog::UpdateTrkListCtrl()
         wxString len;
         len.Printf( wxT("%5.2f"), trk->m_route_length );
         m_pTrkListCtrl->SetItem( idx, colTRKLENGTH, len );
+        
+        wxListItem lic;
+        lic.SetId( list_index );
+        lic.SetColumn(1);
+        lic.SetAlign(wxLIST_FORMAT_LEFT);
+        m_pTrkListCtrl->SetItem( lic );
+
+        lic.SetColumn(2);
+        lic.SetAlign(wxLIST_FORMAT_LEFT);
+        m_pTrkListCtrl->SetItem( lic );
+
+        list_index++;
+        
     }
 
-    m_pTrkListCtrl->SortItems( SortRoutesOnName, (long) m_pTrkListCtrl );
+    m_pTrkListCtrl->SortItems( SortRoutesOnName, (wxIntPtr) m_pTrkListCtrl );
 
+    m_pTrkListCtrl->SortItems( SortRoutesOnName, (wxIntPtr) m_pTrkListCtrl );
+    m_pTrkListCtrl->SetColumnWidth(0, 4 * m_charWidth);
+    
     // restore selection if possible
     // NOTE this will select a different item, if one is deleted
     // (the next route will get that index).
@@ -1610,11 +1757,11 @@ void RouteManagerDialog::OnTrkColumnClicked( wxListEvent &event )
 {
     if( event.m_col == 1 ) {
         sort_track_name_dir++;
-        m_pTrkListCtrl->SortItems( SortTracksOnName, (long) m_pTrkListCtrl );
+        m_pTrkListCtrl->SortItems( SortTracksOnName, (wxIntPtr) m_pTrkListCtrl );
     } else
         if( event.m_col == 2 ) {
             sort_track_len_dir++;
-            m_pTrkListCtrl->SortItems( SortTracksOnDistance, (long) m_pTrkListCtrl );
+            m_pTrkListCtrl->SortItems( SortTracksOnDistance, (wxIntPtr) m_pTrkListCtrl );
         }
 }
 
@@ -1642,11 +1789,15 @@ void RouteManagerDialog::OnTrkToggleVisibility( wxMouseEvent &event )
     //    Clicking Visibility column?
     if( clicked_index > -1 && event.GetX() < m_pTrkListCtrl->GetColumnWidth( colTRKVISIBLE ) ) {
         // Process the clicked item
-        Route *route = pRouteList->Item( m_pTrkListCtrl->GetItemData( clicked_index ) )->GetData();
-        route->SetVisible( !route->IsVisible() );
-        m_pTrkListCtrl->SetItemImage( clicked_index, route->IsVisible() ? 0 : 1 );
-
-//            pConfig->UpdateRoute(route);
+        wxRouteListNode *node = pRouteList->Item( m_pTrkListCtrl->GetItemData( clicked_index ) );
+        if(node){
+            Route *route = node->GetData();
+            if(route){
+                route->SetVisible( !route->IsVisible() );
+                m_pTrkListCtrl->SetItemImage( clicked_index, route->IsVisible() ? 0 : 1 );
+            }
+        }
+        
         cc1->Refresh();
     }
 
@@ -1673,8 +1824,7 @@ void RouteManagerDialog::OnTrkPropertiesClick( wxCommandEvent &event )
 
     if( !route ) return;
 
-    if( NULL == pTrackPropDialog )          // There is one global instance of the RouteProp Dialog
-        pTrackPropDialog = new TrackPropDlg( GetParent() );
+    pTrackPropDialog = TrackPropDlg::getInstance( GetParent() );
     pTrackPropDialog->SetTrackAndUpdate( route );
 
     if( !pTrackPropDialog->IsShown() )
@@ -1716,6 +1866,7 @@ void RouteManagerDialog::OnTrkDeleteClick( wxCommandEvent &event )
         for(unsigned int i=0 ; i < list.GetCount() ; i++) {
             Track *track = (Track *)(list.Item(i)->GetData());
             if( track ) {
+                g_pAIS->DeletePersistentTrack( track );
                 pConfig->DeleteConfigRoute( track );
                 g_pRouteMan->DeleteTrack( track );
             }
@@ -1818,7 +1969,7 @@ void RouteManagerDialog::OnTrkDeleteAllClick( wxCommandEvent &event )
 
 void RouteManagerDialog::UpdateWptListCtrl( RoutePoint *rp_select, bool b_retain_sort )
 {
-    long selected_id = -1;
+    wxIntPtr selected_id = -1;
     long item = -1;
 
     if( NULL == rp_select ) {
@@ -1848,8 +1999,8 @@ void RouteManagerDialog::UpdateWptListCtrl( RoutePoint *rp_select, bool b_retain
 
             wxListItem li;
             li.SetId( index );
-            li.SetImage( rp->IsVisible() ? pWayPointMan->GetIconIndex( rp->m_pbmIcon )
-                                    : pWayPointMan->GetXIconIndex( rp->m_pbmIcon ) );
+            li.SetImage( rp->IsVisible() ? pWayPointMan->GetIconIndex( rp->GetIconBitmap() )
+                                    : pWayPointMan->GetXIconIndex( rp->GetIconBitmap() ) );
             li.SetData( rp );
             li.SetText( _T("") );
             long idx = m_pWptListCtrl->InsertItem( li );
@@ -1864,8 +2015,18 @@ void RouteManagerDialog::UpdateWptListCtrl( RoutePoint *rp_select, bool b_retain
             dist.Printf( _T("%5.2f ") + getUsrDistanceUnit(), toUsrDistance( dst ) );
             m_pWptListCtrl->SetItem( idx, colWPTDIST, dist );
 
-            if( rp == rp_select ) selected_id = (long) rp_select; //index; //m_pWptListCtrl->GetItemData(item);
+            if( rp == rp_select ) selected_id = (wxIntPtr) rp_select; //index; //m_pWptListCtrl->GetItemData(item);
 
+            wxListItem lic;
+            lic.SetId( index );
+            lic.SetColumn(1);
+            lic.SetAlign(wxLIST_FORMAT_LEFT);
+            m_pWptListCtrl->SetItem( lic );
+        
+            lic.SetColumn(2);
+            lic.SetAlign(wxLIST_FORMAT_LEFT);
+            m_pWptListCtrl->SetItem( lic );
+        
             index++;
         }
 
@@ -1873,15 +2034,15 @@ void RouteManagerDialog::UpdateWptListCtrl( RoutePoint *rp_select, bool b_retain
     }
 
     if( !b_retain_sort ) {
-        m_pWptListCtrl->SortItems( SortWaypointsOnName, (long) m_pWptListCtrl );
+        m_pWptListCtrl->SortItems( SortWaypointsOnName, (wxIntPtr) m_pWptListCtrl );
         sort_wp_key = SORT_ON_NAME;
     } else {
         switch( sort_wp_key ){
             case SORT_ON_NAME:
-                m_pWptListCtrl->SortItems( SortWaypointsOnName, (long) m_pWptListCtrl );
+                m_pWptListCtrl->SortItems( SortWaypointsOnName, (wxIntPtr) m_pWptListCtrl );
                 break;
             case SORT_ON_DISTANCE:
-                m_pWptListCtrl->SortItems( SortWaypointsOnDistance, (long) m_pWptListCtrl );
+                m_pWptListCtrl->SortItems( SortWaypointsOnDistance, (wxIntPtr) m_pWptListCtrl );
                 break;
         }
     }
@@ -1893,6 +2054,9 @@ void RouteManagerDialog::UpdateWptListCtrl( RoutePoint *rp_select, bool b_retain
 
     if( (m_lastWptItem >= 0) && (m_pWptListCtrl->GetItemCount()) )
         m_pWptListCtrl->EnsureVisible( m_lastWptItem );
+    
+    m_pWptListCtrl->SetColumnWidth(0, 4 * m_charWidth);
+    
     UpdateWptButtons();
 }
 
@@ -1906,8 +2070,8 @@ void RouteManagerDialog::UpdateWptListCtrlViz( )
             break;
         
         RoutePoint *pRP = (RoutePoint *)m_pWptListCtrl->GetItemData(item);
-        int image = pRP->IsVisible() ? pWayPointMan->GetIconIndex( pRP->m_pbmIcon )
-        : pWayPointMan->GetXIconIndex( pRP->m_pbmIcon ) ;
+        int image = pRP->IsVisible() ? pWayPointMan->GetIconIndex( pRP->GetIconBitmap() )
+        : pWayPointMan->GetXIconIndex( pRP->GetIconBitmap() ) ;
                         
         m_pWptListCtrl->SetItemImage(item, image);
     }
@@ -1929,12 +2093,12 @@ void RouteManagerDialog::OnWptColumnClicked( wxListEvent &event )
 {
     if( event.m_col == 1 ) {
         sort_wp_name_dir++;
-        m_pWptListCtrl->SortItems( SortWaypointsOnName, (long) m_pWptListCtrl );
+        m_pWptListCtrl->SortItems( SortWaypointsOnName, (wxIntPtr) m_pWptListCtrl );
         sort_wp_key = SORT_ON_NAME;
     } else
         if( event.m_col == 2 ) {
             sort_wp_len_dir++;
-            m_pWptListCtrl->SortItems( SortWaypointsOnDistance, (long) m_pWptListCtrl );
+            m_pWptListCtrl->SortItems( SortWaypointsOnDistance, (wxIntPtr) m_pWptListCtrl );
             sort_wp_key = SORT_ON_DISTANCE;
         }
 }
@@ -1992,8 +2156,8 @@ void RouteManagerDialog::OnWptToggleVisibility( wxMouseEvent &event )
 
         wp->SetVisible( !wp->IsVisible() );
         m_pWptListCtrl->SetItemImage( clicked_index,
-                                      wp->IsVisible() ? pWayPointMan->GetIconIndex( wp->m_pbmIcon )
-                                                      : pWayPointMan->GetXIconIndex( wp->m_pbmIcon ) );
+                                      wp->IsVisible() ? pWayPointMan->GetIconIndex( wp->GetIconBitmap() )
+                                                      : pWayPointMan->GetXIconIndex( wp->GetIconBitmap() ) );
 
         pConfig->UpdateWayPoint( wp );
 
@@ -2013,9 +2177,8 @@ void RouteManagerDialog::OnWptNewClick( wxCommandEvent &event )
     pConfig->AddNewWayPoint( pWP, -1 );    // use auto next num
     cc1->Refresh( false );      // Needed for MSW, why not GTK??
 
-    if( NULL == pMarkPropDialog )          // There is one global instance of the MarkProp Dialog
-        pMarkPropDialog = new MarkInfoImpl( GetParent() );
-
+    pMarkPropDialog = MarkInfoImpl::getInstance( GetParent() );
+    
     pMarkPropDialog->SetRoutePoint( pWP );
     pMarkPropDialog->UpdateProperties();
 
@@ -2041,8 +2204,7 @@ void RouteManagerDialog::OnWptPropertiesClick( wxCommandEvent &event )
 void RouteManagerDialog::WptShowPropertiesDialog( RoutePoint* wp, wxWindow* parent )
 {
     // There is one global instance of the MarkProp Dialog
-    if( NULL == pMarkPropDialog )
-        pMarkPropDialog = new MarkInfoImpl( parent );
+    pMarkPropDialog = MarkInfoImpl::getInstance( parent );
 
     pMarkPropDialog->SetRoutePoint( wp );
     pMarkPropDialog->UpdateProperties();
@@ -2112,7 +2274,7 @@ void RouteManagerDialog::OnWptDeleteClick( wxCommandEvent &event )
 
                 if ( wp->m_bIsInRoute || wp->m_bIsInTrack )
                 {
-                    if ( wxYES == OCPNMessageBox(this,  _( "The waypoint you want to delete is used in a route, do you really want to delete it?" ), _( "OpenCPN Alert" ), wxYES_NO ))
+                    if ( wxID_YES == OCPNMessageBox(this,  _( "The waypoint you want to delete is used in a route, do you really want to delete it?" ), _( "OpenCPN Alert" ), wxYES_NO ))
                             pWayPointMan->DestroyWaypoint( wp );
                 }
                 else
@@ -2240,7 +2402,7 @@ void RouteManagerDialog::OnWptDeleteAllClick( wxCommandEvent &event )
     }
     else
     {
-        prompt = _("There are some waypoints used in routes or anchor alarms. Do you want to delete them as well? This will change the routes and disable the anchor alarms. Answering No keeps the waypoints used in routes or alarms.");
+        prompt = _("There are some waypoints used in routes or anchor alarms.\n Do you want to delete them as well?\n This will change the routes and disable the anchor alarms.\n Answering No keeps the waypoints used in routes or alarms.");
         buttons = wxYES_NO | wxCANCEL;
         type = 2;
     }
@@ -2271,11 +2433,11 @@ void RouteManagerDialog::OnLayColumnClicked( wxListEvent &event )
 {
     if( event.m_col == 1 ) {
         sort_layer_name_dir++;
-        m_pLayListCtrl->SortItems( SortLayersOnName, (long) m_pLayListCtrl );
+        m_pLayListCtrl->SortItems( SortLayersOnName, (wxIntPtr) m_pLayListCtrl );
     } else
         if( event.m_col == 2 ) {
             sort_layer_len_dir++;
-            m_pLayListCtrl->SortItems( SortLayersOnSize, (long) m_pLayListCtrl );
+            m_pLayListCtrl->SortItems( SortLayersOnSize, (wxIntPtr) m_pLayListCtrl );
         }
 }
 
@@ -2339,16 +2501,7 @@ void RouteManagerDialog::OnLayNewClick( wxCommandEvent &event )
     bool show_flag = g_bShowLayers;
     g_bShowLayers = true;
     
-#ifdef __WXOSX__
-    HideWithEffect(wxSHOW_EFFECT_BLEND );
-#endif
-    
     pConfig->UI_ImportGPX( this, true, _T("") );
-    
-#ifdef __WXOSX__
-    ShowWithEffect(wxSHOW_EFFECT_BLEND );
-#endif
-    
     
     g_bShowLayers = show_flag;
 
@@ -2377,6 +2530,11 @@ void RouteManagerDialog::OnLayDeleteClick( wxCommandEvent &event )
 
     if( !layer ) return;
 
+    wxString prompt = _("Are you sure you want to delete this layer and <ALL> of its contents?");
+    int answer = OCPNMessageBox( this, prompt, wxString( _("OpenCPN Alert") ), wxYES_NO );
+    if ( answer == wxID_NO )
+        return;
+    
     // Process Tracks and Routes in this layer
     wxRouteListNode *node1 = pRouteList->GetFirst();
     wxRouteListNode *node2;
@@ -2653,10 +2811,22 @@ void RouteManagerDialog::UpdateLayListCtrl()
         wxString len;
         len.Printf( wxT("%d"), (int) lay->m_NoOfItems );
         m_pLayListCtrl->SetItem( idx, colLAYITEMS, len );
+        
+        wxListItem lic;
+        lic.SetId( index );
+        lic.SetColumn(1);
+        lic.SetAlign(wxLIST_FORMAT_LEFT);
+        m_pLayListCtrl->SetItem( lic );
+        
+        lic.SetColumn(2);
+        lic.SetAlign(wxLIST_FORMAT_LEFT);
+        m_pLayListCtrl->SetItem( lic );
+        
     }
 
-    m_pLayListCtrl->SortItems( SortLayersOnName, (long) m_pLayListCtrl );
-
+    m_pLayListCtrl->SortItems( SortLayersOnName, (wxIntPtr) m_pLayListCtrl );
+    m_pLayListCtrl->SetColumnWidth(0, 4 * m_charWidth);
+    
     // restore selection if possible
     // NOTE this will select a different item, if one is deleted
     // (the next route will get that index).
@@ -2673,15 +2843,7 @@ void RouteManagerDialog::OnImportClick( wxCommandEvent &event )
     // FIXME there is no way to instruct this function about what to import.
     // Suggest to add that!
     
-#ifdef __WXOSX__
-    HideWithEffect(wxSHOW_EFFECT_BLEND );
-#endif
-    
     pConfig->UI_ImportGPX( this );
-
-#ifdef __WXOSX__
-    ShowWithEffect(wxSHOW_EFFECT_BLEND );
-#endif
     
     UpdateRouteListCtrl();
     UpdateTrkListCtrl();

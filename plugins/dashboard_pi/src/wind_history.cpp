@@ -26,6 +26,7 @@
  */
 
 #include "wind_history.h"
+#include "wx28compat.h"
 
 // For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
@@ -52,6 +53,7 @@ DashboardInstrument_WindDirHistory::DashboardInstrument_WindDirHistory( wxWindow
       m_WindDir = -1;
       m_WindDirRange=90;
       m_MaxWindSpd = 0;
+      m_WindSpeedUnit = _("--");
       m_TotalMaxWindSpd = 0;
       m_WindSpd = 0;
       m_TopLineHeight=30;
@@ -94,11 +96,43 @@ void DashboardInstrument_WindDirHistory::SetData(int st, double data, wxString u
   if (st == OCPN_DBP_STC_TWD || st == OCPN_DBP_STC_TWS) {
     if (st == OCPN_DBP_STC_TWD) {
       m_WindDir = data;
-      if(m_DirRecCnt++ <=5) m_DirStartVal+=data;
+	  if (m_DirRecCnt <= 5){
+		  m_DirStartVal += data;
+		  m_DirRecCnt++;
+	  }
     }
-    if (st == OCPN_DBP_STC_TWS) {
+    if (st == OCPN_DBP_STC_TWS && data < 200.0) {
       m_WindSpd = data;
-      if(m_SpdRecCnt++<=5) m_SpdStartVal+=data;
+	  // if unit changes, reset everything ...
+	  if (unit != m_WindSpeedUnit && m_WindSpeedUnit != _("--")) {
+		  m_MaxWindDir = -1;
+		  m_WindDir = -1;
+		  m_WindDirRange = 90;
+		  m_MaxWindSpd = 0;
+		  m_TotalMaxWindSpd = 0;
+		  m_WindSpd = 0;
+		  m_SpdRecCnt = 0;
+		  m_DirRecCnt = 0;
+		  m_SpdStartVal = -1;
+		  m_DirStartVal = -1;
+		  m_IsRunning = false;
+		  m_SampleCount = 0;
+		  m_LeftLegend = 3;
+		  m_RightLegend = 3;
+		  for (int idx = 0; idx < WIND_RECORD_COUNT; idx++) {
+			  m_ArrayWindDirHistory[idx] = -1;
+			  m_ArrayWindSpdHistory[idx] = -1;
+			  m_ExpSmoothArrayWindSpd[idx] = -1;
+			  m_ExpSmoothArrayWindDir[idx] = -1;
+			  m_ArrayRecTime[idx] = wxDateTime::Now();
+			  m_ArrayRecTime[idx].SetYear(999);
+		  }
+	  }
+	  m_WindSpeedUnit = unit;
+	  if (m_SpdRecCnt <= 5){
+		  m_SpdStartVal += data;
+		  m_SpdRecCnt++;
+	  }
     }
     if ( m_SpdRecCnt == 5 && m_DirRecCnt == 5) {
       m_WindSpd=  m_SpdStartVal/5;
@@ -294,11 +328,11 @@ void  DashboardInstrument_WindDirHistory::DrawWindSpeedScale(wxGCDC* dc)
   //round maxWindSpd up to the next full knot; nicer view ...
   m_MaxWindSpdScale=(int)m_MaxWindSpd + 1;
   if(!m_IsRunning) {
-    label1=_T("-- Kts");
-    label2=_T("-- Kts");
-    label3=_T("-- Kts");
-    label4=_T("-- Kts");
-    label5=_T("-- Kts");
+ 	label1.Printf(_("--- %s"), m_WindSpeedUnit.c_str());
+	label2 = label1;
+	label3 = label1;
+	label4 = label1;
+	label5 = label1;
   }
   else {
 /*we round the speed up to the next full knot ==> the top and bottom line have full numbers as legend (e.g. 23 kn -- 0 kn)
@@ -307,40 +341,38 @@ void  DashboardInstrument_WindDirHistory::DrawWindSpeedScale(wxGCDC* dc)
  The goal is to draw the legend with decimals only, if we really have them !
 */
     // top legend for max wind
-    label1.Printf(_T("%.0f Kts"), m_MaxWindSpdScale);
-
+	label1.Printf(_T("%.0f %s"), m_MaxWindSpdScale,m_WindSpeedUnit.c_str());
     // 3/4 legend
     WindSpdScale=m_MaxWindSpdScale*3./4.;
     // do we need a decimal ?
     val1=(int)((WindSpdScale-(int)WindSpdScale)*100);
     if(val1==25 || val1==75)  // it's a .25 or a .75
-      label2.Printf(_T("%.2f Kts"), WindSpdScale);
-    else if(val1==50)
-      label2.Printf(_T("%.1f Kts"), WindSpdScale);
+	  label2.Printf(_T("%.2f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
+	else if (val1 == 50)
+	  label2.Printf(_T("%.1f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
     else
-      label2.Printf(_T("%.0f Kts"), WindSpdScale);
-
+	  label2.Printf(_T("%.0f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
     // center legend
     WindSpdScale=m_MaxWindSpdScale/2.;
     // center line can either have a .0 or .5 value !
     if((int)(WindSpdScale*10) % 10 == 5)
-      label3.Printf(_T("%.1f Kts"), WindSpdScale);
+	  label3.Printf(_T("%.1f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
     else
-      label3.Printf(_T("%.0f Kts"), WindSpdScale);
+	  label3.Printf(_T("%.0f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
 
     // 1/4 legend
     WindSpdScale=m_MaxWindSpdScale/4.;
     // do we need a decimal ?
     val1=(int)((WindSpdScale-(int)WindSpdScale)*100);
     if(val1==25 || val1==75)
-      label4.Printf(_T("%.2f Kts"), WindSpdScale);
-    else if(val1==50)
-      label4.Printf(_T("%.1f Kts"), WindSpdScale);
-    else
-      label4.Printf(_T("%.0f Kts"), WindSpdScale);
+ 	  label4.Printf(_T("%.2f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
+	else if (val1 == 50)
+	  label4.Printf(_T("%.1f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
+	else
+	  label4.Printf(_T("%.0f %s"), WindSpdScale, m_WindSpeedUnit.c_str());
 
     //bottom legend for min wind, always 0
-    label5.Printf(_T("%.0f Kts"), 0.0);
+	label5.Printf(_T("%.0f %s"), 0.0, m_WindSpeedUnit.c_str());
   }
   dc->GetTextExtent(label1, &m_LeftLegend, &height, 0, 0, g_pFontSmall);
   dc->DrawText(label1, 4, (int)(m_TopLineHeight-height/2));
@@ -381,12 +413,14 @@ void DashboardInstrument_WindDirHistory::DrawBackground(wxGCDC* dc)
   dc->SetPen(pen);
   dc->DrawLine(m_LeftLegend+3, m_TopLineHeight, m_WindowRect.width-3-m_RightLegend, m_TopLineHeight); // the upper line
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height));
-  pen.SetStyle(wxDOT);
+  pen.SetStyle(wxPENSTYLE_DOT);
   dc->SetPen(pen);
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.25), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.25));
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.75), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.75));
+#ifdef __WXMSW__
   pen.SetStyle(wxSHORT_DASH);
   dc->SetPen(pen);
+#endif
   dc->DrawLine(m_LeftLegend+3, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.5), m_WindowRect.width-3-m_RightLegend, (int)(m_TopLineHeight+m_DrawAreaRect.height*0.5));
 }
 
@@ -476,7 +510,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
   }
   dc->GetTextExtent(WindAngle, &degw, &degh, 0, 0, g_pFontData);
   dc->DrawText(WindAngle, m_WindowRect.width-degw-m_RightLegend-3, m_TopLineHeight-degh);
-  pen.SetStyle(wxSOLID);
+  pen.SetStyle(wxPENSTYLE_SOLID);
   pen.SetColour(wxColour(204,41,41 ,96)); //red, transparent
   pen.SetWidth(1);
   dc->SetPen( pen );
@@ -502,7 +536,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
   //---------------------------------------------------------------------------------
   //exponential smoothing of direction
   //---------------------------------------------------------------------------------
-  pen.SetStyle(wxSOLID);
+  pen.SetStyle(wxPENSTYLE_SOLID);
   pen.SetColour(wxColour(204,41,41 ,255));
   pen.SetWidth(2);
   dc->SetPen( pen );
@@ -523,7 +557,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
   col=wxColour(61,61,204,255); //blue, opaque
   dc->SetFont(*g_pFontData);
   dc->SetTextForeground(col);
-  WindSpeed=wxString::Format(_T("TWS %3.1f  "), m_WindSpd);
+  WindSpeed=wxString::Format(_T("TWS %3.1f %s "), m_WindSpd, m_WindSpeedUnit.c_str());
   dc->GetTextExtent(WindSpeed, &degw, &degh, 0, 0, g_pFontData);
   dc->DrawText(WindSpeed, m_LeftLegend+3, m_TopLineHeight-degh);
   dc->SetFont(*g_pFontLabel);
@@ -538,8 +572,8 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
     min=m_ArrayRecTime[i].GetMinute();
     hour=m_ArrayRecTime[i].GetHour();
   }
-  dc->DrawText(wxString::Format(_("Max %.1f since %02d:%02d  Overall %.1f"),m_MaxWindSpd, hour,min,m_TotalMaxWindSpd), m_LeftLegend+3+2+degw, m_TopLineHeight-degh+5);
-  pen.SetStyle(wxSOLID);
+  dc->DrawText(wxString::Format(_("Max %.1f %s since %02d:%02d  Overall %.1f %s"), m_MaxWindSpd, m_WindSpeedUnit.c_str(), hour, min, m_TotalMaxWindSpd, m_WindSpeedUnit.c_str()), m_LeftLegend + 3 + 2 + degw, m_TopLineHeight - degh + 5);
+  pen.SetStyle(wxPENSTYLE_SOLID);
   pen.SetColour(wxColour(61,61,204,96)); //blue, transparent
   pen.SetWidth(1);
   dc->SetPen( pen );
@@ -563,7 +597,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
   //---------------------------------------------------------------------------------
   //exponential smoothing of speed
   //---------------------------------------------------------------------------------
-  pen.SetStyle(wxSOLID);
+  pen.SetStyle(wxPENSTYLE_SOLID);
   pen.SetColour(wxColour(61,61,204,255)); //blue, opaque
   pen.SetWidth(2);
   dc->SetPen( pen );
@@ -583,7 +617,7 @@ void DashboardInstrument_WindDirHistory::DrawForeground(wxGCDC* dc)
   //---------------------------------------------------------------------------------
   GetGlobalColor(_T("UBLCK"), &col);
   pen.SetColour(col);
-  pen.SetStyle(wxDOT);
+  pen.SetStyle(wxPENSTYLE_DOT);
   dc->SetPen(pen);
   dc->SetTextForeground(col);
   dc->SetFont(*g_pFontSmall);

@@ -34,9 +34,8 @@
 #include "wx/wxprec.h"
 #include <wx/wfstream.h>
 
-
-#include <ogr_geometry.h>
-//#include "s52s57.h"
+class OGRGeometry;
+class OGRPolygon;
 
 #define TESS_VERT   0                           // constants describing preferred tess orientation
 #define TESS_HORZ   1
@@ -55,6 +54,9 @@
 #define ERROR_BAD_OGRPOLY       2
 
 //  Some external prototypes
+
+#define DATA_TYPE_FLOAT         0
+#define DATA_TYPE_DOUBLE        1
 
 
 //--------------------------------------------------------------------------------------------------
@@ -96,6 +98,7 @@ class TriPrim
 public:
         TriPrim();
         ~TriPrim();
+        void FreeMem(void);
 
         unsigned int type;                  // Type of triangle primitive
                                             //  May be PTG_TRIANGLES
@@ -108,6 +111,7 @@ public:
         double      minx, miny, maxx, maxy;
 
         TriPrim     *p_next;                // chain link
+        
 };
 
 
@@ -125,7 +129,11 @@ public:
 
         TriPrim         *tri_prim_head;         // head of linked list of TriPrims
         bool            m_bSMSENC;
-
+        bool            bsingle_alloc;
+        unsigned char   *single_buffer;
+        int             single_buffer_size;
+        int             data_type;              //  p_vertex in TriPrim chain is FLOAT or DOUBLE
+        
     private:
         int my_bufgets( char *buf, int buf_len_max );
 
@@ -172,10 +180,10 @@ class PolyTessGeo
         PolyTessGeo();
         ~PolyTessGeo();
 
-        PolyTessGeo(unsigned char *polybuf, int nrecl, int index);      // Build this from SENC file record
+        PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_file_version);      // Build this from SENC file record
 
         PolyTessGeo(OGRPolygon *poly, bool bSENC_SM,
-            double ref_lat, double ref_lon,  bool bUseInternalTess);  // Build this from OGRPolygon
+            double ref_lat, double ref_lon,  bool bUseInternalTess, double LOD_meters);  // Build this from OGRPolygon
 
         PolyTessGeo(Extended_Geometry *pxGeom);
 
@@ -184,7 +192,6 @@ class PolyTessGeo
         int BuildDeferredTess(void);
 
         int Write_PolyTriGroup( FILE *ofs);
-        int Write_PolyTriGroup( wxOutputStream &ostream);
 
         double Get_xmin(){ return xmin;}
         double Get_xmax(){ return xmax;}
@@ -193,7 +200,9 @@ class PolyTessGeo
         PolyTriGroup *Get_PolyTriGroup_head(){ return m_ppg_head;}
         int GetnVertexMax(){ return m_nvertex_max; }
         int     ErrorCode;
-
+        void Set_PolyTriGroup_head( PolyTriGroup *head ){ m_ppg_head = head;}
+        void Set_OK( bool bok ){ m_bOK = bok;}
+        
 
     private:
         int BuildTessGL(void);
@@ -216,14 +225,15 @@ class PolyTessGeo
                                                       // used by drawing primitives as
                                                       // optimization
 
-        int             ncnt;
-        int             nwkb;
+        int             m_ncnt;
+        int             m_nwkb;
 
         char           *m_buf_head;
         char           *m_buf_ptr;                   // used to read passed SENC record
         int            m_nrecl;
 
         double         m_ref_lat, m_ref_lon;
+        double         m_LOD_meters;
 
 };
 

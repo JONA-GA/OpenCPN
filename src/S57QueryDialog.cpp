@@ -31,6 +31,7 @@ extern ColorScheme global_color_scheme;
 extern S57QueryDialog *g_pObjectQueryDialog;
 extern int g_S57_dialog_sx;
 extern int g_S57_dialog_sy;
+extern bool g_bresponsive;
 
 IMPLEMENT_CLASS ( S57QueryDialog, wxDialog )
 // S57QueryDialog event table definition
@@ -82,12 +83,13 @@ bool S57QueryDialog::Create( wxWindow* parent, wxWindowID id, const wxString& ca
 
     if( !wxDialog::Create( parent, id, caption, pos, size, wstyle ) ) return false;
 
-    wxFont *dFont = wxTheFontList->FindOrCreateFont( 10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL,
-                    wxFONTWEIGHT_NORMAL );
+    wxFont *dFont = GetOCPNScaledFont(_("ObjectQuery"));
 
     SetFont( *dFont );
     CreateControls();
-
+    
+    m_createsize = size;
+/*
 // This ensures that the dialog cannot be sized smaller
 // than the minimum size
     GetSizer()->SetSizeHints( this );
@@ -97,10 +99,36 @@ bool S57QueryDialog::Create( wxWindow* parent, wxWindowID id, const wxString& ca
 
 // Centre the dialog on the parent or (if none) screen
     Centre();
-
+*/
+    RecalculateSize();
+    
     DimeControl( this );
     return true;
 
+}
+
+void S57QueryDialog::RecalculateSize( void )
+{
+    //  Make an estimate of the dialog size, without scrollbars showing
+    
+    wxSize esize = m_createsize;
+    if(g_bresponsive){
+        esize = GetParent()->GetClientSize();
+    }
+    
+    wxSize dsize = GetParent()->GetClientSize();
+    esize.y = wxMin(esize.y, dsize.y - (2 * GetCharHeight()));
+    esize.x = wxMin(esize.x, dsize.x - (2 * GetCharHeight()));
+    SetSize(esize);
+    
+    wxSize fsize = GetSize();
+    fsize.y = wxMin(fsize.y, dsize.y - (2 * GetCharHeight()));
+    fsize.x = wxMin(fsize.x, dsize.x - (2 * GetCharHeight()));
+    SetSize(fsize);
+    
+    
+    Centre();
+    
 }
 
 void S57QueryDialog::CreateControls()
@@ -109,7 +137,8 @@ void S57QueryDialog::CreateControls()
     SetSizer( topSizer );
 
     m_phtml = new wxHtmlWindow( this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                wxHW_SCROLLBAR_AUTO );
+                                wxHW_SCROLLBAR_AUTO | wxHW_NO_SELECTION);
+    
     m_phtml->SetBorders( 5 );
 
     m_phtml->SetMinSize( wxSize( 100, 100 ) );            // this will constrain the dialog, too
@@ -126,7 +155,19 @@ void S57QueryDialog::SetColorScheme( void )
     DimeControl( this );
     wxColor bg = GetBackgroundColour();
     m_phtml->SetBackgroundColour( bg );
+    SetBackgroundColour( bg );                  // This looks like non-sense, but is needed for __WXGTK__
+                                                // to get colours to propagate down the control's family tree.
 
+#ifdef __WXQT__    
+    //  wxQT has some trouble clearing the background of HTML window...
+    wxBitmap tbm( GetSize().x, GetSize().y, -1 );
+    wxMemoryDC tdc( tbm );
+//    wxColour cback = GetGlobalColor( _T("YELO1") );
+    tdc.SetBackground( bg );
+    tdc.Clear();
+    m_phtml->SetBackgroundImage(tbm);
+#endif
+    
 }
 
 void S57QueryDialog::SetHTMLPage( wxString& page )

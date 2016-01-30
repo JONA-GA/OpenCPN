@@ -31,12 +31,6 @@
 #define __CHARTDB_H__
 
 
-#include "wx/file.h"
-#include "wx/stream.h"
-#include "wx/wfstream.h"
-#include "wx/tokenzr.h"
-#include "wx/dir.h"
-#include "wx/filename.h"
 #include <wx/xml/xml.h>
 
 #include "chartbase.h"
@@ -94,6 +88,7 @@ public:
       int         RecentTime;
       int         dbIndex;
       bool        b_in_use;
+      int         n_lock;
 };
 
 
@@ -106,7 +101,7 @@ class ChartDB: public ChartDatabase
 {
 public:
 
-      ChartDB(MyFrame *parent);
+      ChartDB();
       virtual ~ChartDB();
 
 
@@ -130,13 +125,18 @@ public:
 
       int GetStackEntry(ChartStack *ps, wxString fp);
       bool IsChartInCache(int dbindex);
+      bool IsChartInCache(wxString path);
       bool IsChartInGroup(const int db_index, const int group);
 
       ChartBase *OpenChartFromStack(ChartStack *pStack, int StackEntry, ChartInitFlag iflag = FULL_INIT);
       ChartBase *OpenChartFromDB(int index, ChartInitFlag init_flag);
-
+      ChartBase *OpenChartFromDBAndLock(int index, ChartInitFlag init_flag , bool lock = true);
+      ChartBase *OpenChartFromDBAndLock(wxString chart_path, ChartInitFlag init_flag);
+      ChartBase *OpenChartFromDB(wxString chart_path, ChartInitFlag init_flag);
+      
       void ApplyColorSchemeToCachedCharts(ColorScheme cs);
       void PurgeCache();
+      void PurgeCachePlugins();
       bool DeleteCacheChart(ChartBase *pChart);
 
       void LockCache(bool bl){m_b_locked = bl;}
@@ -145,9 +145,16 @@ public:
       bool IsCacheLocked(){ return m_b_locked; }
       wxXmlDocument GetXMLDescription(int dbIndex, bool b_getGeom);
 
+      bool LockCacheChart( int index );
+      bool IsChartLocked( int index );
+      
+      void UnLockCacheChart( int index );
+      void UnLockAllCacheCharts();
+      
       void ClearCacheInUseFlags(void);
-      void PurgeCacheUnusedCharts(bool b_force = false);
+      void PurgeCacheUnusedCharts( double factor );
 
+      bool IsBusy(){ return m_b_busy; }
 protected:
       virtual ChartBase *GetChart(const wxChar *theFilePath, ChartClassDescriptor &chart_desc) const;
 
@@ -158,12 +165,19 @@ private:
       bool CreateS57SENCChartTableEntry(wxString full_name, ChartTableEntry *pEntry, Extent *pext);
       bool CheckPositionWithinChart(int index, float lat, float lon);
       ChartBase *OpenChartUsingCache(int dbindex, ChartInitFlag init_flag);
-
+      CacheEntry *FindOldestDeleteCandidate( bool blog );
+      void DeleteCacheEntry(int i, bool bDelTexture = false, const wxString &msg = wxEmptyString);
+      void DeleteCacheEntry(CacheEntry *pce, bool bDelTexture = false, const wxString &msg = wxEmptyString);
+      
+      
       wxArrayPtrVoid    *pChartCache;
+      int              m_ticks;
 
-      MyFrame           *pParent;
       bool              m_b_locked;
+      bool              m_b_busy;
 
+      wxCriticalSection m_critSect;
+      wxMutex           m_cache_mutex;
 };
 
 

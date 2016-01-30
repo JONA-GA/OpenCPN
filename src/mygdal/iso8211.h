@@ -251,6 +251,8 @@ class DDFFieldDefn
 
     DDF_data_type_code   _data_type_code;
 
+    int         _lex_level;
+    
     int         nSubfieldCount;
     DDFSubfieldDefn **papoSubfields;
 };
@@ -318,7 +320,7 @@ public:
     int         GetWidth() { return nFormatWidth; } // zero for variable.
 
     int         GetDefaultValue( char *pachData, int nBytesAvailable,
-                                 int *pnBytesUsed );
+                                 int *pnBytesUsed, bool b_UTF16 );
 
     void        Dump( FILE * fp );
 
