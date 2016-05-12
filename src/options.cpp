@@ -519,11 +519,9 @@ void MMSIEditDialog::OnMMSIEditOKClick(wxCommandEvent& event) {
     m_MMSICtl->GetValue().ToLong(&nmmsi);
     m_props->MMSI = nmmsi;
 
-<<<<<<< HEAD
-    if ( m_MMSICtl->GetValue().Length()   != 9)
-=======
+
     if (m_MMSICtl->GetValue().Length() != 9)
->>>>>>> upstream/master
+
     {
         if (wxID_CANCEL == OCPNMessageBox(this,
             _("An MMSI Id is generally a number of nine digits.\nPlease check your entries and cancel if necessary."),
