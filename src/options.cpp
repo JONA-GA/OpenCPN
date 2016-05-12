@@ -8037,5 +8037,6 @@ const wxString OpenGLOptionsDlg::GetTextureCacheSize(void) {
   return wxString::Format(_T( "%.1f GB" ), mb);
 }
 
+
 #endif  // ocpnUSE_GL
 
