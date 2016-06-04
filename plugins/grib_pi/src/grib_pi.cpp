@@ -39,6 +39,10 @@
 
 #include "grib_pi.h"
 
+#ifdef __WXQT__
+#include "qdebug.h"
+#endif
+
 // the class factories, used to create and destroy instances of the PlugIn
 
 extern "C" DECL_EXP opencpn_plugin* create_pi(void *ppimgr)
@@ -145,6 +149,7 @@ int grib_pi::Init(void)
               WANTS_CONFIG              |
               WANTS_PREFERENCES         |
               WANTS_PLUGIN_MESSAGING    |
+              WANTS_ONPAINT_VIEWPORT    |
               WANTS_MOUSE_EVENTS
             );
 }
@@ -287,7 +292,7 @@ void grib_pi::ShowPreferencesDialog( wxWindow* parent )
                  break;
              case 3:
                  //rebuild current activefile with new parameters and rebuil data list with current index
-                 m_pGribCtrlBar->CreateActiveFileFromName( m_pGribCtrlBar->m_bGRIBActiveFile->GetFileName() );
+                 m_pGribCtrlBar->CreateActiveFileFromNames( m_pGribCtrlBar->m_bGRIBActiveFile->GetFileNames() );
                  m_pGribCtrlBar->PopulateComboDataList();
                  m_pGribCtrlBar->TimelineChanged();
                  break;
@@ -305,6 +310,7 @@ void grib_pi::ShowPreferencesDialog( wxWindow* parent )
 
          SaveConfig();
      }
+     delete Pref;
 }
 
 bool grib_pi::QualifyCtrlBarPosition( wxPoint position, wxSize size )
@@ -338,19 +344,19 @@ bool grib_pi::QualifyCtrlBarPosition( wxPoint position, wxSize size )
     return !b_reset_pos;
 }
 
-void grib_pi::MoveDialog( wxDialog *dialog, wxPoint position, wxPoint dfault )
+void grib_pi::MoveDialog(wxDialog *dialog, wxPoint position)
 {
-    wxPoint p = position;
+	wxPoint p = GetOCPNCanvasWindow()->ScreenToClient(position);
     //Check and ensure there is always a "grabb" zone always visible wathever the dialoue size is.
-    if( p.x + dialog->GetSize().GetX() > GetOCPNCanvasWindow()->GetClientSize().GetX() || p.x < 0 )
-        p.x = wxMin( (GetOCPNCanvasWindow()->GetClientSize().GetX() - dialog->GetSize().GetX()), dfault.x );
-    if( p.y + dialog->GetSize().GetY() > GetOCPNCanvasWindow()->GetClientSize().GetY() )
-        p.y = dfault.y;
+	if (p.x + dialog->GetSize().GetX() > GetOCPNCanvasWindow()->GetClientSize().GetX())
+		p.x = GetOCPNCanvasWindow()->GetClientSize().GetX() - dialog->GetSize().GetX();
+	if (p.y + dialog->GetSize().GetY() > GetOCPNCanvasWindow()->GetClientSize().GetY())
+		p.y = GetOCPNCanvasWindow()->GetClientSize().GetY() - dialog->GetSize().GetY();
 
 #ifdef __WXGTK__
     dialog->Move(0, 0);
 #endif
-    dialog->Move(p);
+	dialog->Move(GetOCPNCanvasWindow()->ClientToScreen(p));
 }
 
 void grib_pi::OnToolbarToolCallback(int id)
@@ -361,8 +367,6 @@ void grib_pi::OnToolbarToolCallback(int id)
 
     double scale_factor = GetOCPNGUIToolScaleFactor_PlugIn();
     if( scale_factor != m_GUIScaleFactor ) starting = true;
-
-    m_GUIScaleFactor = scale_factor;
     
     if(!m_pGribCtrlBar)
     {
@@ -370,7 +374,7 @@ void grib_pi::OnToolbarToolCallback(int id)
         long style = m_DialogStyle == ATTACHED_HAS_CAPTION ? wxCAPTION|wxCLOSE_BOX|wxSYSTEM_MENU : wxBORDER_NONE|wxSYSTEM_MENU;
         m_pGribCtrlBar = new GRIBUICtrlBar(m_parent_window, wxID_ANY, wxEmptyString, wxDefaultPosition,
                 wxDefaultSize, style, this);
-        m_pGribCtrlBar->SetScaledBitmap(m_GUIScaleFactor);
+		m_pGribCtrlBar->SetScaledBitmap(scale_factor);
         
         wxMenu* dummy = new wxMenu(_T("Plugin"));
         wxMenuItem* table = new wxMenuItem( dummy, wxID_ANY, wxString( _("Weather table") ), wxEmptyString, wxITEM_NORMAL );
@@ -400,13 +404,14 @@ void grib_pi::OnToolbarToolCallback(int id)
     if(m_bShowGrib) {
         if( starting ) {
             SetDialogFont( m_pGribCtrlBar );
-	    m_pGribCtrlBar->SetScaledBitmap( m_GUIScaleFactor );
+			m_GUIScaleFactor = scale_factor;
+			m_pGribCtrlBar->SetScaledBitmap( m_GUIScaleFactor );
             m_pGribCtrlBar->SetDialogsStyleSizePosition( true );
             m_pGribCtrlBar->Refresh();
         } else {
-            MoveDialog( m_pGribCtrlBar, GetCtrlBarXY(), wxPoint( 20, 60) );
+			MoveDialog(m_pGribCtrlBar, GetCtrlBarXY());
             if( m_DialogStyle >> 1 == SEPARATED ) {
-                MoveDialog( m_pGribCtrlBar->GetCDataDialog(), GetCursorDataXY(), wxPoint( 20, 170));
+				MoveDialog(m_pGribCtrlBar->GetCDataDialog(), GetCursorDataXY());
                 m_pGribCtrlBar->GetCDataDialog()->Show( m_pGribCtrlBar->m_CDataIsShown );
                 }
         }
@@ -439,6 +444,10 @@ void grib_pi::OnGribCtrlBarClose()
     RequestRefresh(m_parent_window); // refresh main window
 
 	if (::wxIsBusy()) ::wxEndBusyCursor();
+
+#ifdef __OCPN__ANDROID__        
+    m_DialogStyleChanged = true;       //  Force a delete of the control bar dialog    
+#endif        
 
     if( m_DialogStyleChanged ) {
         m_pGribCtrlBar->Destroy();
@@ -474,6 +483,11 @@ bool grib_pi::RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp)
     if( m_pGribCtrlBar->pReq_Dialog )
         m_pGribCtrlBar->pReq_Dialog->RenderGlZoneOverlay();
     if( ::wxIsBusy() ) ::wxEndBusyCursor();
+    
+    #ifdef __OCPN__ANDROID__
+    m_pGribCtrlBar->Raise();    // Control bar should always be visible
+    #endif
+    
     return true;
 }
 
@@ -551,6 +565,20 @@ void grib_pi::SetPluginMessage(wxString &message_id, wxString &message_body)
         delete m_pLastTimelineSet;
         m_pLastTimelineSet = set;
     }
+    
+    if(message_id == _T("GRIB_APPLY_JSON_CONFIG"))
+    {
+        wxLogMessage(_T("Got GRIB_APPLY_JSON_CONFIG"));
+        
+        if(m_pGribCtrlBar){
+            m_pGribCtrlBar->OpenFileFromJSON(message_body);
+            
+            m_pGribCtrlBar->m_OverlaySettings.JSONToSettings(message_body);
+            m_pGribCtrlBar->m_OverlaySettings.Write();
+            m_pGribCtrlBar->SetDialogsStyleSizePosition( true );
+            
+        }
+    }
 }
 
 bool grib_pi::LoadConfig(void)
@@ -580,6 +608,7 @@ bool grib_pi::LoadConfig(void)
 
     pConf->Read( _T ( "GribCursorDataDisplayStyle" ), &m_DialogStyle, 0 );
     if( m_DialogStyle > 3 ) m_DialogStyle = 0;         //ensure validity of the .conf value
+
     return true;
 }
 

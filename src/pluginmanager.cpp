@@ -105,6 +105,7 @@ extern wxArrayString    g_locale_catalog_array;
 extern int              g_GUIScaleFactor;
 extern int              g_ChartScaleFactor;
 extern wxString         g_locale;
+extern bool             g_btouch;
 
 unsigned int      gs_plib_flags;
 
@@ -265,6 +266,8 @@ PlugInManager::PlugInManager(MyFrame *parent)
     m_last_online = false;
     m_last_online_chk = -1;
     #endif
+    
+    m_benable_blackdialog_done = false;
 }
 
 PlugInManager::~PlugInManager()
@@ -282,7 +285,8 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
     pConfig->SetPath( _T("/PlugIns/") );
     SetPluginOrder( pConfig->Read( _T("PluginOrder"), wxEmptyString ) );
     
-    m_benable_blackdialog = b_enable_blackdialog;
+    //  Enable the compatibility dialogs if requested, and has not been already done once.
+    m_benable_blackdialog = b_enable_blackdialog && !m_benable_blackdialog_done;
     
     m_plugin_location = plugin_dir;
 
@@ -309,6 +313,8 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
         return false;
     }
 
+    if(!g_Platform->isPlatformCapable(PLATFORM_CAP_PLUGINS)) return false;
+       
     wxArrayString file_list;
         
     int get_flags =  wxDIR_FILES | wxDIR_DIRS;
@@ -371,7 +377,7 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
             
         bool b_compat = CheckPluginCompatibility(file_name);
             
-        if(!b_compat)
+        if(m_benable_blackdialog && !b_compat)
         {
             wxLogMessage(wxString::Format(_("    Incompatible PlugIn detected: %s"), file_name.c_str()));
             OCPNMessageBox( NULL, wxString::Format(_("The plugin %s is not compatible with this version of OpenCPN, please get an updated version."), plugin_file.c_str()), wxString(_("OpenCPN Info")), wxICON_INFORMATION | wxOK, 10 );
@@ -442,6 +448,10 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
 
     // Inform plugins of the current color scheme
     g_pi_manager->SetColorSchemeForAllPlugIns( global_color_scheme );
+
+    //  Only allow the PlugIn compatibility dialogs once per instance of application.
+    if(b_enable_blackdialog)
+        m_benable_blackdialog_done = true;
     
     return ret;
 }
@@ -457,6 +467,9 @@ bool PlugInManager::CallLateInit(void)
         switch(pic->m_api_version)
         {
             case 110:
+            case 111:
+            case 112:
+            case 113:
                 if(pic->m_cap_flag & WANTS_LATE_INIT) {
                     wxString msg(_T("PlugInManager: Calling LateInit PlugIn: "));
                     msg += pic->m_plugin_file;
@@ -858,7 +871,7 @@ PlugInContainer *PlugInManager::LoadPlugIn(wxString plugin_file)
     wxDynamicLibrary *plugin = new wxDynamicLibrary(plugin_file);
     pic->m_plibrary = plugin;     // Save a pointer to the wxDynamicLibrary for later deletion
     
-    if( !wxIsReadable(plugin_file) )
+    if( m_benable_blackdialog && !wxIsReadable(plugin_file) )
     {
         msg = _("Unreadable PlugIn library detected, check the file permissions:\n");
         msg += plugin_file;
@@ -867,42 +880,43 @@ PlugInContainer *PlugInManager::LoadPlugIn(wxString plugin_file)
     }
     else if(!plugin->IsLoaded())
     {
+        if( m_benable_blackdialog ){
         //  Look in the Blacklist, try to match a filename, to give some kind of message
         //  extract the probable plugin name
-        wxFileName fn( plugin_file );
-        wxString prob_pi_name;
-        wxString name = fn.GetName();
-        prob_pi_name = name;
-        
-#ifdef __WXGTK__
-        prob_pi_name = name.Mid(3);     // lop off "lib"
-#endif        
-#ifdef __WXOSX__
-        prob_pi_name = name.Mid(3);     // lop off "lib"
-#endif        
-        
-        int len = sizeof(PluginBlacklist) / sizeof(BlackListedPlugin);
-        for (int i = 0; i < len; i++) {
-            wxString candidate = PluginBlacklist[i].name.Lower();
-            if( prob_pi_name.Lower().EndsWith(candidate)){
-                wxString msg = _("Incompatible PlugIn detected:\n");
-                msg += plugin_file;
-                msg += _T("\n\n");
-                
-                wxString msg1;
-                msg1 = wxString::Format(_("PlugIn [ %s ] version %i.%i"),
-                                        PluginBlacklist[i].name.c_str(),
-                                        PluginBlacklist[i].version_major, PluginBlacklist[i].version_minor);
-                msg += msg1;
-                if(PluginBlacklist[i].all_lower)
-                    msg += _(", and all previous versions,");
-                msg += _(" is incompatible with this version of OpenCPN."),
-                                        
-                OCPNMessageBox ( NULL, msg, wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK, 10 );  // 10 second timeout
-                break;
+            wxFileName fn( plugin_file );
+            wxString prob_pi_name;
+            wxString name = fn.GetName();
+            prob_pi_name = name;
+            
+    #ifdef __WXGTK__
+            prob_pi_name = name.Mid(3);     // lop off "lib"
+    #endif        
+    #ifdef __WXOSX__
+            prob_pi_name = name.Mid(3);     // lop off "lib"
+    #endif        
+            
+            int len = sizeof(PluginBlacklist) / sizeof(BlackListedPlugin);
+            for (int i = 0; i < len; i++) {
+                wxString candidate = PluginBlacklist[i].name.Lower();
+                if( prob_pi_name.Lower().EndsWith(candidate)){
+                    wxString msg = _("Incompatible PlugIn detected:\n");
+                    msg += plugin_file;
+                    msg += _T("\n\n");
+                    
+                    wxString msg1;
+                    msg1 = wxString::Format(_("PlugIn [ %s ] version %i.%i"),
+                                            PluginBlacklist[i].name.c_str(),
+                                            PluginBlacklist[i].version_major, PluginBlacklist[i].version_minor);
+                    msg += msg1;
+                    if(PluginBlacklist[i].all_lower)
+                        msg += _(", and all previous versions,");
+                    msg += _(" is incompatible with this version of OpenCPN."),
+                                            
+                    OCPNMessageBox ( NULL, msg, wxString( _("OpenCPN Info") ), wxICON_INFORMATION | wxOK, 10 );  // 10 second timeout
+                    break;
+                }
             }
         }
-        
         
         
         wxString msg(_T("   PlugInManager: Cannot load library: "));
@@ -2172,6 +2186,11 @@ wxBitmap GetBitmapFromSVGFile(wxString filename, unsigned int width, unsigned in
 #else        
         return wxBitmap();
 #endif // ocpnUSE_SVG   
+}
+
+bool IsTouchInterface_PlugIn(void)
+{
+    return g_btouch;
 }
 
 wxColour GetFontColour_PlugIn(wxString TextElement)

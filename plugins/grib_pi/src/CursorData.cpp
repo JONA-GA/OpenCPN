@@ -28,6 +28,10 @@
 
 #include "folder.xpm"
 
+#ifdef __WXQT__
+#include "qdebug.h"
+#endif
+
 extern int m_Altitude;
 extern double m_cursor_lat, m_cursor_lon;
 extern int m_DialogStyle;
@@ -140,7 +144,16 @@ void CursorData::AddTrackingControl( wxControl *ctrl1,  wxControl *ctrl2,  wxCon
 void CursorData::PopulateTrackingControls( bool vertical )
 {
     m_fgTrackingControls->Clear();
-    m_fgTrackingControls->SetCols( vertical ? 2 : 12);
+    if(!vertical){
+        wxFlexGridSizer *ps = (wxFlexGridSizer*)(m_gparent.GetSizer());
+        if(ps && (ps->GetCols() == 1))
+            m_fgTrackingControls->SetCols( 4 );         // compact mode
+        else
+            m_fgTrackingControls->SetCols( 12 );
+    }
+    else
+        m_fgTrackingControls->SetCols( 2 );
+    
     this->Fit();
     //Get text controls sizing data
     wxFont *font = OCPNGetFont(_("Dialog"), 10);
@@ -358,6 +371,14 @@ void CursorData::UpdateTrackingControls( void )
                                          RecordArray[Idx_SEACURRENT_VX],
                                          RecordArray[Idx_SEACURRENT_VY],
                                          m_cursor_lon, m_cursor_lat)) {
+       
+        // Current direction is generally reported as the "flow" direction, 
+        // which is opposite from wind convention.
+        // So, adjust.
+        ang += 180;
+        if(ang >= 360) ang -= 360;
+        if( ang < 0 ) ang += 360;
+        
         vkn = m_gparent.m_OverlaySettings.CalibrateValue(GribOverlaySettings::CURRENT, vkn);
 
         m_tcCurrentVelocity->SetValue( wxString::Format( _T("%4.1f ") + m_gparent.m_OverlaySettings.GetUnitSymbol(GribOverlaySettings::CURRENT), vkn ) );
@@ -618,7 +639,7 @@ void CursorData::OnMouseEvent( wxMouseEvent &event )
 
     if( event.LeftDown() ) {
         s_gspt = spt;
-        CaptureMouse();
+        if (!HasCapture()) CaptureMouse();
     }
 
     if( event.LeftUp() ) {
