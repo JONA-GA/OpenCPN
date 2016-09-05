@@ -1236,6 +1236,15 @@ void OCPNPlatform::HideBusySpinner( void )
 #endif    
 }
 
+double OCPNPlatform::GetDisplayDensityFactor()
+{
+#ifdef __OCPN__ANDROID__
+    return getAndroidDisplayDensity();
+#else
+    return 1.0;
+#endif
+}
+    
 
 int OCPNPlatform::GetStatusBarFieldCount()
 {

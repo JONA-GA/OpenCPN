@@ -90,7 +90,7 @@ extern ArrayOfMMSIProperties   g_MMSI_Props_Array;
 extern Route    *pAISMOBRoute;
 extern wxString AISTargetNameFileName;
 extern MyConfig *pConfig;
-extern RouteList *pRouteList;
+extern TrackList *pTrackList;
 extern OCPNPlatform     *g_Platform;
 extern PlugInManager             *g_pi_manager;
 
@@ -256,37 +256,12 @@ void AIS_Decoder::BuildERIShipTypeHash(void)
       make_hash_ERI(1910, _("Hydrofoil"));
 }
 
-
-//----------------------------------------------------------------------------------
-//     Strip NMEA V4 tags from message
-//----------------------------------------------------------------------------------
-wxString AIS_Decoder::ProcessNMEA4Tags( wxString msg)
-{
-    int idxFirst =  msg.Find('\\');
-    
-    if(wxNOT_FOUND == idxFirst)
-        return msg;
-    
-    if(idxFirst < (int)msg.Length()-1){
-        int idxSecond = msg.Mid(idxFirst + 1).Find('\\') + 1;
-        if(wxNOT_FOUND != idxSecond){
-            if(idxSecond < (int)msg.Length()-1){
-                
-               // wxString tag = msg.Mid(idxFirst+1, (idxSecond - idxFirst) -1);
-                return msg.Mid(idxSecond + 1);
-            }
-        }
-    }
-    
-    return msg;
-}
-
 //----------------------------------------------------------------------------------
 //     Handle events from AIS DataStream
 //----------------------------------------------------------------------------------
 void AIS_Decoder::OnEvtAIS( OCPN_DataStreamEvent& event )
 {
-    wxString message = ProcessNMEA4Tags(wxString(event.GetNMEAString().c_str(), wxConvUTF8) );
+    wxString message = event.ProcessNMEA4Tags();
 
     int nr = 0;
     if( !message.IsEmpty() )
@@ -1446,7 +1421,7 @@ bool AIS_Decoder::Parse_VDXBitstring( AIS_Bitstring *bstr, AIS_Target_Data *ptd 
 //          1 = station compliant with Recommendation ITU-R M.1371-3
 //          2-3 = station compliant with future editions
             int AIS_version_indicator = bstr->GetInt( 39, 2 );
-            if( AIS_version_indicator < 2 ) {
+            if( AIS_version_indicator < 4 ) {
                 ptd->IMO = bstr->GetInt( 41, 30 );
 
                 bstr->GetStr( 71, 42, &ptd->CallSign[0], 7 );
@@ -1870,22 +1845,22 @@ void AIS_Decoder::UpdateOneTrack( AIS_Target_Data *ptarget )
         if ( 0 == m_persistent_tracks.count( ptarget->MMSI ) )
         {
             t = new Track();
-            t->m_RouteNameString = wxString::Format( _T("AIS %s (%u) %s %s"), ptarget->GetFullName().c_str(), ptarget->MMSI, wxDateTime::Now().FormatISODate().c_str(), wxDateTime::Now().FormatISOTime().c_str() );
-            pRouteList->Append( t );
-            pConfig->AddNewRoute( t, -1 );
+            t->m_TrackNameString = wxString::Format( _T("AIS %s (%u) %s %s"), ptarget->GetFullName().c_str(), ptarget->MMSI, wxDateTime::Now().FormatISODate().c_str(), wxDateTime::Now().FormatISOTime().c_str() );
+            pTrackList->Append( t );
+            pConfig->AddNewTrack( t );
             m_persistent_tracks[ptarget->MMSI] = t;
         }
         else
         {
             t = m_persistent_tracks[ptarget->MMSI];
         }
-        RoutePoint *rp = t->GetLastPoint();
+        TrackPoint *tp = t->GetLastPoint();
         vector2D point( ptrackpoint->m_lon, ptrackpoint->m_lat );
-        RoutePoint *rp1 = t->AddNewPoint( point, wxDateTime(ptrackpoint->m_time).ToUTC() );        
-        if( rp )
+        TrackPoint *tp1 = t->AddNewPoint( point, wxDateTime(ptrackpoint->m_time).ToUTC() );        
+        if( tp )
         {
-            pSelect->AddSelectableTrackSegment( rp->m_lat, rp->m_lon, rp1->m_lat,
-                rp1->m_lon, rp, rp1, t );
+            pSelect->AddSelectableTrackSegment( tp->m_lat, tp->m_lon, tp1->m_lat,
+                tp1->m_lon, tp, tp1, t );
         }
         
 //We do not want dependency on the GUI here, do we?

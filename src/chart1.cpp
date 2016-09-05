@@ -73,7 +73,7 @@
 #include "navutil.h"
 #include "styles.h"
 #include "routeman.h"
-#include "chartbarwin.h"
+#include "piano.h"
 #include "concanv.h"
 #include "options.h"
 #include "about.h"
@@ -166,12 +166,12 @@ bool                      g_bFirstRun;
 int                       g_unit_test_1;
 bool                      g_start_fullscreen;
 bool                      g_rebuild_gl_cache;
+bool                      g_parse_all_enc;
 
 MyFrame                   *gFrame;
 
 ChartCanvas               *cc1;
 ConsoleCanvas             *console;
-ChartBarWin               *g_ChartBarWin;
 Piano                     *g_Piano;
 wxWindowList              AppActivateList;
 
@@ -187,6 +187,7 @@ int                       g_restore_dbindex;
 double                    g_ChartNotRenderScaleFactor;
 
 RouteList                 *pRouteList;
+TrackList                 *pTrackList;
 LayerList                 *pLayerList;
 bool                      g_bIsNewLayer;
 int                       g_LayerIdx;
@@ -229,10 +230,6 @@ wxString                  g_SENCPrefix;
 wxString                  g_UserPresLibData;
 wxString                  g_VisibleLayers;
 wxString                  g_InvisibleLayers;
-
-#ifdef ocpnUSE_GL
-extern CompressionWorkerPool   *g_CompressorPool;
-#endif
 
 bool                      g_bcompression_wait;
 
@@ -570,7 +567,7 @@ int                       g_route_line_width;
 int                       g_track_line_width;
 wxString                  g_default_wp_icon;
 
-Track                     *g_pActiveTrack;
+ActiveTrack              *g_pActiveTrack;
 double                    g_TrackIntervalSeconds;
 double                    g_TrackDeltaDistance;
 int                       g_nTrackPrecision;
@@ -644,8 +641,6 @@ wxAuiManager              *g_pauimgr;
 wxAuiDefaultDockArt       *g_pauidockart;
 
 bool                      g_blocale_changed;
-
-RoutePrintSelection       *pRoutePrintSelection;
 
 wxMenu                    *g_FloatingToolbarConfigMenu;
 wxString                  g_toolbarConfig = _T("XXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
@@ -846,6 +841,7 @@ void MyApp::OnInitCmdLine( wxCmdLineParser& parser )
     parser.AddSwitch( _T("no_opengl") );
     parser.AddSwitch( _T("fullscreen") );
     parser.AddSwitch( _T("rebuild_gl_raster_cache") );
+    parser.AddSwitch( _T("parse_all_enc") );
 }
 
 bool MyApp::OnCmdLineParsed( wxCmdLineParser& parser )
@@ -855,6 +851,7 @@ bool MyApp::OnCmdLineParsed( wxCmdLineParser& parser )
     g_bdisable_opengl = parser.Found( _T("no_opengl") );
     g_start_fullscreen = parser.Found( _T("fullscreen") );
     g_rebuild_gl_cache = parser.Found( _T("rebuild_gl_raster_cache") );
+    g_parse_all_enc = parser.Found( _T("parse_all_enc") );
 
     return true;
 }
@@ -1137,10 +1134,199 @@ static char *get_X11_property (Display *disp, Window win,
 }
 #endif
 
+static wxStopWatch init_sw;
+class ParseENCWorkerThread : public wxThread
+{
+public:
+    ParseENCWorkerThread(wxString filename)
+        : wxThread(wxTHREAD_JOINABLE), m_filename(filename)
+        { Create(); }
+        
+    void *Entry() {
+        ChartBase *pchart = ChartData->OpenChartFromDB(m_filename, FULL_INIT);
+        ChartData->DeleteCacheChart(pchart);
+        return 0;
+    }
+
+    wxString m_filename;
+};
+
+// begin duplicated code
+static double chart_dist(int index)
+{
+    double d;
+    float  clon;
+    float  clat;
+    const ChartTableEntry &cte = ChartData->GetChartTableEntry(index);
+    // if the chart contains ownship position set the distance to 0
+    if (cte.GetBBox().Contains(gLon, gLat))
+        d = 0.;
+    else {
+        // find the nearest edge 
+        double t;
+        clon = (cte.GetLonMax() + cte.GetLonMin())/2;
+        d = DistGreatCircle(cte.GetLatMax(), clon, gLat, gLon);
+        t = DistGreatCircle(cte.GetLatMin(), clon, gLat, gLon);
+        if (t < d)
+            d = t;
+            
+        clat = (cte.GetLatMax() + cte.GetLatMin())/2;
+        t = DistGreatCircle(clat, cte.GetLonMin(), gLat, gLon);
+        if (t < d)
+            d = t;
+        t = DistGreatCircle(clat, cte.GetLonMax(), gLat, gLon);
+        if (t < d)
+            d = t;
+    }
+    return d;
+}
+
+WX_DEFINE_SORTED_ARRAY_INT(int, MySortedArrayInt);
+static int CompareInts(int n1, int n2)
+{
+    double d1 = chart_dist(n1);
+    double d2 = chart_dist(n2);
+    return (int)(d1 - d2);
+}
+
+class compress_target
+{
+public:
+    wxString chart_path;
+    double distance;
+};
+
+WX_DECLARE_OBJARRAY(compress_target, ArrayOfCompressTargets);
+//WX_DEFINE_OBJARRAY(ArrayOfCompressTargets);
+
+#include <wx/arrimpl.cpp> 
+// end duplicated code
+
+void ParseAllENC()
+{
+    MySortedArrayInt idx_sorted_by_distance(CompareInts);
+    
+    // Building the cache may take a long time....
+    // Be a little smarter.
+    // Build a sorted array of chart database indices, sorted on distance from the ownship currently.
+    // This way, a user may build a few charts textures for immediate use, then "skip" out on the rest until later.
+    int count = 0;
+    for(int i = 0; i<ChartData->GetChartTableEntries(); i++) {
+        /* skip if not kap */
+        const ChartTableEntry &cte = ChartData->GetChartTableEntry(i);
+        if(CHART_TYPE_S57 != cte.GetChartType())
+            continue;
+
+        idx_sorted_by_distance.Add(i);
+        count++;
+    }  
+
+                                   
+    if(count == 0)
+        return;
+
+    wxLogMessage(wxString::Format(_T("ParseAllENC() count = %d"), count ));
+    
+    //  Build another array of sorted compression targets.
+    //  We need to do this, as the chart table will not be invariant
+    //  after the compression threads start, so our index array will be invalid.
+        
+    ArrayOfCompressTargets ct_array;
+    for(unsigned int j = 0; j<idx_sorted_by_distance.GetCount(); j++) {
+        
+        int i = idx_sorted_by_distance.Item(j);
+        
+        const ChartTableEntry &cte = ChartData->GetChartTableEntry(i);
+        double distance = chart_dist(i);
+        
+        wxString filename(cte.GetpFullPath(), wxConvUTF8);
+        
+        compress_target *pct = new compress_target;
+        pct->distance = distance;
+        pct->chart_path = filename;
+        
+        ct_array.Add(pct);
+    }
+    
+    int thread_count = 0;
+    ParseENCWorkerThread **workers = NULL;
+/*    
+    extern int              g_nCPUCount;
+    if(g_nCPUCount > 0)
+        thread_count = g_nCPUCount;
+    else
+        thread_count = wxThread::GetCPUCount();
+        
+    if (thread_count < 1) {
+        // obviously there's a least one CPU!
+        thread_count = 1;
+    }
+*/
+    thread_count = 1; // for now because there is a problem with more than 1
+            
+    workers = new ParseENCWorkerThread*[thread_count];
+    for(int t = 0; t < thread_count; t++)
+        workers[t] = NULL;
+
+    long style = wxPD_SMOOTH | wxPD_ELAPSED_TIME | wxPD_ESTIMATED_TIME | wxPD_REMAINING_TIME | wxPD_CAN_SKIP;
+    wxProgressDialog prog(_("OpenCPN Parse ENC"), _T(""), count+1, GetOCPNCanvasWindow(), style );
+
+    // make wider to show long filenames
+    wxSize csz = GetOCPNCanvasWindow()->GetClientSize();
+    wxSize sz = prog.GetSize();
+    sz.x = csz.x * 8 / 10;
+    prog.SetSize( sz );
+    prog.Centre();
+
+    // parse targets
+    bool skip = false;
+    count = 0;
+    for(unsigned int j = 0; j<ct_array.GetCount(); j++) {
+        wxString filename = ct_array.Item(j).chart_path;
+        double distance = ct_array.Item(j).distance;
+
+        wxString msg;
+        msg.Printf( _("Distance from Ownship:  %4.0f NMi"), distance);
+        if(sz.x > 600){
+            msg += _T("   Chart:");
+            msg += filename;
+        }
+
+        prog.Update(count++, msg, &skip );
+        if(skip)
+            break;
+
+        for(int t = 0;; t=(t+1)%thread_count) {
+            if(!workers[t]) {
+                workers[t] = new ParseENCWorkerThread(filename);
+                workers[t]->Run();
+                break;
+            }
+
+            if(!workers[t]->IsAlive()) {
+                workers[t]->Wait();
+                delete workers[t];
+                workers[t] = NULL;
+            }
+            if(t == 0) {
+//                ::wxYield();                // allow ChartCanvas main message loop to run 
+                wxThread::Sleep(1); /* wait for a worker to finish */
+            }
+        }
+    }
+
+    /* wait for workers to finish, and clean up after then */
+    for(int t = 0; t<thread_count; t++) {
+        if(workers[t]) {
+            workers[t]->Wait();
+            delete workers[t];
+        }
+    }
+    delete [] workers;
+}
+
 bool MyApp::OnInit()
 {
-    wxStopWatch sw;
-
     if( !wxApp::OnInit() ) return false;
 
 #if defined(__WXGTK__) && defined(ARMHF) && defined(ocpnUSE_GLES)
@@ -1856,14 +2042,6 @@ bool MyApp::OnInit()
     if( g_bresponsive  && ( cc1->GetPixPerMM() > 4.0))
         gFrame->Maximize( true );
 
-    // enable this to use a window for the chart bar instead of rendering it
-    // to the chart canvas.  If it can be determined that rendering works well
-    // in all cases for all platforms we can remove the ChartBarWin class completely
-#if 0
-    g_ChartBarWin = new ChartBarWin( cc1 );
-    g_ChartBarWin->Show();
-#endif
-
     //  Yield to pick up the OnSize() calls that result from Maximize()
     Yield();
 
@@ -2040,6 +2218,8 @@ extern ocpnGLOptions g_GLOptions;
     }
 #endif
 
+    if(g_parse_all_enc )
+        ParseAllENC();
 
 //      establish GPS timeout value as multiple of frame timer
 //      This will override any nonsense or unset value from the config file
@@ -2091,9 +2271,6 @@ extern ocpnGLOptions g_GLOptions;
     gFrame->Refresh( false );
     gFrame->Raise();
 
-    gFrame->RequestNewToolbar();
-
-
     cc1->Enable();
     cc1->SetFocus();
 
@@ -2118,9 +2295,6 @@ extern ocpnGLOptions g_GLOptions;
     if ( g_start_fullscreen )
         gFrame->ToggleFullScreen();
 
-    if(g_ChartBarWin)
-        g_ChartBarWin->Show( g_bShowChartBar );
-
 #ifdef __OCPN__ANDROID__
     //  We need a resize to pick up height adjustment after building android ActionBar
     if(pConfig->m_bShowMenuBar)
@@ -2140,7 +2314,7 @@ extern ocpnGLOptions g_GLOptions;
     // Start delayed initialization chain after 100 milliseconds
     gFrame->InitTimer.Start( 100, wxTIMER_CONTINUOUS );
 
-    wxLogMessage( wxString::Format(_("OpenCPN Initialized in %ld ms."), sw.Time() ) );
+    wxLogMessage( wxString::Format(_("OpenCPN Initialized in %ld ms."), init_sw.Time() ) );
 
 #ifdef __OCPN__ANDROID__
     androidHideBusyIcon();
@@ -2545,12 +2719,7 @@ void MyFrame::OnActivate( wxActivateEvent& event )
 
 #ifdef __WXOSX__
     if(event.GetActive())
-    {
         SurfaceToolbar();
-
-        if(g_ChartBarWin)
-            g_ChartBarWin->Show(g_bShowChartBar);
-    }
 #endif
 
     event.Skip();
@@ -3078,10 +3247,6 @@ void MyFrame::RequestNewToolbar(bool bforcenew)
             g_FloatingToolbarDialog->SetColorScheme(global_color_scheme);
             g_FloatingToolbarDialog->Show(b_reshow && g_bshowToolbar);
         }
-
-#ifndef __WXQT__
-        gFrame->Raise(); // ensure keyboard focus to the chart window (needed by gtk+)
-#endif
     }
 
 #ifdef __OCPN__ANDROID__
@@ -3238,10 +3403,10 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
 
 #ifdef ocpnUSE_GL
     // cancel compression jobs
-    if(g_bopengl && g_CompressorPool){
-        g_CompressorPool->PurgeJobList();
+    if(g_bopengl){
+        g_glTextureManager->PurgeJobList();
 
-        if(g_CompressorPool->GetRunningJobCount())
+        if(g_glTextureManager->GetRunningJobCount())
             g_bcompression_wait = true;
     }
 #endif
@@ -3391,7 +3556,6 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
 #ifndef __OCPN__ANDROID__
     SetStatusBar( NULL );
 #endif
-    g_ChartBarWin = NULL;
 
     if(RouteManagerDialog::getInstanceFlag()){
         if( pRouteManagerDialog ) {
@@ -3468,7 +3632,8 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
     // This way the main window is already invisible and to the user
     // it appears to have finished rather than hanging for several seconds
     // while the compression threads exit
-    if(g_bopengl && g_CompressorPool && g_CompressorPool->GetRunningJobCount()){
+    if(g_bopengl && g_glTextureManager->GetRunningJobCount()){
+        g_glTextureManager->ClearAllRasterTextures();
 
         wxLogMessage(_T("Starting compressor pool drain"));
         wxDateTime now = wxDateTime::Now();
@@ -3481,9 +3646,9 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
             stall = later.GetTicks();
 
             wxString msg;
-            msg.Printf(_T("Time: %d  Job Count: %d"), n_comploop, g_CompressorPool->GetRunningJobCount());
+            msg.Printf(_T("Time: %d  Job Count: %d"), n_comploop, g_glTextureManager->GetRunningJobCount());
             wxLogMessage(msg);
-            if(!g_CompressorPool->GetRunningJobCount())
+            if(!g_glTextureManager->GetRunningJobCount())
                 break;
             wxYield();
             wxSleep(1);
@@ -3491,10 +3656,10 @@ void MyFrame::OnCloseWindow( wxCloseEvent& event )
 
         wxString fmsg;
         fmsg.Printf(_T("Finished compressor pool drain..Time: %d  Job Count: %d"),
-                    n_comploop, g_CompressorPool->GetRunningJobCount());
+                    n_comploop, g_glTextureManager->GetRunningJobCount());
         wxLogMessage(fmsg);
     }
-
+    delete g_glTextureManager;
 #endif
 
     this->Destroy();
@@ -3511,8 +3676,6 @@ void MyFrame::OnMove( wxMoveEvent& event )
 {
     if( g_FloatingToolbarDialog ) g_FloatingToolbarDialog->RePosition();
 
-    if( g_ChartBarWin && g_ChartBarWin->IsVisible()) g_ChartBarWin->RePosition();
-
 //    UpdateGPSCompassStatusBox( );
 
     if( console && console->IsShown() ) PositionConsole();
@@ -3527,11 +3690,6 @@ void MyFrame::OnMove( wxMoveEvent& event )
 
 void MyFrame::ProcessCanvasResize( void )
 {
-    if( g_ChartBarWin ) {
-        g_ChartBarWin->ReSize();
-        g_ChartBarWin->RePosition();
-    }
-
     if( g_FloatingToolbarDialog ) {
         g_FloatingToolbarDialog->RePosition();
         g_FloatingToolbarDialog->SetGeometry(g_Compass->IsShown(), g_Compass->GetRect());
@@ -3746,13 +3904,8 @@ void MyFrame::ODoSetSize( void )
 
     if( console ) PositionConsole();
 
-    if( cc1 ) {
+    if( cc1 )
         g_Piano->FormatKeys();
-        if( g_ChartBarWin ) {
-            g_ChartBarWin->ReSize();
-            g_ChartBarWin->RePosition();
-        }
-    }
 
 //  Update the stored window size
     GetSize( &x, &y );
@@ -4175,22 +4328,22 @@ void MyFrame::OnToolLeftClick( wxCommandEvent& event )
         case ID_ROUTEMANAGER: {
             pRouteManagerDialog = RouteManagerDialog::getInstance( cc1 ); // There is one global instance of the Dialog
 
-            pRouteManagerDialog->UpdateRouteListCtrl();
-            pRouteManagerDialog->UpdateTrkListCtrl();
-            pRouteManagerDialog->UpdateWptListCtrl();
-            pRouteManagerDialog->UpdateLayListCtrl();
+            if( pRouteManagerDialog->IsShown() )
+                pRouteManagerDialog->Hide();
+            else {
+                pRouteManagerDialog->UpdateRouteListCtrl();
+                pRouteManagerDialog->UpdateTrkListCtrl();
+                pRouteManagerDialog->UpdateWptListCtrl();
+                pRouteManagerDialog->UpdateLayListCtrl();
 
-            if(g_bresponsive){
-                if(g_ChartBarWin && g_ChartBarWin->IsShown() )
-                    g_ChartBarWin->Hide();
-            }
-            pRouteManagerDialog->Show();
+                pRouteManagerDialog->Show();
 
             //    Required if RMDialog is not STAY_ON_TOP
 #ifdef __WXOSX__
-            pRouteManagerDialog->Centre();
-            pRouteManagerDialog->Raise();
+                pRouteManagerDialog->Centre();
+                pRouteManagerDialog->Raise();
 #endif
+            }
             break;
         }
 
@@ -4408,33 +4561,11 @@ void MyFrame::DoSettings()
 
 }
 
-void MyFrame::ShowChartBarIfEnabled()
-{
-    if(g_ChartBarWin){
-        g_ChartBarWin->Show(g_bShowChartBar);
-        if(g_bShowChartBar){
-            g_ChartBarWin->Move(0,0);
-            g_ChartBarWin->RePosition();
-         }
-    }
-
-}
-
-
 void MyFrame::ToggleChartBar()
 {
     g_bShowChartBar = !g_bShowChartBar;
 
-    if( g_ChartBarWin ) {
-        g_ChartBarWin->Show(g_bShowChartBar);
-
-        if(g_bShowChartBar) {
-            g_ChartBarWin->Move(0,0);
-            g_ChartBarWin->RePosition();
-            gFrame->Raise();
-        }
-        SendSizeEvent();
-    } else if(g_bShowChartBar)
+    if(g_bShowChartBar)
         cc1->m_brepaint_piano = true;
 
     cc1->ReloadVP(); // needed to set VP.pix_height
@@ -4546,11 +4677,11 @@ void MyFrame::ActivateMOB( void )
 void MyFrame::TrackOn( void )
 {
     g_bTrackActive = true;
-    g_pActiveTrack = new Track();
+    g_pActiveTrack = new ActiveTrack();
 
-    pRouteList->Append( g_pActiveTrack );
+    pTrackList->Append( g_pActiveTrack );
     if(pConfig)
-        pConfig->AddNewRoute( g_pActiveTrack, 0 );
+        pConfig->AddNewTrack( g_pActiveTrack );
 
     g_pActiveTrack->Start();
 
@@ -4574,12 +4705,12 @@ void MyFrame::TrackOn( void )
     wxJSONValue v;
     wxDateTime now;
     now = now.Now().ToUTC();
-    wxString name = g_pActiveTrack->m_RouteNameString;
+    wxString name = g_pActiveTrack->m_TrackNameString;
     if(name.IsEmpty())
     {
-        RoutePoint *rp = g_pActiveTrack->GetPoint( 1 );
-        if( rp && rp->GetCreateTime().IsValid() )
-            name = rp->GetCreateTime().FormatISODate() + _T(" ") + rp->GetCreateTime().FormatISOTime();
+        TrackPoint *tp = g_pActiveTrack->GetPoint( 0 );
+        if( tp->GetCreateTime().IsValid() )
+            name = tp->GetCreateTime().FormatISODate() + _T(" ") + tp->GetCreateTime().FormatISOTime();
         else
             name = _("(Unnamed Track)");
     }
@@ -4603,14 +4734,14 @@ Track *MyFrame::TrackOff( bool do_add_point )
         g_pActiveTrack->Stop( do_add_point );
 
         if( g_pActiveTrack->GetnPoints() < 2 ) {
-            g_pRouteMan->DeleteRoute( g_pActiveTrack );
+            g_pRouteMan->DeleteTrack( g_pActiveTrack );
             return_val = NULL;
         }
         else {
             if( g_bTrackDaily ) {
                 Track *pExtendTrack = g_pActiveTrack->DoExtendDaily();
                 if(pExtendTrack) {
-                    g_pRouteMan->DeleteRoute( g_pActiveTrack );
+                    g_pRouteMan->DeleteTrack( g_pActiveTrack );
                     return_val = pExtendTrack;
                 }
             }
@@ -4693,7 +4824,7 @@ void MyFrame::TrackDailyRestart( void )
     //  attributes of the last point of the track that was just stopped at midnight.
 
     if( pPreviousTrack ) {
-        RoutePoint *pMidnightPoint = pPreviousTrack->GetLastPoint();
+        TrackPoint *pMidnightPoint = pPreviousTrack->GetLastPoint();
         g_pActiveTrack->AdjustCurrentTrackPoint(pMidnightPoint);
     }
 
@@ -5283,7 +5414,9 @@ void MyFrame::JumpToPosition( double lat, double lon, double scale )
     vLon = lon;
     cc1->StopMovement();
     cc1->m_bFollow = false;
-
+    
+/*
+ *  No Need to adjust the reference chart.  Quilt will do it for us.
     //  is the current chart available at the target location?
     int currently_selected_index = pCurrentStack->GetCurrentEntrydbIndex();
 
@@ -5295,7 +5428,7 @@ void MyFrame::JumpToPosition( double lat, double lon, double scale )
         if( cc1->GetQuiltMode() )
             cc1->SetQuiltRefChart( selected_index );
     }
-
+*/
     if( !cc1->GetQuiltMode() ) {
         cc1->SetViewPoint( lat, lon, scale, Current_Ch->GetChartSkew() * PI / 180., cc1->GetVPRotation() );
     } else {
@@ -5355,8 +5488,6 @@ int MyFrame::DoOptionsDialog()
     }
 
 #if defined(__WXOSX__) || defined(__WXQT__)
-    if(g_ChartBarWin) g_ChartBarWin->Hide();
-
     bool b_restoreAIS = false;
     if( g_pAISTargetList  && g_pAISTargetList->IsShown() ){
         b_restoreAIS = true;
@@ -5409,8 +5540,6 @@ int MyFrame::DoOptionsDialog()
     }
 
     delete pWorkDirArray;
-
-    ShowChartBarIfEnabled();
 
     gFrame->Raise();
     DoChartUpdate();
@@ -5734,9 +5863,6 @@ void MyFrame::ChartsRefresh( int dbi_hint, ViewPort &vp, bool b_purge )
         ArrayOfInts piano_active_chart_index_array;
         piano_active_chart_index_array.Add( pCurrentStack->GetCurrentEntrydbIndex() );
         g_Piano->SetActiveKeyArray( piano_active_chart_index_array );
-
-        if( g_ChartBarWin )
-            g_ChartBarWin->Refresh( true );
 
     } else {
         //    Select reference chart from the stack, as though clicked by user
@@ -6203,7 +6329,7 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
             RequestNewToolbar();
             if( g_toolbar )
                 g_toolbar->EnableTool( ID_SETTINGS, false );
-            
+
             wxString perspective;
             pConfig->SetPath( _T ( "/AUI" ) );
             pConfig->Read( _T ( "AUIPerspective" ), &perspective );
@@ -6261,7 +6387,9 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
     
             if( g_toolbar )
                 g_toolbar->EnableTool( ID_SETTINGS, true );
-            
+
+            // needed to ensure that the chart window starts with keyboard focus
+            SurfaceToolbar();
             break;
         }
 
@@ -6273,7 +6401,9 @@ void MyFrame::OnInitTimer(wxTimerEvent& event)
             g_bDeferredInitDone = true;
             
             if(b_reloadForPlugins)
-                ChartsRefresh(g_restore_dbindex, cc1->GetVP());            
+                ChartsRefresh(g_restore_dbindex, cc1->GetVP());
+
+            wxLogMessage( wxString::Format(_("OpenCPN Startup in %ld ms."), init_sw.Time() ) );
             break;
         }
     }   // switch
@@ -7414,9 +7544,6 @@ void MyFrame::SelectChartFromStack( int index, bool bDir, ChartTypeEnum New_Type
     ArrayOfInts piano_active_chart_index_array;
     piano_active_chart_index_array.Add( pCurrentStack->GetCurrentEntrydbIndex() );
     g_Piano->SetActiveKeyArray( piano_active_chart_index_array );
-
-    if( g_ChartBarWin )
-        g_ChartBarWin->Refresh( true );
 }
 
 void MyFrame::SelectdbChart( int dbindex )
@@ -7466,8 +7593,6 @@ void MyFrame::SelectdbChart( int dbindex )
     ArrayOfInts piano_active_chart_index_array;
     piano_active_chart_index_array.Add( pCurrentStack->GetCurrentEntrydbIndex() );
     g_Piano->SetActiveKeyArray( piano_active_chart_index_array );
-    if( g_ChartBarWin )
-        g_ChartBarWin->Refresh( true );
 }
 
 void MyFrame::SetChartUpdatePeriod( ViewPort &vp )
@@ -7680,8 +7805,6 @@ void MyFrame::UpdateControlBar( void )
         cc1->HideChartInfoWindow();
         g_Piano->ResetRollover();
         cc1->SetQuiltChartHiLiteIndex( -1 );
-        if( g_ChartBarWin )
-            g_ChartBarWin->Refresh( false );
         cc1->m_brepaint_piano = true;
     }
 
@@ -8258,17 +8381,7 @@ void MyFrame::PianoPopupMenu( int x, int y, int selected_index, int selected_dbI
                     wxCommandEventHandler(MyFrame::OnPianoMenuDisableChart) );
         }
 
-    wxPoint pos;
-    if(g_ChartBarWin) {
-        int sx, sy;
-        g_ChartBarWin->GetPosition( &sx, &sy );
-        pos = g_ChartBarWin->GetParent()->ScreenToClient( wxPoint( sx, sy ) );
-        wxPoint key_location = g_Piano->GetKeyOrigin( selected_index );
-        pos.x += key_location.x;
-    } else
-        pos = wxPoint(x, y);
-
-    pos.y -= 30;
+    wxPoint pos = wxPoint(x, y - 30);
 
 //        Invoke the drop-down menu
     if( piano_ctx_menu->GetMenuItems().GetCount() ) PopupMenu( piano_ctx_menu, pos );
@@ -8615,15 +8728,15 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
         if(root.HasMember(_T("Track_ID")))
             trk_id = root[_T("Track_ID")].AsString();
 
-        for(RouteList::iterator it = pRouteList->begin(); it != pRouteList->end(); it++)
+        for(TrackList::iterator it = pTrackList->begin(); it != pTrackList->end(); it++)
         {
             wxString name = wxEmptyString;
-            if((*it)->IsTrack() && (*it)->m_GUID == trk_id)
+            if((*it)->m_GUID == trk_id)
             {
-                name = (*it)->m_RouteNameString;
+                name = (*it)->m_TrackNameString;
                 if(name.IsEmpty())
                 {
-                    RoutePoint *rp = (*it)->GetPoint( 1 );
+                    TrackPoint *rp = (*it)->GetPoint( 0 );
                     if( rp && rp->GetCreateTime().IsValid() )
                         name = rp->GetCreateTime().FormatISODate() + _T(" ") + rp->GetCreateTime().FormatISOTime();
                     else
@@ -8633,7 +8746,7 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
 /*                Tracks can be huge e.g merged tracks. On Compüters with small memory this can produce a crash by insufficient memory !!
 
                 wxJSONValue v; unsigned long i = 0;
-                for(RoutePointList::iterator itp = (*it)->pRoutePointList->begin(); itp != (*it)->pRoutePointList->end(); itp++)
+                for(TrackPointList::iterator itp = (*it)->pTrackPointList->begin(); itp != (*it)->pTrackPointList->end(); itp++)
                 {
                     v[i][0] = (*itp)->m_lat;
                     v[i][1] = (*itp)->m_lon;
@@ -8645,11 +8758,12 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
 */
 /*                To avoid memory problems send a single trackpoint. It's up to the plugin to collect the data. */
                 int i = 1;     wxJSONValue v;
-                for(RoutePointList::iterator itp = (*it)->pRoutePointList->begin(); itp != (*it)->pRoutePointList->end(); itp++)
+                for(int j = 0; j< (*it)->GetnPoints(); j++)
                 {
-                    v[_T("lat")] = (*itp)->m_lat;
-                    v[_T("lon")] = (*itp)->m_lon;
-                    v[_T("TotalNodes")] = (*it)->pRoutePointList->GetCount();
+                    TrackPoint *tp = (*it)->GetPoint(j);
+                    v[_T("lat")] = tp->m_lat;
+                    v[_T("lon")] = tp->m_lon;
+                    v[_T("TotalNodes")] = (*it)->GetnPoints();
                     v[_T("NodeNr")] = i;
                     v[_T("error")] = false;
                     i++;
@@ -8686,7 +8800,7 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
             wxString name = wxEmptyString;
             wxJSONValue v;
 
-            if(!(*it)->IsTrack() && (*it)->m_GUID == route_id)
+            if((*it)->m_GUID == route_id)
             {
                 name = (*it)->m_RouteNameString;
                 if(name.IsEmpty())
@@ -8733,7 +8847,7 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
     {
         wxJSONValue  root;
         wxJSONReader reader;
-        bool mode = true, error = false;
+        bool route = true, error = false;
 
         int numErrors = reader.Parse( message_JSONText, &root );
         if ( numErrors > 0 )
@@ -8742,39 +8856,42 @@ void MyFrame::OnEvtPlugInMessage( OCPN_MsgEvent & event )
         if(root.HasMember(_T("mode")))
         {
             wxString str = root[_T("mode")].AsString();
-            if( str == _T("Track")) mode = false;
+            if( str == _T("Track")) route = false;
 
             wxJSONValue v; int i = 1;
-            for(RouteList::iterator it = pRouteList->begin(); it != pRouteList->end(); it++)
-            {
-                if((*it)->IsTrack())
-                    if(mode == true) continue;
-                if(!(*it)->IsTrack())
-                    if(mode == false) continue;
-                v[0][_T("isTrack")] = !mode;
-
-                wxString name = (*it)->m_RouteNameString;
-                if(name.IsEmpty() && !mode)
+            if(route) {
+                for(RouteList::iterator it = pRouteList->begin(); it != pRouteList->end(); it++)
                 {
-                    RoutePoint *rp = (*it)->GetPoint( 1 );
-                    if( rp && rp->GetCreateTime().IsValid() ) name = rp->GetCreateTime().FormatISODate() + _T(" ")
-                        + rp->GetCreateTime().FormatISOTime();
-                    else
-                        name = _("(Unnamed Track)");
-                }
-                else if(name.IsEmpty() && mode)
-                    name = _("(Unnamed Route)");
+                    wxString name = (*it)->m_RouteNameString;
+                    if(name.IsEmpty())
+                        name = _("(Unnamed Route)");
 
-
-                v[i][_T("error")] = false;
-                v[i][_T("name")] = name;
-                v[i][_T("GUID")] = (*it)->m_GUID;
-                bool l = (*it)->IsTrack();
-                if(g_pActiveTrack == (*it) && !mode)
-                    v[i][_T("active")] = true;
-                else
+                    v[i][_T("error")] = false;
+                    v[i][_T("name")] = name;
+                    v[i][_T("GUID")] = (*it)->m_GUID;
                     v[i][_T("active")] = (*it)->IsActive();
-                i++;
+                    i++;
+                }
+            } else { // track
+                for(TrackList::iterator it = pTrackList->begin(); it != pTrackList->end(); it++)
+                {
+                    wxString name = (*it)->m_TrackNameString;
+                    if(name.IsEmpty())
+                    {
+                        TrackPoint *tp = (*it)->GetPoint( 0 );
+                        if( tp && tp->GetCreateTime().IsValid() )
+                            name = tp->GetCreateTime().FormatISODate() + _T(" ")
+                                + tp->GetCreateTime().FormatISOTime();
+                        else
+                            name = _("(Unnamed Track)");
+                    }
+                    v[i][_T("error")] = false;
+                    v[i][_T("name")] = name;
+                    v[i][_T("GUID")] = (*it)->m_GUID;
+                    v[i][_T("active")] = g_pActiveTrack == (*it);
+                    i++;
+
+                }
             }
             wxString msg_id( _T("OCPN_ROUTELIST_RESPONSE") );
             g_pi_manager->SendJSONMessageToAllPlugins( msg_id, v );
@@ -8884,7 +9001,7 @@ void MyFrame::OnEvtOCPN_NMEA( OCPN_DataStreamEvent & event )
     bool bis_recognized_sentence = true;
     bool ll_valid = true;
 
-    wxString str_buf = wxString(event.GetNMEAString().c_str(), wxConvUTF8);
+    wxString str_buf = event.ProcessNMEA4Tags();
 
     if( g_nNMEADebug && ( g_total_NMEAerror_messages < g_nNMEADebug ) )
     {
@@ -10082,9 +10199,6 @@ void MyFrame::applySettingsString( wxString settings)
     DoChartUpdate();
     UpdateControlBar();
     Refresh();
-
-
-    ShowChartBarIfEnabled();
 
 
 #if defined(__WXOSX__) || defined(__WXQT__)
@@ -11643,16 +11757,10 @@ int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& c
 #ifdef __WXOSX__
     long parent_style;
     bool b_toolviz = false;
-    bool b_g_ChartBarWinviz = false;
 
     if(g_FloatingToolbarDialog && g_FloatingToolbarDialog->IsShown()){
         g_FloatingToolbarDialog->Hide();
         b_toolviz = true;
-    }
-
-    if( g_ChartBarWin && g_ChartBarWin->IsShown()) {
-        g_ChartBarWin->Hide();
-        b_g_ChartBarWinviz = true;
     }
 
     if(parent) {
@@ -11673,9 +11781,6 @@ int OCPNMessageBox( wxWindow *parent, const wxString& message, const wxString& c
 #ifdef __WXOSX__
     if(gFrame && b_toolviz)
         gFrame->SurfaceToolbar();
-
-    if( g_ChartBarWin && b_g_ChartBarWinviz)
-        g_ChartBarWin->Show();
 
     if(parent){
         parent->Raise();

@@ -45,7 +45,7 @@
 #include "styles.h"
 #include "options.h"
 #include "multiplexer.h"
-#include "chartbarwin.h"
+#include "piano.h"
 #include "routeman.h"
 #include "FontMgr.h"
 #include "AIS_Decoder.h"
@@ -92,6 +92,7 @@ extern WayPointman     *pWayPointMan;
 extern Select          *pSelect;
 extern RouteManagerDialog *pRouteManagerDialog;
 extern RouteList       *pRouteList;
+extern TrackList       *pTrackList;
 extern PlugInManager   *g_pi_manager;
 extern s52plib         *ps52plib;
 extern wxString         ChartListFileName;
@@ -140,10 +141,10 @@ PlugIn_ViewPort CreatePlugInViewport( const ViewPort &vp)
     pivp.b_quilt =                tvp.b_quilt;
     pivp.m_projection_type =      tvp.m_projection_type;
 
-    pivp.lat_min =                tvp.GetBBox().GetMinY();
-    pivp.lat_max =                tvp.GetBBox().GetMaxY();
-    pivp.lon_min =                tvp.GetBBox().GetMinX();
-    pivp.lon_max =                tvp.GetBBox().GetMaxX();
+    pivp.lat_min =                tvp.GetBBox().GetMinLat();
+    pivp.lat_max =                tvp.GetBBox().GetMaxLat();
+    pivp.lon_min =                tvp.GetBBox().GetMinLon();
+    pivp.lon_max =                tvp.GetBBox().GetMaxLon();
 
     pivp.bValid =                 tvp.IsValid();                 // This VP is valid
 
@@ -384,8 +385,10 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
         }
             
         PlugInContainer *pic = NULL;
+        wxStopWatch sw;
         if(b_compat)
             pic = LoadPlugIn(file_name);
+
         if(pic)
         {
             if(pic->m_pplugin)
@@ -400,7 +403,14 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
                 pic->m_bEnabled = enabled;
                 if(pic->m_bEnabled)
                 {
+                    wxStopWatch sw;
                     pic->m_cap_flag = pic->m_pplugin->Init();
+#ifdef __WXGTK__ // 10 milliseconds is very slow at least on linux
+                    if(sw.Time() > 10)
+                        wxLogMessage(_T("PlugInManager: ") + pic->m_common_name
+                                     + _T(" has loaded very slowly: %ld ms"),
+                                     sw.Time());
+#endif
                     pic->m_bInitState = true;
                 }
                     
@@ -452,7 +462,10 @@ bool PlugInManager::LoadAllPlugIns(const wxString &plugin_dir, bool load_enabled
     //  Only allow the PlugIn compatibility dialogs once per instance of application.
     if(b_enable_blackdialog)
         m_benable_blackdialog_done = true;
-    
+
+    //  And then reload all catalogs.
+    ReloadLocale();
+
     return ret;
 }
 
@@ -778,6 +791,7 @@ bool PlugInManager::CheckPluginCompatibility(wxString plugin_file)
         VirtualFree(virtualpointer, size, MEM_DECOMMIT);
 #endif
 #ifdef __WXGTK__
+#if 0
     wxString cmd = _T("ldd ") + plugin_file + _T(" 2>&1");
     FILE *ldd = popen( cmd.mb_str(), "r" );
     if (ldd != NULL)
@@ -798,6 +812,26 @@ bool PlugInManager::CheckPluginCompatibility(wxString plugin_file)
         }
         fclose(ldd);
     }
+#else
+    // this is 3x faster than the other method
+    FILE *f = fopen(plugin_file, "r");
+    char strver[26]; //Enough space even for very big integers...
+    sprintf( strver, "libwx_baseu-%i.%i", wxMAJOR_VERSION, wxMINOR_VERSION );
+
+    b_compat = false;
+    
+    int pos = 0, len = strlen(strver), c;
+    while((c = fgetc(f)) != EOF) {
+        if(c == strver[pos]) {
+            if(++pos == len) {
+                b_compat = true;
+                break;
+            }
+        } else
+            pos = 0;
+    }
+    fclose(f);
+#endif
 #endif // __WXGTK__
 
     return b_compat;
@@ -958,8 +992,8 @@ PlugInContainer *PlugInManager::LoadPlugIn(wxString plugin_file)
 
     int api_major = plug_in->GetAPIVersionMajor();
     int api_minor = plug_in->GetAPIVersionMinor();
-    int ver = (api_major * 100) + api_minor;
-    pic->m_api_version = ver;
+    int api_ver = (api_major * 100) + api_minor;
+    pic->m_api_version = api_ver;
 
     int pi_major = plug_in->GetPlugInVersionMajor();
     int pi_minor = plug_in->GetPlugInVersionMinor();
@@ -971,7 +1005,7 @@ PlugInContainer *PlugInManager::LoadPlugIn(wxString plugin_file)
         return NULL;
     }
 
-    switch(ver)
+    switch(api_ver)
     {
     case 105:
         pic->m_pplugin = dynamic_cast<opencpn_plugin*>(plug_in);
@@ -1018,7 +1052,7 @@ PlugInContainer *PlugInManager::LoadPlugIn(wxString plugin_file)
         msg = _T("  ");
         msg += plugin_file;
         wxString msg1;
-        msg1.Printf(_T("\n              API Version detected: %d"), ver);
+        msg1.Printf(_T("\n              API Version detected: %d"), api_ver);
         msg += msg1;
         msg1.Printf(_T("\n              PlugIn Version detected: %d"), pi_ver);
         msg += msg1;
@@ -1250,10 +1284,9 @@ bool PlugInManager::SendKeyEventToPlugins( wxKeyEvent &event)
                         case 113:
                         {
                             opencpn_plugin_113 *ppi = dynamic_cast<opencpn_plugin_113*>(pic->m_pplugin);
-                            if(ppi)
-                                if(ppi->KeyboardEventHook( event ))
-                                    bret = true;
-                                break;
+                            if(ppi && ppi->KeyboardEventHook( event ))
+                                bret = true;
+                            break;
                         }
                         
                         default:
@@ -2254,8 +2287,7 @@ bool AddLocaleCatalog( wxString catalog )
         // Add this catalog to the persistent catalog array
         g_locale_catalog_array.Add(catalog);
         
-        //  And then reload all catalogs.
-        return ReloadLocale(); // plocale_def_lang->AddCatalog( catalog );
+        return plocale_def_lang->AddCatalog( catalog );
     }
     else
 #endif        
@@ -3001,28 +3033,20 @@ bool AddPlugInTrack( PlugIn_Track *ptrack, bool b_permanent )
     Track *track = new Track();
 
     PlugIn_Waypoint *pwp;
-    RoutePoint *pWP_src;
+    TrackPoint *pWP_src;
     int ip = 0;
 
     wxPlugin_WaypointListNode *pwpnode = ptrack->pWaypointList->GetFirst();
     while( pwpnode ) {
         pwp = pwpnode->GetData();
 
-        RoutePoint *pWP = new RoutePoint( pwp->m_lat, pwp->m_lon,
-                                          pwp->m_IconName, pwp->m_MarkName,
-                                          pwp->m_GUID );
-
-
-        pWP->m_MarkDescription = pwp->m_MarkDescription;
-        pWP->m_bShowName = false;
+        TrackPoint *pWP = new TrackPoint( pwp->m_lat, pwp->m_lon );
         pWP->SetCreateTime( pwp->m_CreateTime );
         
         track->AddPoint( pWP );
 
-        pSelect->AddSelectableRoutePoint( pWP->m_lat, pWP->m_lon, pWP );
-
         if(ip > 0)
-            pSelect->AddSelectableRouteSegment( pWP_src->m_lat, pWP_src->m_lon, pWP->m_lat,
+            pSelect->AddSelectableTrackSegment( pWP_src->m_lat, pWP_src->m_lon, pWP->m_lat,
                                                 pWP->m_lon, pWP_src, pWP, track );
         ip++;
         pWP_src = pWP;
@@ -3030,16 +3054,16 @@ bool AddPlugInTrack( PlugIn_Track *ptrack, bool b_permanent )
         pwpnode = pwpnode->GetNext(); //PlugInWaypoint
     }
 
-    track->m_RouteNameString = ptrack->m_NameString;
-    track->m_RouteStartString = ptrack->m_StartString;
-    track->m_RouteEndString = ptrack->m_EndString;
+    track->m_TrackNameString = ptrack->m_NameString;
+    track->m_TrackStartString = ptrack->m_StartString;
+    track->m_TrackEndString = ptrack->m_EndString;
     track->m_GUID = ptrack->m_GUID;
     track->m_btemp = (b_permanent == false);
 
-    pRouteList->Append( track );
+    pTrackList->Append( track );
 
     if(b_permanent)
-        pConfig->AddNewRoute( track );
+        pConfig->AddNewTrack( track );
 
     if( pRouteManagerDialog && pRouteManagerDialog->IsShown() )
         pRouteManagerDialog->UpdateTrkListCtrl();
@@ -3054,14 +3078,14 @@ bool DeletePluginTrack( wxString& GUID )
     bool b_found = false;
 
     //  Find the Route
-    Route *pRoute = g_pRouteMan->FindRouteByGUID( GUID );
-    if(pRoute) {
-        g_pRouteMan->DeleteTrack( (Track *)pRoute );
+    Track *pTrack = g_pRouteMan->FindTrackByGUID( GUID );
+    if(pTrack) {
+        g_pRouteMan->DeleteTrack( pTrack );
         b_found = true;
     }
 
     if( pRouteManagerDialog && pRouteManagerDialog->IsShown() )
-        pRouteManagerDialog->UpdateRouteListCtrl();
+        pRouteManagerDialog->UpdateTrkListCtrl();
 
     return b_found;
  }
@@ -3071,13 +3095,13 @@ bool UpdatePlugInTrack ( PlugIn_Track *ptrack )
     bool b_found = false;
 
     //  Find the Track
-    Route *pRoute = g_pRouteMan->FindRouteByGUID( ptrack->m_GUID );
-    if(pRoute)
+    Track *pTrack = g_pRouteMan->FindTrackByGUID( ptrack->m_GUID );
+    if(pTrack)
         b_found = true;
 
     if(b_found) {
-        bool b_permanent = (pRoute->m_btemp == false);
-        g_pRouteMan->DeleteTrack( (Track *)pRoute );
+        bool b_permanent = (pTrack->m_btemp == false);
+        g_pRouteMan->DeleteTrack( pTrack );
 
         b_found = AddPlugInTrack( ptrack, b_permanent );
     }
@@ -4541,9 +4565,10 @@ void CreateCompatibleS57Object( PI_S57Obj *pObj, S57Obj *cobj, chart_context *pc
     
     S52PLIB_Context *pContext = (S52PLIB_Context *)pObj->S52_Context;
     
-    cobj->bBBObj_valid = pContext->bBBObj_valid;
     if( pContext->bBBObj_valid )
-        cobj->BBObj = pContext->BBObj;
+        // this is ugly because plugins still use wxBoundingBox
+        cobj->BBObj.Set(pContext->BBObj.GetMinY(), pContext->BBObj.GetMinX(),
+                        pContext->BBObj.GetMaxY(), pContext->BBObj.GetMaxX());
     
     cobj->CSrules = pContext->CSrules;
     cobj->bCS_Added = pContext->bCS_Added;
@@ -4665,9 +4690,12 @@ void UpdatePIObjectPlibContext( PI_S57Obj *pObj, S57Obj *cobj, ObjRazRules *rzRu
     pContext->bFText_Added = cobj->bFText_Added;
     pContext->rText = cobj->rText;
     
-    if(cobj->bBBObj_valid)
-        pContext->BBObj = cobj->BBObj;
-    pContext->bBBObj_valid = cobj->bBBObj_valid;
+    if(cobj->BBObj.GetValid()) {
+        // ugly as plugins still use wxBoundingBox
+        pContext->BBObj = wxBoundingBox(cobj->BBObj.GetMinLon(), cobj->BBObj.GetMinLat(),
+                                        cobj->BBObj.GetMaxLon(), cobj->BBObj.GetMaxLat());
+        pContext->bBBObj_valid = true;
+    }
 
     //  Render operation may have promoted the object's display category (e.g.WRECKS)
     pObj->m_DisplayCat = (PI_DisCat)cobj->m_DisplayCat;

@@ -1523,10 +1523,7 @@ InitReturn ChartKAP::Init( const wxString& name, ChartInitFlag init_flags )
           double dlat = 0;
           double dlon = 0;
           
-          if(m_datum_index == DATUM_INDEX_WGS84){
-          }
-          
-          else if(m_datum_index == DATUM_INDEX_UNKNOWN)
+          if(m_datum_index == DATUM_INDEX_WGS84 || m_datum_index == DATUM_INDEX_UNKNOWN)
           {
               dlon = m_dtm_lon / 3600.;
               dlat = m_dtm_lat / 3600.;
@@ -1708,20 +1705,8 @@ ChartBaseBSB::~ChartBaseBSB()
       }
 
 //    Free the line cache
-
-      if(pLineCache)
-      {
-            CachedLine *pt;
-            for(int ylc = 0 ; ylc < Size_Y ; ylc++)
-            {
-                  pt = &pLineCache[ylc];
-                  free (pt->pTileOffset);
-                  free (pt->pPix);
-            }
-            free (pLineCache);
-      }
-
-
+      FreeLineCacheRows();
+      free (pLineCache);
 
       delete pPixCache;
 
@@ -1730,6 +1715,36 @@ ChartBaseBSB::~ChartBaseBSB()
             delete pPalettes[i];
 
 }
+
+void ChartBaseBSB::FreeLineCacheRows(int start, int end)
+{
+    if(pLineCache)
+    {
+        if(end < 0)
+            end = Size_Y;
+        else
+            end = wxMin(end, Size_Y);
+        for(int ylc = start ; ylc < end ; ylc++) {
+            CachedLine *pt = &pLineCache[ylc];
+            if(pt->bValid) {
+                free (pt->pTileOffset);
+                free (pt->pPix);
+                pt->bValid = false;
+            }
+        }
+    }
+}
+
+bool ChartBaseBSB::HaveLineCacheRow(int row)
+{
+    if(pLineCache)
+    {
+        CachedLine *pt = &pLineCache[row];
+        return pt->bValid;
+    }
+    return false;
+}
+
 
 //    Report recommended minimum and maximum scale values for which use of this chart is valid
 
@@ -3023,13 +3038,7 @@ void ChartBaseBSB::SetVPRasterParms(const ViewPort &vpt)
 {
       //    Calculate the potential datum offset parameters for this viewport, if not WGS84
 
-      if(m_datum_index == DATUM_INDEX_WGS84)
-      {
-            m_lon_datum_adjust = 0.;
-            m_lat_datum_adjust = 0.;
-      }
-
-      else if(m_datum_index == DATUM_INDEX_UNKNOWN)
+      if(m_datum_index == DATUM_INDEX_WGS84 || m_datum_index == DATUM_INDEX_UNKNOWN)
       {
             m_lon_datum_adjust = (-m_dtm_lon) / 3600.;
             m_lat_datum_adjust = (-m_dtm_lat) / 3600.;
@@ -4345,7 +4354,8 @@ int   ChartBaseBSB::BSBGetScanline( unsigned char *pLineBuf, int y, int xs, int 
           unsigned int tileindex = 1, nextTile = TILE_SIZE;
 #endif
           unsigned int nRunCount;
-          while( ((byNext = *lp++) != 0 ) && (iPixel < (unsigned int)Size_X))
+          unsigned char *end = pt->pPix+thisline_size;
+          while(iPixel < (unsigned int)Size_X)
 #ifdef USE_OLD_CACHE
           {
               nPixValue = (byNext & byValueMask) >> nValueShift;
@@ -4370,7 +4380,18 @@ int   ChartBaseBSB::BSBGetScanline( unsigned char *pLineBuf, int y, int xs, int 
 #else
           // build tile offset table for faster random access
           {
+              byNext = *lp++;
               unsigned char *offset = lp - 1;
+              if(byNext == 0 || lp == end) {
+                  // finished early...corrupt?
+                  while(tileindex < (unsigned int)Size_X/TILE_SIZE + 1) {
+                      pt->pTileOffset[tileindex].offset = pt->pTileOffset[0].offset;
+                      pt->pTileOffset[tileindex].pixel = 0;
+                      tileindex++;
+                  }
+                  break;
+              }
+
               nRunCount = byNext & byCountMask;
 
               while( (byNext & 0x80) != 0 )
@@ -4533,15 +4554,20 @@ nocachestart:
           byNext = *lp++;
 
           nPixValue = (byNext & byValueMask) >> nValueShift;
-          unsigned int nRunCount = byNext & byCountMask;
+          unsigned int nRunCount;
 
-          while( (byNext & 0x80) != 0 )
-          {
-              byNext = *lp++;
-              nRunCount = nRunCount * 128 + (byNext & 0x7f);
+          if(byNext == 0)
+              nRunCount = xl - ix; // corrupted chart, just run to the end
+          else {
+              nRunCount = byNext & byCountMask;
+              while( (byNext & 0x80) != 0 )
+              {
+                  byNext = *lp++;
+                  nRunCount = nRunCount * 128 + (byNext & 0x7f);
+              }
+
+              nRunCount++;
           }
-
-          nRunCount++;
 
           if(ix < xs) {
               if(ix + nRunCount <= (unsigned int)xs) {

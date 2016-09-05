@@ -853,6 +853,7 @@ BEGIN_EVENT_TABLE(options, wxDialog)
 EVT_CHECKBOX(ID_DEBUGCHECKBOX1, options::OnDebugcheckbox1Click)
 EVT_BUTTON(ID_BUTTONADD, options::OnButtonaddClick)
 EVT_BUTTON(ID_BUTTONDELETE, options::OnButtondeleteClick)
+EVT_BUTTON(ID_PARSEENCBUTTON, options::OnButtonParseENC)
 EVT_BUTTON(ID_TCDATAADD, options::OnInsertTideDataLocation)
 EVT_BUTTON(ID_TCDATADEL, options::OnRemoveTideDataLocation)
 EVT_BUTTON(ID_APPLY, options::OnApplyClick)
@@ -974,6 +975,7 @@ void options::Init(void) {
   pDispCat = NULL;
   m_pSerialArray = NULL;
   pUpdateCheckBox = NULL;
+  pParseENCButton = NULL;
   k_charts = 0;
   k_vectorcharts = 0;
   k_plugins = 0;
@@ -2687,14 +2689,24 @@ void options::CreatePanel_ChartsLoad(size_t parent, int border_size,
       new wxStaticBoxSizer(itemStaticBoxUpdateStatic, wxVERTICAL);
   chartPanel->Add(itemStaticBoxSizerUpdate, 0, wxGROW | wxALL, 5);
 
+  wxFlexGridSizer* itemFlexGridSizerUpdate = new wxFlexGridSizer(2);
+  itemFlexGridSizerUpdate->SetFlexibleDirection( wxHORIZONTAL );
+
   pScanCheckBox = new wxCheckBox(chartPanelWin, ID_SCANCHECKBOX,
                                  _("Scan Charts and Update Database"));
-  itemStaticBoxSizerUpdate->Add(pScanCheckBox, 1, wxALL, 5);
+  itemFlexGridSizerUpdate->Add(pScanCheckBox, 1, wxALL, 5);
+
+  pParseENCButton = new wxButton(chartPanelWin, ID_PARSEENCBUTTON,
+                                   _("Parse all ENC Charts"));
+  itemFlexGridSizerUpdate->Add(pParseENCButton, 1, wxALL, 5);
 
   pUpdateCheckBox = new wxCheckBox(chartPanelWin, ID_UPDCHECKBOX,
                                    _("Force Full Database Rebuild"));
-  itemStaticBoxSizerUpdate->Add(pUpdateCheckBox, 1, wxALL, 5);
+  itemFlexGridSizerUpdate->Add(pUpdateCheckBox, 1, wxALL, 5);
 
+  itemStaticBoxSizerUpdate->Add( itemFlexGridSizerUpdate, 1, wxEXPAND, 5 );
+  
+  
   chartPanel->Layout();
 }
 
@@ -4443,6 +4455,8 @@ void options::CreateControls(void) {
   m_small_button_size =
       wxSize(-1, (int)(1.4 * (font_size_y + font_descent + font_lead)));
 
+  m_nCharWidthMax = GetSize().x / GetCharWidth();
+      
   // Some members (pointers to controls) need to initialized
   pEnableZoomToCursor = NULL;
   pSmoothPanZoom = NULL;
@@ -5286,7 +5300,7 @@ void options::OnOpenGLOptions(wxCommandEvent& event) {
       g_GLOptions.m_bTextureCompression = dlg.GetTextureCompression();
       ::wxBeginBusyCursor();
       cc1->GetglCanvas()->SetupCompression();
-      cc1->GetglCanvas()->ClearAllRasterTextures();
+      g_glTextureManager->ClearAllRasterTextures();
       ::wxEndBusyCursor();
     }
     else
@@ -5692,7 +5706,7 @@ void options::OnApplyClick(wxCommandEvent& event) {
   //  to facility identification and allow stop and restart of the stream
   wxString lastAddr;
   int lastPort = 0;
-  NetworkProtocol lastNetProtocol;
+  NetworkProtocol lastNetProtocol = PROTO_UNDEFINED;
   
   if (itemIndex >= 0) {
     int params_index = m_lcSources->GetItemData(itemIndex);
@@ -6167,6 +6181,12 @@ void options::OnButtondeleteClick(wxCommandEvent& event) {
   event.Skip();
 }
 
+void options::OnButtonParseENC(wxCommandEvent &event)
+{
+    extern void ParseAllENC();
+    ParseAllENC();
+}
+
 void options::OnDebugcheckbox1Click(wxCommandEvent& event) { event.Skip(); }
 
 void options::OnCancelClick(wxCommandEvent& event) {
@@ -6374,7 +6394,9 @@ void options::DoOnPageChange(size_t page) {
 
           wxLocale ltest(lang_list[it], 0);
 #if wxCHECK_VERSION(2, 9, 0)
-          ltest.AddCatalogLookupPathPrefix( wxStandardPaths::Get().GetInstallPrefix() + _T( "/share/locale" ) );
+#ifdef __WXGTK__
+          ltest.AddCatalogLookupPathPrefix(wxStandardPaths::Get().GetInstallPrefix() + _T( "/share/locale" ) );
+#endif
 #endif
           ltest.AddCatalog(_T("opencpn"));
 
@@ -8022,7 +8044,7 @@ void OpenGLOptionsDlg::OnButtonRebuild(wxCommandEvent& event) {
 
 void OpenGLOptionsDlg::OnButtonClear(wxCommandEvent& event) {
   ::wxBeginBusyCursor();
-  if (g_bopengl) cc1->GetglCanvas()->ClearAllRasterTextures();
+  if (g_bopengl) g_glTextureManager->ClearAllRasterTextures();
 
   wxString path = g_Platform->GetPrivateDataDir() +
                   wxFileName::GetPathSeparator() + _T( "raster_texture_cache" );

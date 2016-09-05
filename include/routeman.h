@@ -70,11 +70,12 @@ public:
       void DeleteAllRoutes(void);
       void DeleteAllTracks(void);
 
-      void DeleteTrack(Route *pRoute);
+      void DeleteTrack(Track *pTrack);
 
       bool IsRouteValid(Route *pRoute);
 
-      Route *FindRouteByGUID(wxString &guid);
+      Route *FindRouteByGUID(const wxString &guid);
+      Track *FindTrackByGUID(const wxString &guid);
       Route *FindRouteContainingWaypoint(RoutePoint *pWP);
       wxArrayPtrVoid *GetRouteArrayContaining(RoutePoint *pWP);
       bool DoesRouteContainSharedPoints( Route *pRoute );

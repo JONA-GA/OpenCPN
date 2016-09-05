@@ -92,7 +92,10 @@ IF (NOT WIN32)
     #    SET (PACKAGE_DEPS  "libwx_baseu-2_8-0-wxcontainer MesaGLw libbz2-1 portaudio")
     IF (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "x86_64")
-      SET (LIB_INSTALL_DIR "lib64")
+      SET (LIB_INSTALL_DIR "lib")
+        # In recent openSUSE versions (as of 2016), lib64 is mostly used when there are both 32-bit and 64-bit versions, although not limited to that.
+        # This CMake variable only affects the location of OpenCPN plugins at installation time, and nothing more than that.
+        # At run time, the plugin directory is determined by wxStandardPaths::GetPluginsDir(), which returns "lib", so this can be considered canonical.
     ELSE (CMAKE_SIZEOF_VOID_P MATCHES "8")
       SET (ARCH "i386")
       SET (LIB_INSTALL_DIR "lib")
@@ -932,6 +935,7 @@ SET(HDRS
 		include/NavObjectCollection.h
 		include/RoutePoint.h
 		include/Route.h
+                include/Track.h
 		include/SelectItem.h
 		include/Select.h
 		include/FontMgr.h
@@ -954,7 +958,7 @@ SET(HDRS
 		include/routeprintout.h
 		include/PositionParser.h
 		include/printtable.h
-		include/chartbarwin.h
+		include/piano.h
 		include/tcmgr.h
 		include/Station_Data.h
 		include/IDX_entry.h
@@ -1025,6 +1029,7 @@ SET(SRCS
 		src/NavObjectCollection.cpp
 		src/RoutePoint.cpp
 		src/Route.cpp
+                src/Track.cpp
 		src/SelectItem.cpp
 		src/Select.cpp
 		src/FontMgr.cpp
@@ -1046,7 +1051,7 @@ SET(SRCS
 		src/routeprintout.cpp
 		src/PositionParser.cpp
 		src/printtable.cpp
-		src/chartbarwin.cpp
+		src/piano.cpp
 		src/tcmgr.cpp
 		src/Station_Data.cpp
 		src/IDX_entry.cpp
@@ -1119,11 +1124,13 @@ IF(OPENGL_FOUND)
   SET(HDRS ${HDRS} include/glChartCanvas.h
                    include/glTextureDescriptor.h
                    include/glTexCache.h
+                   include/glTextureManager.h
                    include/TexFont.h
         )
   SET(SRCS ${SRCS} src/glChartCanvas.cpp
                    src/glTextureDescriptor.cpp
                    src/glTexCache.cpp
+                   src/glTextureManager.cpp
                    src/TexFont.cpp
         )
 ENDIF(OPENGL_FOUND)
@@ -1828,7 +1835,11 @@ ENDIF(BUNDLE_TCDATA MATCHES "ON")
 
 INSTALL(FILES data/license.txt DESTINATION ${PREFIX_PKGDATA} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 INSTALL(FILES data/copyright DESTINATION ${PREFIX_DATA}/doc/${PACKAGE_NAME} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
-INSTALL(FILES data/changelog.Debian.gz DESTINATION ${PREFIX_DATA}/doc/${PACKAGE_NAME} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+IF(PACKAGE_FORMAT EQUAL "DEB")
+	INSTALL(FILES data/changelog.gz DESTINATION ${PREFIX_DATA}/doc/${PACKAGE_NAME} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+ELSE(PACKAGE_FORMAT EQUAL "DEB")
+	INSTALL(FILES data/changelog DESTINATION ${PREFIX_DATA}/doc/${PACKAGE_NAME} PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+ENDIF(PACKAGE_FORMAT EQUAL "DEB")
 
 INSTALL(DIRECTORY data/sounds/ DESTINATION ${PREFIX_PKGDATA}/sounds )
 
@@ -2105,12 +2116,14 @@ IF(UNIX AND NOT APPLE)
     SET(CPACK_RPM_PACKAGE_RELEASE "${PACKAGE_RELEASE}")
     SET(CPACK_RPM_PACKAGE_ARCHITECTURE  ${ARCH})
     SET(CPACK_RPM_PACKAGE_REQUIRES  ${PACKAGE_DEPS})
+    SET(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
     SET(CPACK_RPM_USER_BINARY_SPECFILE "${CMAKE_SOURCE_DIR}/opencpn.spec.in")
     SET(CPACK_OPENCPN_RPM_BINDIR "${CMAKE_INSTALL_PREFIX}/${PREFIX_BIN}")
     SET(CPACK_OPENCPN_RPM_LIBDIR "${PREFIX_LIB}")
     SET(CPACK_OPENCPN_RPM_DATADIR "${CMAKE_INSTALL_PREFIX}/${PREFIX_DATA}")
     SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenSource Chart Plotter/Navigator")
     SET(CPACK_PACKAGE_DESCRIPTION "OpenCPN is a concise ChartPlotter/Navigator. The application supports: GPS/GPDS Position Input, BSB Raster Chart Display, S57 Vector ENChart Display, AIS Input Decoding, Waypoint Autopilot Navigation .")
+    SET(CPACK_PACKAGE_RELOCATABLE OFF)
     SET(CPACK_SET_DESTDIR ON)
     SET(CPACK_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 ENDIF(UNIX AND NOT APPLE)

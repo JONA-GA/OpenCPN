@@ -79,7 +79,7 @@ class M_COVR_Desc
       double      user_yoff;
       double      m_centerlat_cos;
       
-      wxBoundingBox m_covr_bbox;
+      LLBBox m_covr_bbox;
       bool        m_buser_offsets;
 
 };
@@ -317,7 +317,7 @@ class cm93chart : public s57chart
             void ResetSubcellKey(){ m_loadcell_key = '0'; }
 
             double GetNormalScaleMin(double canvas_scale_factor, bool b_allow_overzoom);
-            double GetNormalScaleMax(double canvas_scale_factor);
+            double GetNormalScaleMax(double canvas_scale_factor, int canvas_width);
 
             bool AdjustVP(ViewPort &vp_last, ViewPort &vp_proposed);
             void SetVPParms(const ViewPort &vpt);
@@ -347,7 +347,7 @@ class cm93chart : public s57chart
 
             OCPNRegion          m_render_region;
 
-            wxBoundingBox      m_covr_bbox; /* bounding box for entire covr_set */
+            LLBBox      m_covr_bbox; /* bounding box for entire covr_set */
 
       private:
             InitReturn CreateHeaderDataFromCM93Cell(void);

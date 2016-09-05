@@ -57,7 +57,13 @@ GribRequestSetting::GribRequestSetting(GRIBUICtrlBar &parent )
     : GribRequestSettingBase(&parent),
       m_parent(parent)
 {
+    m_Vp = 0;
     InitRequestConfig();
+}
+
+GribRequestSetting::~GribRequestSetting( )
+{
+    delete m_Vp;
 }
 
 void GribRequestSetting::InitRequestConfig()
@@ -309,6 +315,7 @@ void GribRequestSetting::StopGraphicalZoneSelection()
 
 void GribRequestSetting::OnVpChange(PlugIn_ViewPort *vp)
 {
+    delete m_Vp;
     m_Vp = new PlugIn_ViewPort(*vp);
 
     if(!m_AllowSend) return;
@@ -849,7 +856,7 @@ int GribRequestSetting::EstimateFileSize( double *size )
     double maxlat = m_spMaxLat->GetValue(), minlat = m_spMinLat->GetValue();
     if( maxlat - minlat < 0 )
         return 3;                               // maxlat must be > minlat
-	double wlon = (maxlon > minlon ? 0 : 360) + maxlon - minlon;
+    double wlon = (maxlon > minlon ? 0 : 360) + maxlon - minlon;
     if (wlon > 180 || ( maxlat - minlat > 180 ))
         return 4;                           //ovoid too big area
 

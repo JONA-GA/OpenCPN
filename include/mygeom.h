@@ -108,12 +108,32 @@ public:
         int         nVert;
         double      *p_vertex;              //  Pointer to vertex array, x,y,x,y.....
 
-        double      minx, miny, maxx, maxy;
+        LLBBox      box;
 
         TriPrim     *p_next;                // chain link
         
 };
 
+class LegacyTriPrim
+{
+public:
+    LegacyTriPrim();
+    ~LegacyTriPrim();
+    void FreeMem(void);
+    
+    unsigned int type;                  // Type of triangle primitive
+    //  May be PTG_TRIANGLES
+    //         PTG_TRIANGLE_STRIP
+    //         PTG_TRIANGLE_FAN
+    
+    int         nVert;
+    double      *p_vertex;              //  Pointer to vertex array, x,y,x,y.....
+    
+    double      minx, miny, maxx, maxy;
+    
+    LegacyTriPrim     *p_next;                // chain link
+    
+};
 
 
 class PolyTriGroup
