@@ -41,7 +41,7 @@
 #include <stdint.h>
 #include <vector>
 
-WX_DECLARE_OBJARRAY(float *,   SENCFloatPtrArray);
+WX_DEFINE_ARRAY_PTR(float *, SENCFloatPtrArray);
 
 //      Various error return enums
 #define         SENC_NO_ERROR                           0
@@ -523,7 +523,6 @@ private:
     std::string GetAttributeAcronymFromTypecode( int typeCode );
     
     PolyTessGeo *BuildPolyTessGeo(_OSENC_AreaGeometry_Record_Payload *record, unsigned char **bytes_consumed );
-    LineGeometryDescriptor *BuildLineGeometry( _OSENC_LineGeometry_Record_Payload *pPayload );
     bool CalculateExtent( S57Reader *poReader, S57ClassRegistrar *poRegistrar );
     
     wxString            errorMessage;
@@ -545,6 +544,8 @@ private:
     wxString            m_sdate000;
     
     wxString            m_edtn000;
+    int                 m_UPDN;
+    
     int                 m_nGeoRecords;
     int                 m_last_applied_update;
     wxString            m_LastUpdateDate;

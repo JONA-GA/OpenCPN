@@ -146,7 +146,7 @@ static double chart_dist(int index)
     float  clat;
     const ChartTableEntry &cte = ChartData->GetChartTableEntry(index);
     // if the chart contains ownship position set the distance to 0
-    if (cte.GetBBox().Contains(gLon, gLat))
+    if (cte.GetBBox().Contains(gLat, gLon))
         d = 0.;
     else {
         // find the nearest edge 
@@ -1154,19 +1154,17 @@ void glTextureManager::PurgeJobList( wxString chart_path )
 {
     if(chart_path.Len()){    
         //  Remove all pending jobs relating to the passed chart path
-        wxJobListNode *tnode = todo_list.GetFirst();
+        wxJobListNode *next, *tnode = todo_list.GetFirst();
         while(tnode){
             JobTicket *ticket = tnode->GetData();
+            next = tnode->GetNext();
             if(ticket->m_ChartPath.IsSameAs(chart_path)){
                 if(bthread_debug)
                     printf("Pool:  Purge pending job for purged chart\n");
                 todo_list.DeleteNode(tnode);
                 delete ticket;
-                tnode = todo_list.GetFirst();  // restart the list
             }
-            else{
-                tnode = tnode->GetNext();
-            }
+            tnode = next;
         }
 
         wxJobListNode *node = running_list.GetFirst();

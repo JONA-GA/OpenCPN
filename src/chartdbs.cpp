@@ -46,6 +46,7 @@
 #endif
 
 extern PlugInManager    *g_pi_manager;
+extern wxString         gWorldMapLocation;
 
 int s_dbVersion;                                //    Database version currently in use at runtime
                                                 //  Needed for ChartTableEntry::GetChartType() only
@@ -146,6 +147,15 @@ bool ChartTableHeader::CheckValid()
 // ChartTableEntry
 ///////////////////////////////////////////////////////////////////////
 
+void ChartTableEntry::SetScale( int scale )
+{
+    Scale = scale;
+    rounding = 0;
+    // XXX find the right rounding
+    if (Scale >= 1000)
+       rounding = 5 *pow(10, log10(Scale) -2);
+}
+
 ChartTableEntry::ChartTableEntry(ChartBase &theChart)
 {
     Clear();
@@ -155,10 +165,10 @@ ChartTableEntry::ChartTableEntry(ChartBase &theChart)
     pFullPath = pt;
 
 
+    SetScale(theChart.GetNativeScale());
 
     ChartType = theChart.GetChartType();
     ChartFamily = theChart.GetChartFamily();
-    Scale = theChart.GetNativeScale();
 
     Skew = theChart.GetChartSkew();
     ProjectionType = theChart.GetChartProjectionType();
@@ -351,6 +361,9 @@ ChartTableEntry::ChartTableEntry(ChartBase &theChart)
     //  Get and populate the NoCovr tables
     
     nNoCovrPlyEntries = theChart.GetNoCOVREntries();
+    if (nNoCovrPlyEntries == 0)
+        return;
+
     float **pfpnc = (float **)malloc(nNoCovrPlyEntries * sizeof(float *));
     float **pft0nc = pfpnc;
     int *pipnc = (int *)malloc(nNoCovrPlyEntries * sizeof(int));
@@ -502,7 +515,7 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
         Skew = cte.skew;
         ProjectionType = cte.ProjectionType;
         
-        Scale = cte.Scale;
+        SetScale(cte.Scale);
         edition_date = cte.edition_date;
         file_date = cte.file_date;
         
@@ -579,7 +592,7 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
         Skew = cte.skew;
         ProjectionType = cte.ProjectionType;
         
-        Scale = cte.Scale;
+        SetScale(cte.Scale);
         edition_date = cte.edition_date;
         file_date = cte.file_date;
         
@@ -657,7 +670,7 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
           Skew = cte.skew;
           ProjectionType = cte.ProjectionType;
 
-          Scale = cte.Scale;
+          SetScale(cte.Scale);
           edition_date = cte.edition_date;
           file_date = cte.file_date;
 
@@ -709,7 +722,7 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
 
       m_bbox.Set(LatMin, LatMax, LonMin, LonMax);
       
-      Scale = cte.Scale;
+      SetScale(cte.Scale);
       edition_date = cte.edition_date;
       file_date = cte.file_date;
 
@@ -759,7 +772,7 @@ bool ChartTableEntry::Read(const ChartDatabase *pDb, wxInputStream &is)
 
           m_bbox.Set(LatMin, LatMax, LonMin, LonMax);
           
-          Scale = cte.Scale;
+          SetScale(cte.Scale);
           edition_date = cte.edition_date;
           file_date = 0;                        //  file_date does not exist in V14;
           nPlyEntries = cte.nPlyEntries;
@@ -896,6 +909,165 @@ void ChartTableEntry::ReEnable()
     }
 }
 
+std::vector<float> ChartTableEntry::GetReducedPlyPoints()
+{
+    if(m_reducedPlyPoints.size())
+        return m_reducedPlyPoints;
+    
+    //  Reduce the LOD of the chart outline PlyPoints
+    float LOD_meters = 1; 
+    
+    float plylat, plylon;
+    const int nPoints = GetnPlyEntries();
+
+    float *fpo = GetpPlyTable();
+
+    double *ppd = new double[nPoints * 2];
+    double *ppsm = new double[nPoints * 2];
+    double *npr = ppd;
+    double *npsm= ppsm;
+    for( int i = 0; i < nPoints; i++ ) {
+        plylat = fpo[i*2];
+        plylon = fpo[i*2+1];
+
+        double x, y;
+        toSM(plylat, plylon, fpo[0], fpo[1], &x, &y);
+
+        *npr++ = plylon;
+        *npr++ = plylat;
+        *npsm++ = x;
+        *npsm++ = y;
+    }
+
+    wxArrayInt index_keep;
+    if(nPoints > 10){
+        index_keep.Clear();
+        index_keep.Add(0);
+        index_keep.Add(nPoints-1);
+        index_keep.Add(1);
+        index_keep.Add(nPoints-2);
+
+                
+        DouglasPeuckerM(ppsm, 1, nPoints-2, LOD_meters , &index_keep);
+                
+    }
+    else {
+        index_keep.Clear();
+        for(int i = 0 ; i < nPoints ; i++)
+            index_keep.Add(i);
+    }
+            
+    double *ppr = ppd;  
+    for(int ip = 0 ; ip < nPoints ; ip++){
+        double x = *ppr++;
+        double y = *ppr++;
+                
+        for(unsigned int j=0 ; j < index_keep.GetCount() ; j++){
+            if(index_keep.Item(j) == ip){
+                m_reducedPlyPoints.push_back(x);
+                m_reducedPlyPoints.push_back(y);
+                break;
+            }
+        }
+    }
+    
+    delete[] ppd;
+    delete[] ppsm;
+    
+    int nprr = m_reducedPlyPoints.size() / 2;
+   
+    return m_reducedPlyPoints;
+
+}
+
+std::vector<float> ChartTableEntry::GetReducedAuxPlyPoints( int iTable)
+{
+    //  Maybe need to initialize the vector
+    if( !m_reducedAuxPlyPointsVector.size()){
+        std::vector<float> vec;
+        for(int i=0 ; i < GetnAuxPlyEntries() ; i++){
+            m_reducedAuxPlyPointsVector.push_back(vec);
+        }
+    }
+    
+    std::vector<float> vec;
+
+    //  Invalid parameter
+    if((unsigned int)iTable >= m_reducedAuxPlyPointsVector.size())
+        return vec;
+    
+    if( m_reducedAuxPlyPointsVector.at(iTable).size())
+        return m_reducedAuxPlyPointsVector.at(iTable);
+    
+    //  Reduce the LOD of the chart outline PlyPoints
+    float LOD_meters = 1.0;
+    
+    const int nPoints = GetAuxCntTableEntry(iTable);
+    float *fpo = GetpAuxPlyTableEntry(iTable);
+
+    double *ppd = new double[nPoints * 2];
+    double *ppsm = new double[nPoints * 2];
+    double *npr = ppd;
+    double *npsm= ppsm;
+    float plylat, plylon;
+    
+    for( int i = 0; i < nPoints; i++ ) {
+        plylat = fpo[i*2];
+        plylon = fpo[i*2+1];
+
+        double x, y;
+        toSM(plylat, plylon, fpo[0], fpo[1], &x, &y);
+
+        *npr++ = plylon;
+        *npr++ = plylat;
+        *npsm++ = x;
+        *npsm++ = y;
+    }
+
+
+    wxArrayInt index_keep;
+    if(nPoints > 10 ){
+        index_keep.Clear();
+        index_keep.Add(0);
+        index_keep.Add(nPoints-1);
+        index_keep.Add(1);
+        index_keep.Add(nPoints-2);
+                
+        DouglasPeuckerM(ppsm, 1, nPoints - 2, LOD_meters, &index_keep);
+                
+    }
+    else {
+        index_keep.Clear();
+        for(int i = 0 ; i < nPoints ; i++)
+            index_keep.Add(i);
+    }
+   
+   int nnn = index_keep.GetCount();
+   
+    double *ppr = ppd;  
+    for(int ip = 0 ; ip < nPoints ; ip++){
+        double x = *ppr++;
+        double y = *ppr++;
+                
+        for(unsigned int j=0 ; j < index_keep.GetCount() ; j++){
+            if(index_keep.Item(j) == ip){
+                vec.push_back(x);
+                vec.push_back(y);
+                break;
+            }
+        }
+    }
+    
+    delete[] ppd;
+    delete[] ppsm;
+
+    m_reducedAuxPlyPointsVector[iTable] = vec;
+    
+    int nprr = vec.size() / 2;
+    
+    return vec;
+
+}
 
 ///////////////////////////////////////////////////////////////////////
 // ChartDatabase
@@ -1406,6 +1578,11 @@ bool ChartDatabase::Update(ArrayOfCDI& dir_array, bool bForce, wxGenericProgress
             ChartDirInfo dir_info = dir_array.Item(j);
 
             wxString dir_magic;
+            if( !wxDir::FindFirst(dir_info.fullpath, "poly-*-1.dat").empty() ) {
+            //If some polygons exist in the directory, set it as the one to use for GSHHG
+            //TODO: We should probably compare the version and maybe resolutions available with what is currently used...
+                gWorldMapLocation = dir_info.fullpath + wxFileName::GetPathSeparator();
+            }
             TraverseDirAndAddCharts(dir_info, pprog, dir_magic, lbForce);
 
         //  Update the dir_list entry, even if the magic values are the same
@@ -1976,19 +2153,17 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
                 }
             }
 
+            wxString msg_fn(full_name);
+            msg_fn.Replace(_T("%"), _T("%%"));
             if( file_time_is_same ) {
                 // Produce the same output without actually calling `CreateChartTableEntry()`.
-                wxString msg = wxT("Loading chart data for ");
-                msg.Append(full_name);
-                wxLogMessage(msg);
+                wxLogMessage(wxString::Format(_T("Loading chart data for %s"), msg_fn.c_str()));
             } else {
                 pnewChart = CreateChartTableEntry(full_name, chart_desc);
                 if(!pnewChart)
                 {
                     bAddFinal = false;
-                    wxString msg = _T("   CreateChartTableEntry() failed for file: ");
-                    msg.Append(full_name);
-                    wxLogMessage(msg);
+                    wxLogMessage(wxString::Format(_T("   CreateChartTableEntry() failed for file: %s"), msg_fn.c_str()));
                 }
             }
 
@@ -1998,9 +2173,7 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
             }
             else if( file_path_is_same )
             {
-                wxString msg = _T("   Replacing older chart file of same path: ");
-                msg.Append(full_name);
-                wxLogMessage(msg);
+                wxLogMessage(wxString::Format(_T("   Replacing older chart file of same path: %s"), msg_fn.c_str()));
             }
             else if( !file_time_is_same )
             {
@@ -2017,9 +2190,7 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
                     {
                         pEntry->SetValid(true);
                         bAddFinal = false;
-                        wxString msg = _T("   Retaining newer chart file of same name: ");
-                        msg.Append(full_name);
-                        wxLogMessage(msg);
+                        wxLogMessage(wxString::Format(_T("   Retaining newer chart file of same name: %s"), msg_fn.c_str()));
 
                     }
                 }
@@ -2036,9 +2207,7 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
                 {
                     pEntry->SetValid(false);
                     bAddFinal = true;
-                    wxString msg = _T("   Replacing older chart file of same name: ");
-                    msg.Append(full_name);
-                    wxLogMessage(msg);
+                    wxLogMessage(wxString::Format(_T("   Replacing older chart file of same name: %s"), msg_fn.c_str()));
                 }
             }
 
@@ -2047,9 +2216,7 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
             {
                   if(0 == b_add_msg)
                   {
-                        wxString msg = _T("   Adding chart file: ");
-                        msg.Append(full_name);
-                        wxLogMessage(msg);
+                        wxLogMessage(wxString::Format(_T("   Adding chart file: %s"), msg_fn.c_str()));
                   }
                   collision_map[file_name] = active_chartTable.GetCount();
                   active_chartTable.Add(pnewChart);
@@ -2059,9 +2226,7 @@ int ChartDatabase::SearchDirAndAddCharts(wxString& dir_name_base,
             {
                 if (pnewChart)
                     delete pnewChart;
-//                  wxString msg = _T("   Not adding chart file: ");
-//                  msg.Append(full_name);
-//                  wxLogMessage(msg);
+//                    wxLogMessage(wxString::Format(_T("   Not adding chart file: %s"), msg_fn.c_str()));
             }
       }
 
@@ -2091,14 +2256,14 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
     ChartTableEntry *pnewChart = NULL;
     bool bAddFinal = true;
     int b_add_msg = 0;
+    wxString msg_fn(full_name);
+    msg_fn.Replace(_T("%"), _T("%%"));
     
     pnewChart = CreateChartTableEntry(full_name, chart_desc);
     if(!pnewChart)
     {
         bAddFinal = false;
-        wxString msg = _T("   CreateChartTableEntry() failed for file: ");
-        msg.Append(full_name);
-        wxLogMessage(msg);
+        wxLogMessage(wxString::Format(_T("   CreateChartTableEntry() failed for file: %s"), msg_fn.c_str()));
         return false;
     }
     else         // traverse the existing database looking for duplicates, and choosing the right one
@@ -2126,9 +2291,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                         {
                             bAddFinal = true;
                             active_chartTable[isearch].SetValid(false);
-                            wxString msg = _T("   Replacing older chart file of same path: ");
-                            msg.Append(full_name);
-                            wxLogMessage(msg);
+                            wxLogMessage(wxString::Format(_T("   Replacing older chart file of same path: %s"), msg_fn.c_str()));
                         }
                         
                         break;
@@ -2151,9 +2314,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                             {
                                 active_chartTable[isearch].SetValid(true);
                                 bAddFinal = false;
-                                wxString msg = _T("   Retaining newer chart file of same name: ");
-                                msg.Append(full_name);
-                                wxLogMessage(msg);
+                                wxLogMessage(wxString::Format(_T("   Retaining newer chart file of same name: %s"), msg_fn.c_str()));
                                 
                             }
                         }
@@ -2171,9 +2332,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
                         {
                             active_chartTable[isearch].SetValid(false);
                             bAddFinal = true;
-                            wxString msg = _T("   Replacing older chart file of same name: ");
-                            msg.Append(full_name);
-                            wxLogMessage(msg);
+                            wxLogMessage(wxString::Format(_T("   Replacing older chart file of same name: %s"), msg_fn.c_str()));
                         }
                         
                         break;
@@ -2193,9 +2352,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
             {
                 if(0 == b_add_msg)
                 {
-                    wxString msg = _T("   Adding chart file: ");
-                    msg.Append(full_name);
-                    wxLogMessage(msg);
+                    wxLogMessage(wxString::Format(_T("   Adding chart file: %s"), msg_fn.c_str()));
                 }
 
                 active_chartTable.Add(pnewChart);
@@ -2205,9 +2362,7 @@ bool ChartDatabase::AddChart( wxString &chartfilename, ChartClassDescriptor &cha
             else
             {
                 delete pnewChart;
-                //                  wxString msg = _T("   Not adding chart file: ");
-                //                  msg.Append(full_name);
-                //                  wxLogMessage(msg);
+                //                  wxLogMessage(wxString::Format(_T("   Not adding chart file: %s"), msg_fn.c_str()));
                 rv = false;
             }
             
@@ -2395,24 +2550,20 @@ ChartBase *ChartDatabase::GetChart(const wxChar *theFilePath, ChartClassDescript
 
 ChartTableEntry *ChartDatabase::CreateChartTableEntry(const wxString &filePath, ChartClassDescriptor &chart_desc)
 {
-      wxString msg = wxT("Loading chart data for ");
-      msg.Append(filePath);
-      wxLogMessage(msg);
+      wxString msg_fn(filePath);
+      msg_fn.Replace(_T("%"), _T("%%"));
+      wxLogMessage(wxString::Format(_T("Loading chart data for %s"), msg_fn.c_str()));
 
       ChartBase *pch = GetChart(filePath, chart_desc);
       if (pch == NULL) {
-            wxString msg = wxT("   ...creation failed for ");
-            msg.Append(filePath);
-            wxLogMessage(msg);
+            wxLogMessage(wxString::Format(_T("   ...creation failed for %s"), msg_fn.c_str()));
             return NULL;
       }
 
       InitReturn rc = pch->Init(filePath, HEADER_ONLY);
       if (rc != INIT_OK) {
             delete pch;
-            wxString msg = wxT("   ...initialization failed for ");
-            msg.Append(filePath);
-            wxLogMessage(msg);
+            wxLogMessage(wxString::Format(_T("   ...initialization failed for %s"), msg_fn.c_str()));
             return NULL;
       }
 
@@ -2612,6 +2763,37 @@ int  ChartDatabase::GetnAuxPlyEntries(int dbIndex)
       else
             return 0;
 }
+
+//-------------------------------------------------------------------
+//      Get vector of reduced Plypoints
+//-------------------------------------------------------------------
+std::vector<float> ChartDatabase::GetReducedPlyPoints(int dbIndex)
+{
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size())){
+        ChartTableEntry *pentry = GetpChartTableEntry(dbIndex);
+        if(pentry)
+            return pentry->GetReducedPlyPoints();
+    }
+    
+    std::vector<float> dummy;
+    return dummy;
+}
+
+//-------------------------------------------------------------------
+//      Get vector of reduced AuxPlypoints
+//-------------------------------------------------------------------
+std::vector<float> ChartDatabase::GetReducedAuxPlyPoints(int dbIndex, int iTable)
+{
+    if((bValid) && (dbIndex >= 0) && (dbIndex < (int)active_chartTable.size())){
+        ChartTableEntry *pentry = GetpChartTableEntry(dbIndex);
+        if(pentry)
+            return pentry->GetReducedAuxPlyPoints( iTable );
+    }
+    
+    std::vector<float> dummy;
+    return dummy;
+}
+
 
 bool  ChartDatabase::IsChartAvailable(int dbIndex)
 {

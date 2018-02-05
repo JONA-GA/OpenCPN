@@ -468,6 +468,15 @@ bool Select::IsSegmentSelected( float a, float b, float c, float d, float slat, 
 {
     double adder = 0.;
 
+    // Track segments for some reason can have longitude values > 180.
+    // Therefore, we normalize all the lat/lon values here.
+    if (a > 90.0) a -= 180.0;
+    if (b > 90.0) b -= 180.0;
+    if (c > 180.0) c -= 360.0;
+    if (d > 180.0) d -= 360.0;
+    if (slat > 90.0) slat -= 180.0;
+    if (slon > 180.0) slon -= 360.0;
+
     if( ( c * d ) < 0. ) {
         //    Arrange for points to be increasing longitude, c to d
         double dist, brg;
@@ -612,6 +621,7 @@ SelectableItemList Select::FindSelectionList( float slat, float slon, int fselty
                 case SELTYPE_TIDEPOINT:
                 case SELTYPE_CURRENTPOINT:
                 case SELTYPE_AISTARGET:
+                case SELTYPE_DRAGHANDLE:    
                     if( ( fabs( slat - pFindSel->m_slat ) < selectRadius )
                             && ( fabs( slon - pFindSel->m_slon ) < selectRadius ) ) {
                         ret_list.Append( pFindSel );

@@ -34,6 +34,7 @@
 #endif //precompiled headers
 
 #include "chartdldr_pi.h"
+#include "wxWTranslateCatalog.h"
 #include <wx/stdpaths.h>
 #include <wx/url.h>
 #include <wx/progdlg.h>
@@ -47,7 +48,15 @@
 #include <wx/wfstream.h>
 #include <memory>
 #include <wx/regex.h>
-#include "unrar/rar.hpp"
+#ifdef DLDR_USE_LIBARCHIVE
+  #include <archive.h>
+  #include <archive_entry.h>
+  #ifdef CHARTDLDR_RAR_UNARR
+    #include "unarr.h"
+  #endif
+#else
+  #include "unarr.h"
+#endif
 
 #include <wx/arrimpl.cpp>
     WX_DEFINE_OBJARRAY(wxArrayOfDateTime);
@@ -151,7 +160,7 @@ chartdldr_pi::chartdldr_pi( void *ppimgr ) : opencpn_plugin_113( ppimgr )
 
 int chartdldr_pi::Init( void )
 {
-    AddLocaleCatalog( _T("opencpn-chartdldr_pi") );
+    AddLocaleCatalog( PLUGIN_CATALOG_NAME );
 
     //    Get a pointer to the opencpn display canvas, to use as a parent for the POI Manager dialog
     m_parent_window = GetOCPNCanvasWindow();
@@ -771,9 +780,10 @@ void ChartDldrPanelImpl::UpdateChartList( wxCommandEvent& event )
 //     return;
     ///
     
-    bool b_usetmpfile = true;
 #ifdef __OCPN__ANDROID__
-    b_usetmpfile = false;
+    const bool b_usetmpfile = false;
+#else
+    const bool b_usetmpfile = true;
 #endif    
 
     wxFileName tfn;
@@ -926,7 +936,8 @@ void ChartSource::SaveUpdateData()
     for( iter = m_update_data.begin(); iter != m_update_data.end(); ++iter )
     {
         if( iter->first.find(" ") == std::string::npos )
-            outfile << iter->first << " " << iter->second << "\n";
+            if( !iter->first.empty() )
+                outfile << iter->first << " " << iter->second << "\n";
     }
 
     outfile.close();
@@ -1046,7 +1057,7 @@ After downloading the charts, please extract them to %s"), pPlugIn->m_pChartCata
                     m_stCatalogInfo->SetLabel( wxString::Format( _("Downloading chart %u of %u, %u downloads failed (%s / %s)"),
                                                                  downloading, to_download, failed_downloads,
                                                                  m_transferredsize.c_str(), m_totalsize.c_str() ) );
-                    wxMilliSleep(1000);
+                    wxMilliSleep(30);
                     wxYield();
 //                    if( !IsShownOnScreen() )
 //                        cancelled = true;
@@ -1125,6 +1136,8 @@ ChartDldrPanelImpl::ChartDldrPanelImpl( chartdldr_pi* plugin, wxWindow* parent, 
     DownloadIsCancel = false;
     failed_downloads = 0;
     m_stCatalogInfo->SetLabel( wxEmptyString );
+    m_bTransferComplete = true;
+    m_bTransferSuccess = true;
     
     Connect(wxEVT_DOWNLOAD_EVENT, (wxObjectEventFunction)(wxEventFunction)&ChartDldrPanelImpl::onDLEvent);
     m_bconnected = true;
@@ -1291,15 +1304,57 @@ bool chartdldr_pi::ProcessFile( const wxString& aFile, const wxString& aTargetDi
             wxLogError(_T("chartdldr_pi: Unable to extract: ") + aFile );
         return ret;
     }
-    else if( aFile.Lower().EndsWith(_T("rar")) ) //Rar compressed
+#ifdef DLDR_USE_LIBARCHIVE
+    else if( aFile.Lower().EndsWith(_T("rar")) )
     {
-        bool ret = ExtractRarFiles( aFile, aTargetDir, aStripPath, aMTime, false);
+#ifdef CHARTDLDR_RAR_UNARR
+          bool ret = ExtractUnarrFiles( aFile, aTargetDir, aStripPath, aMTime, false);
+#else
+          bool ret = ExtractLibArchiveFiles( aFile, aTargetDir, aStripPath, aMTime, false);
+#endif
+          if( ret )
+              wxRemoveFile(aFile);
+          else
+              wxLogError(_T("chartdldr_pi: Unable to extract: ") + aFile );
+          return ret;
+    }
+    else if( aFile.Lower().EndsWith(_T("tar")) ||
+            aFile.Lower().EndsWith(_T("gz")) ||
+            aFile.Lower().EndsWith(_T("bz2")) ||
+            aFile.Lower().EndsWith(_T("lzma")) ||
+            aFile.Lower().EndsWith(_T("7z")) ||
+            aFile.Lower().EndsWith(_T("xz"))
+            )
+    {
+        bool ret = ExtractLibArchiveFiles( aFile, aTargetDir, aStripPath, aMTime, false);
         if( ret )
             wxRemoveFile(aFile);
         else
             wxLogError(_T("chartdldr_pi: Unable to extract: ") + aFile );
         return ret;
     }
+#else
+    else if( aFile.Lower().EndsWith(_T("rar"))
+               || aFile.Lower().EndsWith(_T("tar"))
+#ifdef HAVE_BZIP2
+             || aFile.Lower().EndsWith(_T("bz2"))
+#endif
+#ifdef HAVE_ZLIB
+             || aFile.Lower().EndsWith(_T("gz"))
+#endif
+#ifdef HAVE_7Z
+             || aFile.Lower().EndsWith(_T("7z")) //TODO: Could it actually extract more formats the LZMA SDK supports?
+#endif
+    )
+    {
+        bool ret = ExtractUnarrFiles( aFile, aTargetDir, aStripPath, aMTime, false);
+        if( ret )
+            wxRemoveFile(aFile);
+        else
+            wxLogError(_T("chartdldr_pi: Unable to extract: ") + aFile );
+        return ret;
+    }
+#endif
     else //Uncompressed
     {
         wxFileName fn(aFile);
@@ -1324,134 +1379,209 @@ bool chartdldr_pi::ProcessFile( const wxString& aFile, const wxString& aTargetDi
     return true;
 }
 
-bool chartdldr_pi::ExtractRarFiles( const wxString& aRarFile, const wxString& aTargetDir, bool aStripPath, wxDateTime aMTime, bool aRemoveRar )
+#ifdef DLDR_USE_LIBARCHIVE
+static int copy_data(struct archive *ar, struct archive *aw)
 {
-    wxString cmd;
-    if( aStripPath )
-        cmd = _T("e");
-    else
-        cmd = _T("x");
-    int argc = 5;
+    int r;
+    const void *buff;
+    size_t size;
+    __LA_INT64_T offset;
 
-    char command[2];
-    strncpy(command, (const char*)cmd.mb_str(wxConvUTF8), 1);
-    command[1] = 0;
-
-    char file[1024];
-    strncpy(file, (const char*)aRarFile.mb_str(wxConvUTF8), 1023);
-    file[1023] = 0;
-
-    char target[1024];
-    strncpy(target, (const char*)aTargetDir.mb_str(wxConvUTF8), 1023);
-    target[1023] = 0;
-
-    char *argv[] = {const_cast<char *>("unrar"), command, const_cast<char *>("-y"), file, target};
-#ifdef _UNIX
-    // XXX is setlocale need?
-    setlocale(LC_ALL,"");
-#endif
-
-    InitConsole();
-    ErrHandler.SetSignalHandlers(true);
-
-#ifdef SFX_MODULE
-    wchar ModuleName[NM];
-#ifdef _WIN_ALL
-    GetModuleFileName(NULL,ModuleName,ASIZE(ModuleName));
-#else
-    CharToWide(argv[0],ModuleName,ASIZE(ModuleName));
-#endif
-#endif
-
-#ifdef _WIN_ALL
-    SetErrorMode(SEM_NOALIGNMENTFAULTEXCEPT|SEM_FAILCRITICALERRORS|SEM_NOOPENFILEERRORBOX);
-
-#endif
-
-#if defined(_WIN_ALL) && !defined(SFX_MODULE) && !defined(SHELL_EXT)
-    // Must be initialized, normal initialization can be skipped in case of
-    // exception.
-    bool ShutdownOnClose=false;
-#endif
-
-    try
-    {
-        CommandData *Cmd=new CommandData;
-#ifdef SFX_MODULE
-        wcscpy(Cmd->Command,L"X");
-        char *Switch=argc>1 ? argv[1]:NULL;
-        if (Switch!=NULL && Cmd->IsSwitch(Switch[0]))
-        {
-            int UpperCmd=etoupper(Switch[1]);
-            switch(UpperCmd)
-            {
-                case 'T':
-                case 'V':
-                    Cmd->Command[0]=UpperCmd;
-                    break;
-                case '?':
-                    Cmd->OutHelp(RARX_SUCCESS);
-                break;
-            }
+    for (;;) {
+        r = archive_read_data_block(ar, &buff, &size, &offset);
+        if (r == ARCHIVE_EOF)
+            return (ARCHIVE_OK);
+         if (r < ARCHIVE_OK)
+            return (r);
+        r = archive_write_data_block(aw, buff, size, offset);
+        if (r < ARCHIVE_OK) {
+            //fprintf(stderr, "%s\n", archive_error_string(aw));
+            wxLogError(wxString::Format("Chartdldr_pi: LibArchive error: %s", archive_error_string(aw))); 
+            return (r);
         }
-        Cmd->AddArcName(ModuleName);
-        Cmd->ParseDone();
-#else // !SFX_MODULE
-        Cmd->ParseCommandLine(true,argc,argv);
-        if (!Cmd->ConfigDisabled)
-        {
-            Cmd->ReadConfig();
-            Cmd->ParseEnvVar();
+    }
+}
+
+bool chartdldr_pi::ExtractLibArchiveFiles(const wxString& aArchiveFile, const wxString& aTargetDir, bool aStripPath, wxDateTime aMTime, bool aRemoveArchive)
+{
+    struct archive *a;
+    struct archive *ext;
+    struct archive_entry *entry;
+    int flags;
+    int r;
+
+    /* Select which attributes we want to restore. */
+    flags = ARCHIVE_EXTRACT_TIME;
+    /*
+    flags |= ARCHIVE_EXTRACT_PERM;
+    flags |= ARCHIVE_EXTRACT_ACL;
+    flags |= ARCHIVE_EXTRACT_FFLAGS;
+    */
+
+    a = archive_read_new();
+    archive_read_support_format_all(a);
+    archive_read_support_filter_all(a);
+    archive_read_support_compression_all(a);
+    ext = archive_write_disk_new();
+    archive_write_disk_set_options(ext, flags);
+    archive_write_disk_set_standard_lookup(ext);
+    if ((r = archive_read_open_filename(a, aArchiveFile.c_str(), 10240)))
+        return false;
+    for (;;) {
+        r = archive_read_next_header(a, &entry);
+        if (r == ARCHIVE_EOF)
+            break;
+        if (r < ARCHIVE_OK)
+            //fprintf(stderr, "%s\n", archive_error_string(a));
+            wxLogError(wxString::Format("Chartdldr_pi: LibArchive error: %s", archive_error_string(a)));
+        if (r < ARCHIVE_WARN)
+            return false;
+        if (aStripPath) {
+            const char* currentFile = archive_entry_pathname(entry);
+            std::string fullOutputPath = currentFile;
+            size_t sep = fullOutputPath.find_last_of("\\/");
+            if (sep != std::string::npos)
+                fullOutputPath = fullOutputPath.substr(sep + 1, fullOutputPath.size() - sep - 1);
+            archive_entry_set_pathname(entry, fullOutputPath.c_str());
         }
-        Cmd->ParseCommandLine(false,argc,argv);
-#endif
-
-#if defined(_WIN_ALL) && !defined(SFX_MODULE) && !defined(SHELL_EXT)
-        ShutdownOnClose=Cmd->Shutdown;
-#endif
-
-        uiInit(Cmd->Sound);
-        InitConsoleOptions(Cmd->MsgStream);
-        InitLogOptions(Cmd->LogName,Cmd->ErrlogCharset);
-        ErrHandler.SetSilent(Cmd->AllYes || Cmd->MsgStream==MSG_NULL);
-        ErrHandler.SetShutdown(Cmd->Shutdown);
-
-        Cmd->OutTitle();
-        Cmd->ProcessCommand();
-        delete Cmd;
+        if (aTargetDir != wxEmptyString) {
+            const char* currentFile = archive_entry_pathname(entry);
+            const std::string fullOutputPath = aTargetDir.ToStdString() + wxString(wxFileName::GetPathSeparator()).ToStdString() + currentFile;
+            archive_entry_set_pathname(entry, fullOutputPath.c_str());
+        }
+        r = archive_write_header(ext, entry);
+        if (r < ARCHIVE_OK)
+            //fprintf(stderr, "%s\n", archive_error_string(ext));
+            wxLogError(wxString::Format("Chartdldr_pi: LibArchive error: %s", archive_error_string(ext)));
+        else if (archive_entry_size(entry) > 0) {
+            r = copy_data(a, ext);
+            if (r < ARCHIVE_OK)
+                //fprintf(stderr, "%s\n", archive_error_string(ext));
+                wxLogError(wxString::Format("Chartdldr_pi: LibArchive error: %s", archive_error_string(ext)));
+            if (r < ARCHIVE_WARN)
+                return false;
+        }
+        r = archive_write_finish_entry(ext);
+        if (r < ARCHIVE_OK)
+            //fprintf(stderr, "%s\n", archive_error_string(ext));
+            wxLogError(wxString::Format("Chartdldr_pi: LibArchive error: %s", archive_error_string(ext)));
+        if (r < ARCHIVE_WARN)
+            return false;
     }
-    catch (RAR_EXIT ErrCode)
-    {
-        ErrHandler.SetErrorCode(ErrCode);
-    }
-    catch (std::bad_alloc&)
-    {
-        ErrHandler.MemoryErrorMsg();
-        ErrHandler.SetErrorCode(RARX_MEMORY);
-    }
-    catch (...)
-    {
-        ErrHandler.SetErrorCode(RARX_FATAL);
-    }
+    archive_read_close(a);
+    archive_read_free(a);
+    archive_write_close(ext);
+    archive_write_free(ext);
 
-#if defined(_WIN_ALL) && !defined(SFX_MODULE) && !defined(SHELL_EXT)
-    if (ShutdownOnClose)
-        Shutdown();
-#endif
-    ErrHandler.MainExit=true;
-    //return ErrHandler.GetErrorCode();
-
-    if( aRemoveRar )
-        wxRemoveFile(aRarFile);
-
-#ifdef _UNIX
-    // reset LC_NUMERIC locale, some locales use a comma for decimal point
-    // and it corrupts navobj.xml file
-    setlocale(LC_NUMERIC, "C");
-#endif
+    if( aRemoveArchive )
+        wxRemoveFile(aArchiveFile);
 
     return true;
 }
+#endif
+
+#if defined(CHARTDLDR_RAR_UNARR) || !defined(DLDR_USE_LIBARCHIVE)
+ar_archive *ar_open_any_archive(ar_stream *stream, const char *fileext)
+{
+    ar_archive *ar = ar_open_rar_archive(stream);
+    if (!ar)
+        ar = ar_open_zip_archive(stream, fileext && (strcmp(fileext, ".xps") == 0 || strcmp(fileext, ".epub") == 0));
+    if (!ar)
+        ar = ar_open_7z_archive(stream);
+    if (!ar)
+        ar = ar_open_tar_archive(stream);
+    return ar;
+}
+
+bool chartdldr_pi::ExtractUnarrFiles( const wxString& aRarFile, const wxString& aTargetDir, bool aStripPath, wxDateTime aMTime, bool aRemoveRar )
+{
+    ar_stream *stream = NULL;
+    ar_archive *ar = NULL;
+    int entry_count = 1;
+    int entry_skips = 0;
+    int error_step = 1;
+    bool ret = true;
+
+    stream = ar_open_file(aRarFile.c_str());
+    if( !stream ) {
+        wxLogError(_T("Can not open file '")+aRarFile+_T("'."));
+        ar_close_archive(ar);
+        ar_close(stream);
+        return false;
+    }
+    ar = ar_open_any_archive(stream, strrchr(aRarFile.c_str(), '.'));
+    if( !ar ) {
+          wxLogError(_T("Can not open archive '")+aRarFile+_T("'."));
+          ar_close_archive(ar);
+          ar_close(stream);
+          return false;
+    }
+    while (ar_parse_entry(ar)) {
+        size_t size = ar_entry_get_size(ar);
+        wxString name = ar_entry_get_name(ar);
+        if( aStripPath )
+        {
+            wxFileName fn(name);
+            /* We can completly replace the entry path */
+            //fn.SetPath(aTargetDir);
+            //name = fn.GetFullPath();
+            /* Or only remove the first dir (eg. ENC_ROOT) */
+            if (fn.GetDirCount() > 0)
+            {
+                fn.RemoveDir(0);
+                name = aTargetDir + wxFileName::GetPathSeparator() + fn.GetFullPath();
+            }
+            else
+            {
+                name = aTargetDir + wxFileName::GetPathSeparator() + name;
+            }
+        }
+        wxFileName fn(name);
+        if( !fn.DirExists() )
+        {
+            if( !wxFileName::Mkdir(fn.GetPath()) )
+            {
+                wxLogError(_T("Can not create directory '") + fn.GetPath() + _T("'."));
+                ret = false;
+                break;
+            }
+        }
+        wxFileOutputStream file(name);
+        if( !file )
+        {
+            wxLogError(_T("Can not create file '")+name+_T("'."));
+            ret = false;
+            break;
+        }
+        while (size > 0) {
+            unsigned char buffer[1024];
+            size_t count = size < sizeof(buffer) ? size : sizeof(buffer);
+            if (!ar_entry_uncompress(ar, buffer, count))
+                break;
+            file.Write(buffer, count);
+            size -= count;
+        }
+        file.Close();
+        fn.SetTimes(&aMTime, &aMTime, &aMTime);
+        if (size > 0) {
+            wxLogError("Warning: Failed to uncompress... skipping");
+            entry_skips++;
+            ret = false;
+        }
+    }
+    if( !ar_at_eof(ar) ) {
+        wxLogError("Error: Failed to parse entry %d!", entry_count);
+        ret = false;
+    }
+    ar_close_archive(ar);
+    ar_close(stream);
+
+    if( aRemoveRar )
+          wxRemoveFile(aRarFile);
+
+    return ret;
+}
+#endif
 
 bool chartdldr_pi::ExtractZipFiles( const wxString& aZipFile, const wxString& aTargetDir, bool aStripPath, wxDateTime aMTime, bool aRemoveZip )
 {

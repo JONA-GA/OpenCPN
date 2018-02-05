@@ -27,6 +27,7 @@
 #define __CHARTDBS_H__
 
 #include <map>
+#include <vector>
 
 #include "ocpn_types.h"
 #include "bbox.h"
@@ -234,7 +235,16 @@ struct ChartTableEntry
     void AddIntToGroupArray( int val ) { m_GroupArray.Add( val ); }
     void SetAvailable(bool avail ){ m_bavail = avail;}
 
+    std::vector<float> GetReducedPlyPoints();
+    std::vector<float> GetReducedAuxPlyPoints( int iTable);
+
     LLRegion quilt_candidate_region;
+
+    void        SetScale(int scale);
+    bool	Scale_eq( int b ) const { return abs ( Scale - b) <= rounding; }
+    bool        Scale_ge( int b ) const { return  Scale_eq( b ) || Scale > b; }
+    bool        Scale_gt( int b ) const { return  Scale > b && !Scale_eq( b ); }
+
   private:
     int         EntryOffset;
     int         ChartType;
@@ -244,6 +254,7 @@ struct ChartTableEntry
     float       LonMax;
     float       LonMin;
     char        *pFullPath;
+    int		rounding;
     int         Scale;
     time_t      edition_date;
     time_t      file_date;
@@ -264,6 +275,10 @@ struct ChartTableEntry
     wxString    *m_psFullPath;
     LLBBox m_bbox;
     bool        m_bavail;
+    
+    std::vector<float> m_reducedPlyPoints;
+    
+    std::vector<std::vector<float> > m_reducedAuxPlyPointsVector;
 };
 
 enum
@@ -347,6 +362,9 @@ public:
     ChartTable    active_chartTable;
     std::map <wxString, int> active_chartTable_pathindex;
     
+    std::vector<float> GetReducedPlyPoints(int dbIndex);
+    std::vector<float> GetReducedAuxPlyPoints(int dbIndex, int iTable);
+
 protected:
     virtual ChartBase *GetChart(const wxChar *theFilePath, ChartClassDescriptor &chart_desc) const;
     int AddChartDirectory(const wxString &theDir, bool bshow_prog);

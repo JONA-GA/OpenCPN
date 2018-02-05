@@ -133,6 +133,7 @@ extern ArrayOfMMSIProperties   g_MMSI_Props_Array;
 
 extern bool             g_bresponsive;
 extern float            g_ChartScaleFactorExp;
+extern float            g_ShipScaleFactorExp;
 
 extern ocpnStyle::StyleManager* g_StyleManager;
 
@@ -883,12 +884,29 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc, ViewPort& vp, ChartC
     //    Target is lost due to position report time-out, but still in Target List
     if( td->b_lost ) return;
     
-    float scale_factor = g_ChartScaleFactorExp;
-    if( g_ChartScaleFactorExp > 1.0 )
-        scale_factor = (log(g_ChartScaleFactorExp) + 1.0) * 1.2;   // soften the scale factor a bit
+    float scale_factor = 1.0;
     
+    //  Set the onscreen size of the symbol
+    //  Compensate for various display resolutions
+    //  Develop empirically, making a "diamond ATON" symbol about 4 mm square
+    
+    float nominal_target_size_mm = cc1->GetDisplaySizeMM() / 60.0;
+    nominal_target_size_mm = wxMin(nominal_target_size_mm, 10.0);
+    nominal_target_size_mm = wxMax(nominal_target_size_mm, 6.0);
+    
+    float nominal_icon_size_pixels = wxMax(4.0, floor(g_Platform->GetDisplayDPmm() * nominal_target_size_mm));             // nominal size, but not less than 4 pixel
+    float pix_factor = nominal_icon_size_pixels / 30.0;          // generic A/B icons are 30 units in size
+    
+    scale_factor *= pix_factor;
+    
+    float user_scale_factor = g_ShipScaleFactorExp;
+    if( g_ShipScaleFactorExp > 1.0 )
+        user_scale_factor = (log(g_ShipScaleFactorExp) + 1.0) * 1.2;   // soften the scale factor a bit
+        
+    scale_factor *= user_scale_factor;
+
     //  Establish some graphic element line widths dependent on the platform display resolution
-    double nominal_line_width_pix = wxMax(1.0, floor(g_Platform->GetDisplayDPmm() / 2.5));             //0.4 mm nominal, but not less than 1 pixel
+    double nominal_line_width_pix = wxMax(1.5, floor(g_Platform->GetDisplayDPmm() / 5.0));             //0.4 mm nominal, but not less than 1 pixel
 
     float width_interceptbar_base = 3 * nominal_line_width_pix;
     float width_interceptbar_top = 1.5 * nominal_line_width_pix;
@@ -896,7 +914,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc, ViewPort& vp, ChartC
     float width_interceptline = 2 * nominal_line_width_pix;
     float width_cogpredictor_base = 3 * nominal_line_width_pix;
     float width_cogpredictor_line = 1.5 * nominal_line_width_pix;
-    float width_target_outline = 1 * nominal_line_width_pix;
+    float width_target_outline = 1.2 * nominal_line_width_pix;
     
     
     //      Skip anchored/moored (interpreted as low speed) targets if requested
@@ -946,7 +964,7 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc, ViewPort& vp, ChartC
         drawit++;                     // yep
     else {
         LLBBox box;
-        box.SetFromSegment(td->Lon, td->Lat, pred_lon, pred_lat);
+        box.SetFromSegment(td->Lat, td->Lon, pred_lat, pred_lon);
     // And one more test to catch the case where target COG line crosses the screen,
     // but the target itself and its pred point are both off-screen
         if( !vp.GetBBox().IntersectOut(box))
@@ -1313,39 +1331,6 @@ static void AISDrawTarget( AIS_Target_Data *td, ocpnDC& dc, ViewPort& vp, ChartC
                         dc.StrokeLine( pixx, pixy, pixx1, pixy1 );
                     }
 
-#ifdef ocpnUSE_GL
-
-/*
-                    // opengl optimized version, looks not as nice...
-                    
-                    wxColour c = target_brush.GetColour();
-                    glColor3ub(c.Red(), c.Green(), c.Blue());
-                    float dx = pixx1 - pixx, dy = pixy1 - pixy;
-                    float m = (g_ais_cog_predictor_width + 1) / 2 / sqrtf(dx*dx + dy*dy);
-                    float tx = dy * m, ty = dx * m;
-                    glBegin(GL_TRIANGLE_STRIP);
-                    glVertex2f(pixx+tx,  pixy+ty);
-                    glVertex2f(pixx1+tx, pixy1+ty);
-                    glVertex2f(pixx-tx,  pixy-ty);
-                    glVertex2f(pixx1-tx, pixy1-ty);
-                    glEnd();
-
-                    if( g_ais_cog_predictor_width > 1 ) {
-                        //    Draw a 1 pixel wide black line
-                        glLineWidth( 1 );
-                        glColor3ub(0, 0, 0);
-                        glEnable( GL_BLEND );
-                        glEnable( GL_LINE_SMOOTH );
-                        glBegin(GL_LINES);
-                        glVertex2i(pixx, pixy);
-                        glVertex2i(pixx1, pixy1);
-                        glEnd();
-                        glDisable( GL_LINE_SMOOTH );
-                        glDisable( GL_BLEND );
-                        glColor3ub(c.Red(), c.Green(), c.Blue());
-                    }
-*/
-#endif
                     if(dc.GetDC()) {      
                         dc.SetBrush( target_brush );
                         if (targetscale >= 75)

@@ -94,7 +94,6 @@ class connector_segment;
 
 // Declare the Array of S57Obj
 WX_DECLARE_OBJARRAY(S57Obj, ArrayOfS57Obj);
-WX_DECLARE_OBJARRAY(S57Obj *, ArrayOfS57ObjPtr);
 
 // And also a list
 WX_DECLARE_LIST(S57Obj, ListOfS57Obj);
@@ -279,6 +278,9 @@ private:
                                   const OCPNRegion &RectRegion, const LLRegion &Region, bool b_overlay);
 
       void BuildLineVBO( void );
+      
+      void ChangeThumbColor(ColorScheme cs);
+      void LoadThumb();
       
  // Private Data
       char        *hdr_buf;

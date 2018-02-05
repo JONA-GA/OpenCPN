@@ -32,10 +32,9 @@
 # define minimum cmake version
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.2)
 IF (COMMAND cmake_policy)
-  CMAKE_POLICY(SET CMP0002 OLD)
-  CMAKE_POLICY(SET CMP0003 OLD)
-  CMAKE_POLICY(SET CMP0005 OLD)
-  CMAKE_POLICY(SET CMP0011 OLD)
+  if (POLICY CMP0043)
+    CMAKE_POLICY(SET CMP0043 NEW)
+  endif (POLICY CMP0043)
 ENDIF (COMMAND cmake_policy)
 
 PROJECT(OpenCPN)
@@ -48,6 +47,33 @@ ELSE(APPLE)
   SET(PACKAGE_NAME opencpn)
 ENDIF(APPLE)
 
+OPTION(OCPN_USE_LIBCPP "Use C++11 and libc++ instead of libstdc++ on macOS" OFF)
+
+if ( CMAKE_VERSION VERSION_GREATER 3.4 )
+  set(ENABLE_CLANG_TIDY OFF CACHE BOOL "Add clang-tidy automatically to builds")
+  if (ENABLE_CLANG_TIDY)
+    find_program (CLANG_TIDY_EXE NAMES "clang-tidy" PATHS /usr/local/opt/llvm/bin )
+    if (CLANG_TIDY_EXE)
+      message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+      #For more, see http://clang.llvm.org/extra/clang-tidy/
+      #set(CLANG_TIDY_CHECKS "-*,modernize-*")
+      set(CLANG_TIDY_CHECKS "-*,performance-*")
+      set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-checks=${CLANG_TIDY_CHECKS};-header-filter='${CMAKE_SOURCE_DIR}/*'"
+        CACHE STRING "" FORCE)
+    else()
+      message(AUTHOR_WARNING "clang-tidy not found!")
+      set(CMAKE_CXX_CLANG_TIDY "" CACHE STRING "" FORCE) # delete it
+    endif()
+  endif()
+endif()
+
+if ( CMAKE_VERSION VERSION_GREATER 3.9 )
+  set(ENABLE_CPPCHECK OFF CACHE BOOL "Add cppcheck automatically to builds")
+  if (ENABLE_CPPCHECK)
+      find_program (CPPCHECK_EXECUTABLE NAMES "cppcheck" )
+      set(CMAKE_CXX_CPPCHECK ${CPPCHECK_EXECUTABLE})
+  endif()
+endif()
 
 INCLUDE( ${CMAKE_SOURCE_DIR}/VERSION.cmake )
 SET(PACKAGE_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" )
@@ -331,9 +357,7 @@ IF (ARCH MATCHES "arm*" AND (NOT QT_ANDROID) )
     SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
     add_subdirectory(src/glshim)
 
-    add_subdirectory(src/glu)
-
-    SET(OPENGL_LIBRARIES "GL_static" "EGL" "X11" "drm" "dri2" )
+    SET(OPENGL_LIBRARIES "GL_static" "EGL" "X11" "drm"  )
   ENDIF()
 ENDIF()
 
@@ -351,8 +375,6 @@ IF(QT_ANDROID)
 
     SET(wxWidgets_USE_LIBS ${wxWidgets_USE_LIBS} gl )
     add_subdirectory(src/glshim)
-
-    add_subdirectory(src/glu)
 
 ENDIF(QT_ANDROID)
 
@@ -385,6 +407,7 @@ IF(OPENGL_FOUND)
         ENDIF()
     ENDFOREACH (_currentLibFile )
 
+    SET( OPENGL_LIBRARIES ${REVISED_OPENGL_LIBRARIES})
     MESSAGE (STATUS "    Revised GL Lib: " ${OPENGL_LIBRARIES})
 
 ELSE(OPENGL_FOUND)
@@ -395,7 +418,7 @@ ENDIF()
 
 MESSAGE (STATUS "    Adding local GLU" )
 add_subdirectory(src/glu)
-SET( OPENGL_LIBRARIES "GLU_static" ${REVISED_OPENGL_LIBRARIES}) 
+SET( OPENGL_LIBRARIES "GLU_static" ${OPENGL_LIBRARIES}) 
 
 IF(NOT QT_ANDROID)
 # Find wxWidgets here, and the setting get inherited by all plugins.
@@ -405,6 +428,10 @@ SET( wxWidgets_USE_UNICODE ON)
 SET( wxWidgets_USE_UNIVERSAL OFF)
 SET( wxWidgets_USE_STATIC OFF)
 
+set (WXWIDGETS_FORCE_VERSION CACHE VERSION "Force usage of a specific wxWidgets version.")
+if(WXWIDGETS_FORCE_VERSION)
+  set (wxWidgets_CONFIG_OPTIONS --version=${WXWIDGETS_FORCE_VERSION})
+endif()
 FIND_PACKAGE(wxWidgets REQUIRED)
 
 IF(MSYS)
@@ -704,25 +731,6 @@ IF(OCPN_USE_SVG)
         message(STATUS "Cairo Extra Libraries: " ${CAIRO_EXTRA_LIBRARIES})
       ENDIF ( CAIRO_EXTRAS_FOUND ) 
 
- 
-      IF(NOT WIN32 AND NOT APPLE)
-        OPTION(OCPN_FORCE_GTK3 "Force the build to use GTK3" OFF)
-
-        IF(NOT OCPN_FORCE_GTK3)
-          FIND_PACKAGE(GTK2)
-        ENDIF(NOT OCPN_FORCE_GTK3)
-
-        IF(GTK2_FOUND)
-          INCLUDE_DIRECTORIES(${GTK2_INCLUDE_DIRS})
-          SET(GTK_LIBRARIES ${GTK2_LIBRARIES})
-          MESSAGE(STATUS "Building against GTK2...")
-        ELSE(GTK2_FOUND)
-          FIND_PACKAGE(GTK3)
-          INCLUDE_DIRECTORIES(${GTK3_INCLUDE_DIRS})
-          SET(GTK_LIBRARIES ${GTK3_LIBRARIES})
-          MESSAGE(STATUS "Building against GTK3...")
-        ENDIF(GTK2_FOUND)
-      ENDIF(NOT WIN32 AND NOT APPLE)
 
       # Find FFMPEG - we have it disabled in our wxSVG
       #set(FFmpeg_FIND_COMPONENTS AVCODEC AVFORMAT AVUTIL SWSCALE SWRESAMPLE AVRESAMPLE)
@@ -734,6 +742,7 @@ IF(OCPN_USE_SVG)
       #set(VIDEO_FFMPEG_LIBRARIES ${FFMPEG_LIBRARIES} ${SWSCALE_LIBRARIES})
 
        FIND_PACKAGE(EXPAT REQUIRED)
+       INCLUDE(FindEXIF.cmake)
     ELSE(NOT WIN32)
       #On Windows, we have our own expat
       SET(EXPAT_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/buildwin/expat-2.1.0/include)
@@ -767,6 +776,7 @@ IF(OCPN_USE_SVG)
         ${CAIRO_EXTRA_LIBRARIES}
 #        ${FFMPEG_LIBRARIES}
         ${EXPAT_LIBRARIES}
+        ${EXIF_LIBRARIES}
         ${GTK_LIBRARIES}
       )
     ENDIF(WIN32)
@@ -840,6 +850,12 @@ IF(OCPN_USE_SVG)
       src/wxsvg/src/svgxml/svgxml.cpp
       src/wxsvg/src/svgxml/svgxmlhelpr.cpp
     )
+    if(EXIF_FOUND)
+        SET(SRC_WXSVG ${SRC_WXSVG}
+            src/wxsvg/src/ExifHandler.cpp
+        )
+        ADD_DEFINITIONS(-DwxsvgUSE_EXIF) 
+    endif()
     ADD_LIBRARY(WXSVG ${SRC_WXSVG})
     TARGET_LINK_LIBRARIES(WXSVG ${SVG_LIBS})
     INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/wxsvg/include/wxSVG)
@@ -850,6 +866,29 @@ IF(OCPN_USE_SVG)
   ENDIF(NOT QT_ANDROID)
 ENDIF(OCPN_USE_SVG)
 
+ 
+IF(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
+  OPTION(OCPN_FORCE_GTK3 "Force the build to use GTK3" OFF)
+
+  IF(NOT OCPN_FORCE_GTK3)
+    FIND_PACKAGE(GTK2)
+  ENDIF(NOT OCPN_FORCE_GTK3)
+
+  IF(GTK2_FOUND)
+    INCLUDE_DIRECTORIES(${GTK2_INCLUDE_DIRS})
+    SET(GTK_LIBRARIES ${GTK2_LIBRARIES})
+    MESSAGE(STATUS "Building against GTK2...")
+  ELSE(GTK2_FOUND)
+    FIND_PACKAGE(GTK3)
+    INCLUDE_DIRECTORIES(${GTK3_INCLUDE_DIRS})
+    SET(GTK_LIBRARIES ${GTK3_LIBRARIES})
+    MESSAGE(STATUS "Building against GTK3...")
+  ENDIF(GTK2_FOUND)
+        
+  SET(EXTRA_LIBS ${EXTRA_LIBS} ${GTK_LIBRARIES})
+ENDIF(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
+
+
 FIND_PACKAGE(Gettext REQUIRED)
 
 IF(UNIX)
@@ -859,11 +898,19 @@ IF(UNIX)
     FIND_PACKAGE(ZLIB REQUIRED)
     FIND_PACKAGE(X11)
     INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR})
-    FIND_PACKAGE(TinyXML)
+    IF(NOT APPLE)
+      #TinyXML from Homebrew is not good enough for our GpxDocument needs
+      #We should probably replace it with pugixml completely anyway...
+      FIND_PACKAGE(TinyXML)
+    ENDIF(NOT APPLE)
   ENDIF(NOT QT_ANDROID)
 ENDIF(UNIX)
 
 # check for lzma support for reading compressed charts
+IF(WIN32)
+  LIST(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/buildwin")
+  LIST(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/buildwin/include")
+ENDIF(WIN32)
 FIND_PACKAGE(LibLZMA)
 IF(LIBLZMA_FOUND)
     message (STATUS "Building with lzma support")
@@ -977,7 +1024,7 @@ SET(HDRS
 		include/AISTargetAlertDialog.h
 		include/AIS_Decoder.h
 		include/AIS_Target_Data.h
-		include/CM93DSlide.h
+		include/DetailSlider.h
 		include/GoToPositionDialog.h
 		include/RolloverWin.h
 		include/S57QueryDialog.h
@@ -1016,6 +1063,7 @@ SET(HDRS
 		include/routemanagerdialog.h
 		include/routeprop.h
 		include/routeprintout.h
+		include/trackprintout.h
 		include/PositionParser.h
 		include/printtable.h
 		include/piano.h
@@ -1077,7 +1125,7 @@ SET(SRCS
 		src/TCWin.cpp
 		src/S57QueryDialog.cpp
 		src/GoToPositionDialog.cpp
-		src/CM93DSlide.cpp
+		src/DetailSlider.cpp
 		src/RolloverWin.cpp
 		src/ChInfoWin.cpp
 		src/AISTargetQueryDialog.cpp
@@ -1112,6 +1160,7 @@ SET(SRCS
 		src/routemanagerdialog.cpp
 		src/routeprop.cpp
 		src/routeprintout.cpp
+		src/trackprintout.cpp
 		src/PositionParser.cpp
 		src/printtable.cpp
 		src/piano.cpp
@@ -1304,7 +1353,7 @@ IF (USE_S57)
 		src/mygdal/gdal_misc.cpp
 	)
 	ADD_LIBRARY(S57ENC ${SRC_S57ENC})
-	INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/mygdal)
+	INCLUDE_DIRECTORIES(BEFORE ${CMAKE_SOURCE_DIR}/src/mygdal)
 	SET(EXTRA_LIBS ${EXTRA_LIBS} S57ENC)
 	
 ELSE (USE_S57)
@@ -1417,10 +1466,10 @@ IF (OPENGL_FOUND)
       IF (( ARCH MATCHES "i386" OR ARCH MATCHES "amd64" OR ARCH MATCHES "x86_64") AND NOT QT_ANDROID)
         # using sse which makes the compression run about 50% faster
         message (STATUS "Compiling texture compression library with sse support")
-        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "-O3 -msse2 -DSQUISH_USE_SSE=2")
+        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "-O3 -msse2 -DSQUISH_USE_SSE=2 -fPIC")
       ELSE ()
         # use standard optimizations for other architectures
-        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "-O3")
+        set_property(TARGET TEXCMP PROPERTY COMPILE_FLAGS "-O3 -fPIC")
       ENDIF ()
   ELSE (NOT MSVC)
         # try to use sse on x86 based systems
@@ -1462,7 +1511,9 @@ IF (OPENGL_FOUND)
         ENDIF("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 
       ELSE ()
-#        set_source_files_properties(src/mipmap/mipmap_neon.c PROPERTIES COMPILE_FLAGS "-mfpu=neon")
+        IF(NOT (ARCH MATCHES "arm64" OR ARCH MATCHES "aarch64"))
+          set_source_files_properties(src/mipmap/mipmap_neon.c PROPERTIES COMPILE_FLAGS "-mfpu=neon")
+        ENDIF()
       ENDIF ()
   ELSE (NOT MSVC)
         # try to use sse on x86 based systems
@@ -1575,6 +1626,7 @@ SET(uiData
         src/bitmaps/iconStandard.png
         src/bitmaps/iconUserStd.png
         src/bitmaps/iconAll.png
+        src/bitmaps/DragHandle.svg
 	)
 
 IF (USE_S57)
@@ -1609,16 +1661,18 @@ IF(APPLE)
   SET(CMAKE_C_FLAGS_RELEASE "-O3 -arch ${ARCH}")
   SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-g -O3 -arch ${ARCH}")
 
-  SET(CMAKE_CXX_FLAGS "-O2 -arch ${ARCH}")
-  SET(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -arch ${ARCH}")
-  SET(CMAKE_CXX_FLAGS_MINSIZEREL "-O2 -arch ${ARCH}")
-  SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -arch ${ARCH}")
-  SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g -O3 -arch ${ARCH}")
+  IF(OCPN_USE_LIBCPP)
+	  SET(OCPN_LIBCPP "-std=c++11 -stdlib=libc++")
+  ENDIF(OCPN_USE_LIBCPP)
+  SET(CMAKE_CXX_FLAGS "-O2 ${OCPN_LIBCPP} -arch ${ARCH}")
+  SET(CMAKE_CXX_FLAGS_DEBUG "-g -O0 ${OCPN_LIBCPP} -arch ${ARCH}")
+  SET(CMAKE_CXX_FLAGS_MINSIZEREL "-O2 ${OCPN_LIBCPP} -arch ${ARCH}")
+  SET(CMAKE_CXX_FLAGS_RELEASE "-O3 ${OCPN_LIBCPP} -arch ${ARCH}")
+  SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g -O3 ${OCPN_LIBCPP} -arch ${ARCH}")
 
-  SET(CMAKE_EXE_LINKER_FLAGS "-O2 -arch ${ARCH}")
-  SET(CMAKE_SHARED_LINKER_FLAGS "-O2 -arch ${ARCH}")
-  SET(CMAKE_MODULE_LINKER_FLAGS "-O2 -arch ${ARCH}")
-
+  SET(CMAKE_EXE_LINKER_FLAGS "-O2 ${OCPN_LIBCPP} -arch ${ARCH}")
+  SET(CMAKE_SHARED_LINKER_FLAGS "-O2 ${OCPN_LIBCPP} -arch ${ARCH}")
+  SET(CMAKE_MODULE_LINKER_FLAGS "-O2 ${OCPN_LIBCPP} -arch ${ARCH}")
   SET(SRCS ${SRCS}
     include/macutils.h
     src/macutils.c
@@ -1690,9 +1744,6 @@ IF(OCPN_USE_SVG)
     SET_SOURCE_FILES_PROPERTIES(
 	    ${_currentSvgFile} PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/uidata/traditional )
   ENDFOREACH (_currentSvgFile )
-  ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
-    ${TRADITIONAL_SVG_FILES}
-  )
 
   #Journeyman theme SVG icons
   FILE(GLOB JOURNEYMAN_SVG_FILES "${CMAKE_SOURCE_DIR}/data/svg/journeyman/*")
@@ -1700,9 +1751,6 @@ IF(OCPN_USE_SVG)
     SET_SOURCE_FILES_PROPERTIES(
             ${_currentSvgFile} PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/uidata/journeyman )
   ENDFOREACH (_currentSvgFile )
-  ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
-    ${JOURNEYMAN_SVG_FILES}
-  )
   
   #Journeyman_flat theme SVG icons
   FILE(GLOB JOURNEYMAN_FLAT_SVG_FILES "${CMAKE_SOURCE_DIR}/data/svg/journeyman_flat/*")
@@ -1710,20 +1758,16 @@ IF(OCPN_USE_SVG)
     SET_SOURCE_FILES_PROPERTIES(
             ${_currentSvgFile} PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/uidata/journeyman_flat )
   ENDFOREACH (_currentSvgFile )
-  ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
-    ${JOURNEYMAN_FLAT_SVG_FILES}
-  )
-  
-ENDIF(OCPN_USE_SVG)
 
-INSTALL(DIRECTORY data/svg/markicons/ DESTINATION ${PREFIX_PKGDATA}/uidata/markicons)
-
-#Default SVG Icons
+  #Default SVG Icons
   FILE(GLOB DEFAULT_ICON_SVG_FILES "${CMAKE_SOURCE_DIR}/data/svg/markicons/*")
   FOREACH (_currentSvgFile ${DEFAULT_ICON_SVG_FILES})
     SET_SOURCE_FILES_PROPERTIES( ${_currentSvgFile} PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/uidata/markicons )
   ENDFOREACH (_currentSvgFile )
-  ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE ${DEFAULT_ICON_SVG_FILES})
+ 
+ENDIF(OCPN_USE_SVG)
+
+INSTALL(DIRECTORY data/svg/markicons/ DESTINATION ${PREFIX_PKGDATA}/uidata/markicons)
 
 SET_SOURCE_FILES_PROPERTIES( data/doc/help_web.html PROPERTIES MACOSX_PACKAGE_LOCATION SharedSupport/doc )
 
@@ -1758,6 +1802,18 @@ SET(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PACKAGE_VERSION}")
 SET(MACOSX_BUNDLE_BUNDLE_NAME "OpenCPN")
 SET(MACOSX_BUNDLE_GUI_IDENTIFIER "org.opencpn")
 
+IF(BUNDLE_DOCS MATCHES "ON")
+	SET(DOC_FILES 
+		data/doc/help_web.html
+		data/doc/help_en_US.html
+		${WIKI_DOC_FILES}
+		)
+ELSE(BUNDLE_DOCS MATCHES "ON")
+	SET(DOC_FILES 
+		data/doc/help_web.html
+		)
+ENDIF(BUNDLE_DOCS MATCHES "ON")
+
 ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
       ${HDRS}
       ${SRCS}
@@ -1770,19 +1826,12 @@ ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
       ${SOUND_FILES}
       buildosx/opencpn.icns
       buildosx/MainMenu.xib
+      ${TRADITIONAL_SVG_FILES}
+      ${JOURNEYMAN_SVG_FILES}
+      ${JOURNEYMAN_FLAT_SVG_FILES}
+      ${DEFAULT_ICON_SVG_FILES}
+      ${DOC_FILES}
       )
-
-IF(BUNDLE_DOCS MATCHES "ON")
-  ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
-      data/doc/help_web.html
-      data/doc/help_en_US.html
-      ${WIKI_DOC_FILES}
-  )
-ELSE(BUNDLE_DOCS MATCHES "ON")
-  ADD_EXECUTABLE(${PACKAGE_NAME} MACOSX_BUNDLE
-      data/doc/help_web.html
-  )
-ENDIF(BUNDLE_DOCS MATCHES "ON")
 
   INSTALL(TARGETS
     ${PACKAGE_NAME}
@@ -2111,6 +2160,12 @@ IF(WIN32 AND NOT UNIX)
         INSTALL(FILES ${vcdll_files} DESTINATION ".")
 	MESSAGE(STATUS "MSVC redistributable DLLs bundled into the installer package...")
     ENDIF(BUNDLE_VCDLLS)
+    OPTION (BUNDLE_LIBARCHIVEDLLS "Bundle the prebuilt LibArchive and LibLZMA DLLs" ON)
+    IF(BUNDLE_LIBARCHIVEDLLS)
+        FILE(GLOB libarchivedll_files "${CMAKE_CURRENT_SOURCE_DIR}/buildwin/archive.dll" "${CMAKE_CURRENT_SOURCE_DIR}/buildwin/liblzma.dll")
+        INSTALL(FILES ${libarchivedll_files} DESTINATION ".")
+	MESSAGE(STATUS "LibArchive DLLs bundled into the installer package...")
+    ENDIF(BUNDLE_LIBARCHIVEDLLS)
 ENDIF(WIN32 AND NOT UNIX)
 
 IF(MSVC AND OCPN_USE_CRASHREPORT)
@@ -2287,9 +2342,14 @@ IF(APPLE)
   SET(APPS "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app")
   SET(DIRS "")
 
+#INSTALL(DIRECTORY DESTINATION "bin/OpenCPN.app/Contents/PlugIns")
+  INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/plugins/dashboard_pi/libdashboard_pi.dylib DESTINATION "bin/OpenCPN.app/Contents/PlugIns")
+  INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/plugins/grib_pi/libgrib_pi.dylib DESTINATION "bin/OpenCPN.app/Contents/PlugIns")
+  INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/plugins/chartdldr_pi/libchartdldr_pi.dylib DESTINATION "bin/OpenCPN.app/Contents/PlugIns")
+  INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/plugins/wmm_pi/libwmm_pi.dylib DESTINATION "bin/OpenCPN.app/Contents/PlugIns")  
+
   SET(LIBS "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app/Contents/PlugIns/libdashboard_pi.dylib")
   SET(LIBS ${LIBS} "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app/Contents/PlugIns/libgrib_pi.dylib")
-
   SET(LIBS ${LIBS} "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app/Contents/PlugIns/libchartdldr_pi.dylib")
   SET(LIBS ${LIBS} "\${CMAKE_INSTALL_PREFIX}/bin/OpenCPN.app/Contents/PlugIns/libwmm_pi.dylib")
 

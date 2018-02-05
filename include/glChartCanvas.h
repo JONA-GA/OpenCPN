@@ -53,6 +53,9 @@ public:
 
     int m_iTextureDimension;
     int m_iTextureMemorySize;
+    
+    bool m_GLPolygonSmoothing;
+    bool m_GLLineSmoothing;
 };
 
 class ocpnDC;
@@ -80,6 +83,9 @@ public:
     static bool         s_b_useScissorTest;
     static bool         s_b_useStencil;
     static bool         s_b_useStencilAP;
+    static bool         s_b_useFBO;
+    
+    void SendJSONConfigMessage();
     
     glChartCanvas(wxWindow *parent);
     ~glChartCanvas();

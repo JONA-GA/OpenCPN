@@ -148,10 +148,11 @@ public:
     GRIBOverlayFactory( GRIBUICtrlBar &dlg );
     ~GRIBOverlayFactory();
 
-    void SetSettings( bool hiDefGraphics, bool GradualColors )
+    void SetSettings( bool hiDefGraphics, bool GradualColors, bool BarbedArrowHead = true )
     {
       m_hiDefGraphics = hiDefGraphics;
       m_bGradualColors = GradualColors;
+      m_bDrawBarbedArrowHead = BarbedArrowHead;
       ClearCachedData();
     }
 
@@ -186,17 +187,16 @@ private:
     void RenderGribOverlayMap( int config, GribRecord **pGR, PlugIn_ViewPort *vp);
     void RenderGribNumbers( int config, GribRecord **pGR, PlugIn_ViewPort *vp );
     void RenderGribParticles( int settings, GribRecord **pGR, PlugIn_ViewPort *vp );
-    void DrawLineBuffer(LineBuffer &buffer);
     void OnParticleTimer( wxTimerEvent & event );
 
     wxString GetRefString( GribRecord *rec, int map );
     void DrawMessageWindow( wxString msg, int x, int y , wxFont *mfont);
 
-    void drawDoubleArrow( int x, int y, double ang, wxColour arrowColor, int arrowWidth, int arrowSizeIdx );
-    void drawSingleArrow( int x, int y, double ang, wxColour arrowColor, int arrowWidth, int arrowSizeIdx );
+    void drawDoubleArrow( int x, int y, double ang, wxColour arrowColor, int arrowWidth, int arrowSizeIdx, double scale );
+    void drawSingleArrow( int x, int y, double ang, wxColour arrowColor, int arrowWidth, int arrowSizeIdx, double scale );
     void drawWindArrowWithBarbs( int settings, int x, int y, double vkn, double ang,
                                  bool south, wxColour arrowColor, double rotate_angle );
-    void drawLineBuffer(LineBuffer &buffer, int x, int y, double ang, bool south=false);
+    void drawLineBuffer(LineBuffer &buffer, int x, int y, double ang, double scale, bool south=false, bool head=true);
 
     void DrawNumbers( wxPoint p, double value, int settings, wxColour back_color );
     void FillGrid(GribRecord *pGR);
@@ -233,6 +233,7 @@ private:
 
     bool m_hiDefGraphics;
     bool m_bGradualColors;
+    bool m_bDrawBarbedArrowHead;
 
     std::map < double , wxImage > m_labelCache;
 

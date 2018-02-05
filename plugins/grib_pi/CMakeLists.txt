@@ -22,9 +22,9 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.2)
 # This should be 2.8.0 to have FindGTK2 module
 IF (COMMAND cmake_policy)
-  CMAKE_POLICY(SET CMP0003 OLD)
-  CMAKE_POLICY(SET CMP0005 OLD)
-  CMAKE_POLICY(SET CMP0011 OLD)
+  if (POLICY CMP0043)
+    CMAKE_POLICY(SET CMP0043 NEW)
+  endif (POLICY CMP0043)
 ENDIF (COMMAND cmake_policy)
 
 PROJECT(grib_pi)
@@ -35,6 +35,7 @@ MESSAGE (STATUS "*** Staging to build ${PACKAGE_NAME} ***")
 
 #SET(CMAKE_BUILD_TYPE Debug)
 #SET(CMAKE_VERBOSE_MAKEFILE ON)
+SET(CMAKE_MACOSX_RPATH "ON")
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 
@@ -105,6 +106,8 @@ SET(SRC_GRIB
             src/TexFont.cpp
             src/GribTable.h
             src/GribTable.cpp
+            src/CustomGrid.h
+            src/CustomGrid.cpp
             src/icons.cpp
             src/GribReader.cpp
             src/GribRecord.cpp
@@ -172,7 +175,7 @@ ENDIF(QT_ANDROID)
     ADD_DEFINITIONS(-DJASPER)
     ADD_DEFINITIONS(-DEXCLUDE_MIF_SUPPORT -DEXCLUDE_PNM_SUPPORT -DEXCLUDE_BMP_SUPPORT -DEXCLUDE_RAS_SUPPORT -DEXCLUDE_JPG_SUPPORT -DEXCLUDE_PGX_SUPPORT)
    
-    INCLUDE_DIRECTORIES("src/jasper/include")
+    INCLUDE_DIRECTORIES(BEFORE "src/jasper/include")
 
 
 

@@ -1247,6 +1247,7 @@ void WayPointman::ProcessIcons( ocpnStyle::Style* style )
     }
     
     m_bitmapSizeForList = wxMax(w,h);
+    m_bitmapSizeForList = wxMin(100, m_bitmapSizeForList);
     
     
 }
@@ -1262,6 +1263,7 @@ void WayPointman::ProcessDefaultIcons()
     else
         m_pLegacyIconArray = new SortedArrayOfMarkIcon(CompareMarkIcons);
     
+    pmi = ProcessLegacyIcon( iconDir + _T("Symbol-Empty.svg"), _T("empty"), _T("Empty") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Hazard-Airplane.svg"), _T("airplane"), _T("Airplane") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("1st-Anchorage.svg"), _T("anchorage"), _T("Anchorage") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Symbol-Anchor2.svg"), _T("anchor"), _T("Anchor") ); if(pmi)pmi->preScaled = true;
@@ -1277,7 +1279,7 @@ void WayPointman::ProcessDefaultIcons()
     pmi = ProcessLegacyIcon( iconDir + _T("Activity-Fishing.svg"), _T("fish"), _T("Fish") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Marks-Mooring-Buoy.svg"), _T("float"), _T("Float") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Service-Food.svg"), _T("food"), _T("Food") ); if(pmi)pmi->preScaled = true;
-    pmi = ProcessLegacyIcon( iconDir + _T("Service-Fuel-Pump-Diesel&Petrol.svg"), _T("fuel"), _T("Fuel") ); if(pmi)pmi->preScaled = true;
+    pmi = ProcessLegacyIcon( iconDir + _T("Service-Fuel-Pump-Diesel-Petrol.svg"), _T("fuel"), _T("Fuel") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Marks-Light-Green.svg"), _T("greenlite"), _T("Green Light") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Sea-Floor-Sea-Weed.svg"), _T("kelp"), _T("Kelp") ); if(pmi)pmi->preScaled = true;
     pmi = ProcessLegacyIcon( iconDir + _T("Marks-Light-TypeA.svg"), _T("light"), _T("Light Type A") ); if(pmi)pmi->preScaled = true;
@@ -1498,45 +1500,48 @@ MarkIcon *WayPointman::ProcessLegacyIcon( wxString fileName, const wxString & ke
 
 wxRect WayPointman::CropImageOnAlpha(wxImage &image)
 {
-    wxRect rv = wxRect(0,0, image.GetWidth(), image.GetHeight());
+    const int w = image.GetWidth();
+    const int h = image.GetHeight();
+
+    wxRect rv = wxRect(0,0, w, h);
     if(!image.HasAlpha())
         return rv;
     
     unsigned char *pAlpha = image.GetAlpha();
     
-    int leftCrop = image.GetWidth();
-    int topCrop = image.GetHeight();
-    int rightCrop = image.GetWidth();
-    int bottomCrop = image.GetHeight();
+    int leftCrop = w;
+    int topCrop = h;
+    int rightCrop = w;
+    int bottomCrop = h;
     
     // Horizontal
-    for(int i=0 ; i < image.GetHeight() ; i++){
-        int lineStartIndex = i*image.GetWidth();
+    for(int i=0 ; i < h ; i++){
+        int lineStartIndex = i *w;
         
         int j = 0;
-        while((j < image.GetWidth()) && (pAlpha[lineStartIndex+j] == 0) )
+        while((j < w) && (pAlpha[lineStartIndex+j] == 0) )
             j++;
         leftCrop = wxMin(leftCrop, j);
         
-        int k = image.GetWidth() - 1;
+        int k = w - 1;
         while( k && (pAlpha[lineStartIndex+k] == 0) )
             k--;
         rightCrop = wxMin(rightCrop, image.GetWidth() - k - 2);
     }
  
     // Vertical
-    for(int i=0 ; i < image.GetWidth() ; i++){
+    for(int i=0 ; i < w ; i++){
         int columnStartIndex = i;
         
         int j = 0;
-        while((j < image.GetHeight()) && (pAlpha[columnStartIndex+ (j * image.GetWidth())] == 0) )
+        while((j < h) && (pAlpha[columnStartIndex+ (j * w)] == 0) )
             j++;
         topCrop = wxMin(topCrop, j);
         
-        int k = image.GetHeight() - 1;
-        while( k && (pAlpha[columnStartIndex+(k * image.GetWidth())] == 0) )
+        int k = h - 1;
+        while( k && (pAlpha[columnStartIndex+(k * w)] == 0) )
             k--;
-        bottomCrop = wxMin(bottomCrop, image.GetHeight() - k - 2);
+        bottomCrop = wxMin(bottomCrop, h - k - 2);
     }
  
     int xcrop = wxMin(rightCrop, leftCrop);
@@ -1544,8 +1549,8 @@ wxRect WayPointman::CropImageOnAlpha(wxImage &image)
     int crop = wxMin(xcrop, ycrop);
     
     rv.x = wxMax(crop, 0);
-    rv.width = wxMax(1, image.GetWidth() - (2 * crop));
-    rv.width = wxMin(rv.width, image.GetWidth());
+    rv.width = wxMax(1, w - (2 * crop));
+    rv.width = wxMin(rv.width, w);
     rv.y = rv.x;
     rv.height = rv.width;
     
@@ -1636,7 +1641,7 @@ void WayPointman::ReloadAllIcons(  )
 {
     ProcessIcons( g_StyleManager->GetCurrentStyle() );
  
-    for( int i = 0; i < m_pIconArray->GetCount(); i++ ) {
+    for( unsigned int i = 0; i < m_pIconArray->GetCount(); i++ ) {
         MarkIcon *pmi = (MarkIcon *) m_pIconArray->Item( i );
         wxImage dim_image;
         if(m_cs == GLOBAL_COLOR_SCHEME_DUSK){
@@ -1647,9 +1652,13 @@ void WayPointman::ReloadAllIcons(  )
             dim_image = CreateDimImage(pmi->iconImage, .20);
             pmi->iconImage = dim_image;
         }
-        
     }
     
+    ReloadRoutepointIcons();
+}
+
+void WayPointman::ReloadRoutepointIcons()
+{
     //    Iterate on the RoutePoint list, requiring each to reload icon
     
     wxRoutePointListNode *node = m_pWayPointList->GetFirst();
@@ -1702,8 +1711,10 @@ wxBitmap *WayPointman::GetIconBitmap( const wxString& icon_key )
         if(pmi->piconBitmap)
             pret = pmi->piconBitmap;
         else{
-            pmi->piconBitmap = new wxBitmap(pmi->iconImage);
-            pret = pmi->piconBitmap;
+            if(pmi->iconImage.IsOk()){
+                pmi->piconBitmap = new wxBitmap(pmi->iconImage);
+                pret = pmi->piconBitmap;
+            }
         }
     }
     return pret;
@@ -1747,6 +1758,13 @@ unsigned int WayPointman::GetIconTexture( const wxBitmap *pbm, int &glw, int &gl
 
     if(!pmi->icon_texture) {
         /* make rgba texture */       
+        wxImage image = pbm->ConvertToImage();
+        unsigned char *d = image.GetData();
+        if (d == 0) {
+            // don't create a texture with junk
+            return 0;
+        }
+
         glGenTextures(1, &pmi->icon_texture);
         glBindTexture(GL_TEXTURE_2D, pmi->icon_texture);
                 
@@ -1755,24 +1773,22 @@ unsigned int WayPointman::GetIconTexture( const wxBitmap *pbm, int &glw, int &gl
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
         
         
-        wxImage image = pbm->ConvertToImage();
         int w = image.GetWidth(), h = image.GetHeight();
         
         pmi->tex_w = NextPow2(w);
         pmi->tex_h = NextPow2(h);
         
-        unsigned char *d = image.GetData();
         unsigned char *a = image.GetAlpha();
             
         unsigned char mr, mg, mb;
-        image.GetOrFindMaskColour( &mr, &mg, &mb );
+        if (!a)
+            image.GetOrFindMaskColour( &mr, &mg, &mb );
     
         unsigned char *e = new unsigned char[4 * w * h];
-        if(d && e){
-            for( int y = 0; y < h; y++ )
+        for( int y = 0; y < h; y++ ) {
                 for( int x = 0; x < w; x++ ) {
                     unsigned char r, g, b;
-                    int off = ( y * image.GetWidth() + x );
+                    int off = ( y * w + x );
                     r = d[off * 3 + 0];
                     g = d[off * 3 + 1];
                     b = d[off * 3 + 2];
@@ -1828,7 +1844,7 @@ wxBitmap WayPointman::GetIconBitmapForList( int index )
                 else if( w0 > w ) h1 = wxRound( (double) h0 * ( (double) w / (double) w0 ) );
                 
                 icon_larger = pmi->iconImage.Rescale( w1, h1 );
-                icon_larger = pmi->iconImage.Resize( wxSize( w, h ), wxPoint( 0, 0 ) );
+                icon_larger = pmi->iconImage.Resize( wxSize( w, h ), wxPoint( w/2 -w1/2, h/2-h1/2 ) );
             }
             
             pret = wxBitmap(icon_larger);
@@ -1916,7 +1932,7 @@ int WayPointman::GetIconImageListIndex( const wxBitmap *pbm )
             else if( w0 > w ) h1 = wxRound( (double) h0 * ( (double) w / (double) w0 ) );
             
             icon_larger =  pmi->iconImage.Rescale( w1, h1 );
-            icon_larger = icon_larger.Resize( wxSize( w, h ), wxPoint( 0, 0 ) );
+            icon_larger = icon_larger.Resize( wxSize( w, h ), wxPoint( w/2 -w1/2, h/2-h1/2  ) );
         }
         
         int index = pmarkicon_image_list->Add( wxBitmap(icon_larger));
@@ -1991,7 +2007,7 @@ int WayPointman::GetXIconImageListIndex( const wxBitmap *pbm )
             else if( w0 > w ) h1 = wxRound( (double) h0 * ( (double) w / (double) w0 ) );
             
             icon_larger =  pmi->iconImage.Rescale( w1, h1 );
-            icon_larger = icon_larger.Resize( wxSize( w, h ), wxPoint( 0, 0 ) );
+            icon_larger = icon_larger.Resize( wxSize( w, h ), wxPoint( w/2 -w1/2, h/2-h1/2  ) );
         }
         
         int index = pmarkicon_image_list->Add( wxBitmap(icon_larger) );

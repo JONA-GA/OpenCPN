@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: opencpn\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-08-04 09:41-0400\n"
-"PO-Revision-Date: 2017-08-04 22:34-0400\n"
+"POT-Creation-Date: 2018-01-24 10:23-0500\n"
+"PO-Revision-Date: 2018-01-29 21:29-0500\n"
 "Last-Translator: nohal <pavel@kalian.cz>\n"
 "Language-Team: Turkish\n"
 "Language: tr_TR\n"
@@ -67,7 +67,7 @@ msgstr "Gör.Rüzgar Açısı & Hızı"
 
 #: src/dashboard_pi.cpp:128
 msgid "App & True Wind Angle"
-msgstr ""
+msgstr "Uygulama & Gerçek Rüzgar Açısı"
 
 #: src/dashboard_pi.cpp:130 src/dashboard_pi.cpp:132
 msgid "App. Wind Speed"
@@ -135,7 +135,7 @@ msgstr "Fare"
 
 #: src/dashboard_pi.cpp:172
 msgid "GPS Clock"
-msgstr ""
+msgstr "GPS Saati"
 
 #: src/dashboard_pi.cpp:174
 msgid "Sunrise/Sunset"
@@ -175,15 +175,15 @@ msgstr ""
 
 #: src/dashboard_pi.cpp:192
 msgid "Local GPS Clock"
-msgstr ""
+msgstr "Yerel GPS Saati"
 
 #: src/dashboard_pi.cpp:194
 msgid "Local CPU Clock"
-msgstr ""
+msgstr "Yerel CPU Saati"
 
 #: src/dashboard_pi.cpp:196
 msgid "Local Sunrise/Sunset"
-msgstr ""
+msgstr "Yerel Gün Doğumu/Batımı"
 
 #: src/dashboard_pi.cpp:388 src/dashboard_pi.cpp:503 src/dashboard_pi.cpp:1460
 #: src/dashboard_pi.cpp:1473 src/dashboard_pi.cpp:1659
@@ -280,7 +280,7 @@ msgstr "Hızölçerin en yüksek değeri:"
 
 #: src/dashboard_pi.cpp:1827
 msgid "Speed Over Ground Damping Factor:"
-msgstr ""
+msgstr "Zemin Üzerindeki Hız Sönümleme Faktörü:"
 
 #: src/dashboard_pi.cpp:1833
 msgid "COG Damping Factor:"

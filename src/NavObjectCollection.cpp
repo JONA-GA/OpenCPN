@@ -257,19 +257,15 @@ RoutePoint * GPXLoadWaypoint1( pugi::xml_node &wpt_node,
 
 TrackPoint * GPXLoadTrackPoint1( pugi::xml_node &wpt_node )
 {
-
     wxString TimeString;
-    TrackPoint *pWP = NULL;
-    
+
     double rlat = wpt_node.attribute( "lat" ).as_double();
     double rlon = wpt_node.attribute( "lon" ).as_double();
 
     for( pugi::xml_node child = wpt_node.first_child(); child != 0; child = child.next_sibling() ) {
         const char *pcn = child.name();
-        
         if( !strcmp( pcn, "time") ) 
             TimeString = wxString::FromUTF8( child.first_child().value() );
-
 
     //    OpenCPN Extensions....
         else
@@ -283,15 +279,7 @@ TrackPoint * GPXLoadTrackPoint1( pugi::xml_node &wpt_node )
     }   // for
 
     // Create waypoint
-
-    pWP = new TrackPoint( rlat, rlon );
-
-    if(TimeString.Len()) {
-        pWP->m_timestring = TimeString;
-        pWP->SetCreateTime(wxInvalidDateTime);          // cause deferred timestamp parsing
-    }
-
-    return ( pWP );
+    return new TrackPoint( rlat, rlon, TimeString );
 }
 
 Track *GPXLoadTrack1( pugi::xml_node &trk_node, bool b_fullviz,
@@ -749,12 +737,8 @@ bool GPXCreateTrkpt( pugi::xml_node node, TrackPoint *pt, unsigned int flags )
  
     if(flags & OUT_TIME) {
         child = node.append_child("time");
-        if( pt->m_timestring.Len() )
-            child.append_child(pugi::node_pcdata).set_value(pt->m_timestring.mb_str());
-        else {
-            wxString t = pt->GetCreateTime().FormatISODate().Append(_T("T")).Append(pt->GetCreateTime().FormatISOTime()).Append(_T("Z"));
-            child.append_child(pugi::node_pcdata).set_value(t.mb_str());
-        }
+        if( pt->GetTimeString() )
+            child.append_child(pugi::node_pcdata).set_value(pt->GetTimeString());
     }
     
     return true;
@@ -947,9 +931,12 @@ bool GPXCreateRoute( pugi::xml_node node, Route *pRoute )
         if( pRoute->m_style != wxPENSTYLE_INVALID )
             child.append_attribute("style") = pRoute->m_style;
     }
-    
+
+    pugi::xml_node gpxx_ext = child_ext.append_child("gpxx:RouteExtension");
+    child = gpxx_ext.append_child("gpxx:IsAutoNamed");
+    child.append_child(pugi::node_pcdata).set_value("false");
+
     if( pRoute->m_Colour != wxEmptyString ) {
-        pugi::xml_node gpxx_ext = child_ext.append_child("gpxx:RouteExtension");
         child = gpxx_ext.append_child("gpxx:DisplayColor");
         child.append_child(pugi::node_pcdata).set_value(pRoute->m_Colour.mb_str());
     }
@@ -986,8 +973,6 @@ void InsertRouteA( Route *pTentRoute )
     if( bAddroute ) {
             
         pRouteList->Append( pTentRoute );
-        pTentRoute->RebuildGUIDList();                  // ensure the GUID list is intact
-        
                  
                 //    Do the (deferred) calculation of BBox
                     pTentRoute->FinalizeForRendering();
@@ -1043,7 +1028,7 @@ void InsertRouteA( Route *pTentRoute )
     }
 }
                        
-void InsertTrack( Track *pTentTrack )
+void InsertTrack( Track *pTentTrack, bool bApplyChanges = false )
 {
     if(!pTentTrack)
         return;
@@ -1051,7 +1036,7 @@ void InsertTrack( Track *pTentTrack )
     bool bAddtrack = true;
     //    If the track has only 1 point, don't load it.
     //    This usually occurs if some points were discarded as being co-incident.
-    if( pTentTrack->GetnPoints() < 2 )
+    if( !bApplyChanges && pTentTrack->GetnPoints() < 2 )
         bAddtrack = false;
     
     //    TODO  All this trouble for a tentative track.......Should make some Track methods????
@@ -1071,7 +1056,7 @@ void InsertTrack( Track *pTentTrack )
             TrackPoint *prp = pTentTrack->GetPoint(i);
             
             if( i ) pSelect->AddSelectableTrackSegment( prev_rlat, prev_rlon, prp->m_lat,
-                                                         prp->m_lon, prev_pConfPoint, prp, pTentTrack );
+                                                        prp->m_lon, prev_pConfPoint, prp, pTentTrack );
                     
             prev_rlat = prp->m_lat;
             prev_rlon = prp->m_lon;
@@ -1335,6 +1320,7 @@ bool NavObjectCollection1::LoadAllGPXObjects( bool b_full_viz )
             if( !strcmp(object.name(), "trk") ) {
                 Track *pTrack = GPXLoadTrack1( object, b_full_viz, false, false, 0);
                 InsertTrack( pTrack );
+                //delete pTrack
             }
             else
                 if( !strcmp(object.name(), "rte") ) {
@@ -1478,7 +1464,7 @@ void NavObjectChanges::AddTrackPoint( TrackPoint *pWP, const char *action, const
     pugi::xml_node object = m_gpx_root.append_child("tkpt");
     GPXCreateTrkpt(object, pWP, OPT_TRACKPT);
 
-    pugi::xml_node xchild = object.child("extensions");
+    pugi::xml_node xchild = object.append_child("extensions");
     
     pugi::xml_node child = xchild.append_child("opencpn:action");
     child.append_child(pugi::node_pcdata).set_value(action);
@@ -1556,7 +1542,7 @@ bool NavObjectChanges::ApplyChanges(void)
             
                     else if(!strcmp(child.first_child().value(), "add") ){
                         if( !pExisting )
-                            ::InsertTrack( pTrack );
+                            ::InsertTrack( pTrack, true );
                     }
                 
                     else
@@ -1623,6 +1609,18 @@ bool NavObjectChanges::ApplyChanges(void)
         object = object.next_sibling();
                 
     }
-
+    // Check to make sure we haven't loaded tracks with less than 2 points
+    wxTrackListNode *node1 = pTrackList->GetFirst();
+    while( node1 ) {
+        Track *pTrack = node1->GetData();
+        if( pTrack->GetnPoints() < 2 ) {
+            wxTrackListNode *tnode = node1->GetNext();
+            delete pTrack;
+            pTrackList->DeleteNode(node1);
+            node1 = tnode;
+        } else
+            node1 = node1->GetNext();
+    }
+    
     return true;
 }

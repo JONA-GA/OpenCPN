@@ -60,6 +60,14 @@ extern bool g_bopengl;
 
 #define GetChartTableEntry(i) GetChartTable()[i]
 
+//  Calculating the chart coverage region with extremely complicated shape is very expensive,
+//  put a limit on the complefity of "not covered" areas to prevent the application from slowing
+//  down to total unusability.
+//  On US ENC charts, the number of NOCOVR PLYs seems to always be under 300, but on the SCS ENCs it
+//  can get as high as 10000 and make the application totally unusable with chart quilting enabled
+//  while bringing little real effect.
+#define NOCOVR_PLY_PERF_LIMIT 500
+#define AUX_PLY_PERF_LIMIT 500
 
 static int CompareScales( int *i1, int *i2 )
 {
@@ -68,7 +76,7 @@ static int CompareScales( int *i1, int *i2 )
     const ChartTableEntry &cte1 = ChartData->GetChartTableEntry( *i1 );
     const ChartTableEntry &cte2 = ChartData->GetChartTableEntry( *i2 );
 
-    if( cte1.GetScale() == cte2.GetScale() ) {         // same scales, so sort on dbIndex
+    if( cte1.Scale_eq( cte2.GetScale()) ) {  // same scales, so sort on dbIndex
         float lat1, lat2;
         lat1 = cte1.GetLatMax();
         lat2 = cte2.GetLatMax();
@@ -178,6 +186,15 @@ LLRegion &QuiltCandidate::GetReducedCandidateRegion(double factor)
     }
 
     return reduced_candidate_region;
+}
+
+void QuiltCandidate::SetScale( int scale )
+{
+    ChartScale = scale;
+    rounding = 0;
+    // XXX find the right rounding
+    if (scale >= 1000)
+       rounding = 5 *pow(10, log10(scale) -2);
 }
 
 Quilt::Quilt()
@@ -322,7 +339,7 @@ ArrayOfInts Quilt::GetCandidatedbIndexArray( bool from_ref_chart, bool exclude_u
         QuiltCandidate *pqc = m_pcandidate_array->Item( ir );
         if( from_ref_chart )                     // only add entries of smaller scale than ref scale
         {
-            if( pqc->ChartScale >= m_reference_scale ) {
+            if( pqc->Scale_ge( m_reference_scale) ) {
                 // Search the no-show array
                 if( exclude_user_hidden ) {
                     bool b_noshow = false;
@@ -479,11 +496,16 @@ LLRegion Quilt::GetChartQuiltRegion( const ChartTableEntry &cte, ViewPort &vp )
 
     //    If the chart has an aux ply table, use it for finer region precision
     int nAuxPlyEntries = cte.GetnAuxPlyEntries();
+    bool aux_ply_skipped = false;
     if( nAuxPlyEntries >= 1 ) {
         for( int ip = 0; ip < nAuxPlyEntries; ip++ ) {
-            float *pfp = cte.GetpAuxPlyTableEntry( ip );
             int nAuxPly = cte.GetAuxCntTableEntry( ip );
-
+            if( nAuxPly > AUX_PLY_PERF_LIMIT ) {
+                //wxLogMessage("PLY calculation skipped for %s, nAuxPly: %d", cte.GetpFullPath(), nAuxPly);
+                aux_ply_skipped = true;
+                break;
+            }
+            float *pfp = cte.GetpAuxPlyTableEntry( ip );
             LLRegion t_region(nAuxPly, pfp);
             t_region.Intersect(screen_region);
 //            OCPNRegion t_region = vp.GetVPRegionIntersect( screen_region, nAuxPly, pfp,
@@ -493,7 +515,7 @@ LLRegion Quilt::GetChartQuiltRegion( const ChartTableEntry &cte, ViewPort &vp )
         }
     }
 
-    else {
+    if( aux_ply_skipped || nAuxPlyEntries == 0 ) {
         int n_ply_entries = cte.GetnPlyEntries();
         float *pfp = cte.GetpPlyTable();
 
@@ -514,8 +536,12 @@ LLRegion Quilt::GetChartQuiltRegion( const ChartTableEntry &cte, ViewPort &vp )
     int nNoCovrPlyEntries = cte.GetnNoCovrPlyEntries();
     if( nNoCovrPlyEntries ) {
         for( int ip = 0; ip < nNoCovrPlyEntries; ip++ ) {
-            float *pfp = cte.GetpNoCovrPlyTableEntry( ip );
             int nNoCovrPly = cte.GetNoCovrCntTableEntry( ip );
+            if( nNoCovrPly > NOCOVR_PLY_PERF_LIMIT ) {
+                //wxLogMessage("NOCOVR calculation skipped for %s, nNoCovrPly: %d", cte.GetpFullPath(), nNoCovrPly);
+                continue;
+            }
+            float *pfp = cte.GetpNoCovrPlyTableEntry( ip );
 
             LLRegion t_region(nNoCovrPly, pfp);
             t_region.Intersect(screen_region);
@@ -756,7 +782,7 @@ int Quilt::GetNewRefChart( void )
             double skew_norm = m.GetChartSkew();
             if( skew_norm > 180. ) skew_norm -= 360.;
 
-            if( ( m.GetScale() >= m_reference_scale )
+            if( ( m.Scale_ge( m_reference_scale) )
                     && ( m_reference_family == m.GetChartFamily() )
                     && ( m_bquiltanyproj || m_quilt_proj == m.GetChartProjectionType() )
                     && ( m_bquiltskew || (fabs(skew_norm) < 1.0) ) ){
@@ -1063,7 +1089,7 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
     EmptyCandidateArray();
     m_extended_stack_array.Clear();
 
-    int reference_scale = 1.;
+    int reference_scale = 1;
     int reference_type = -1;
     int reference_family = -1;
     int quilt_proj = m_bquiltanyproj ? vp_in.m_projection_type : PROJECTION_UNKNOWN;
@@ -1093,6 +1119,8 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
     //    Building the quilt candidate array
     for( int ics = 0; ics < n_charts; ics++ ) {
         int i = pCurrentStack->GetDBIndex( ics );
+        if (i < 0)
+            continue;
         m_extended_stack_array.Add( i );
 
         //  If the reference chart is cm93, we need not add any charts to the candidate array from the vp center.
@@ -1127,7 +1155,7 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
                 && ( m_bquiltanyproj || cte.GetChartProjectionType() == quilt_proj ) ) {
                     QuiltCandidate *qcnew = new QuiltCandidate;
                     qcnew->dbIndex = i;
-                    qcnew->ChartScale = cte.GetScale();
+                    qcnew->SetScale (cte.GetScale() );
                     m_pcandidate_array->Add( qcnew );               // auto-sorted on scale
         }
             
@@ -1185,14 +1213,14 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
                 continue;
 
             //    Calculate zoom factor for this chart
-            double candidate_chart_scale = cte.GetScale();
-            double chart_native_ppm = m_canvas_scale_factor / candidate_chart_scale;
+            int candidate_chart_scale = cte.GetScale();
+            double chart_native_ppm = m_canvas_scale_factor / (double)candidate_chart_scale;
             double zoom_factor = vp_in.view_scale_ppm / chart_native_ppm;
 
             //  Try to guarantee that there is one chart added with scale larger than reference scale
             //    Take note here, and keep track of the smallest scale chart that is larger scale than reference....
-            if( candidate_chart_scale < reference_scale ) {
-                if( candidate_chart_scale > sure_index_scale ) {
+            if( ! cte.Scale_ge( reference_scale) ) {
+                if( cte.Scale_gt( sure_index_scale ) ) {
                     sure_index = i;
                     sure_index_scale = candidate_chart_scale;
                 }
@@ -1201,7 +1229,9 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
             //    At this point, the candidate is the right type, skew, and projection, and is on-screen somewhere....
             //    Now  add the candidate if its scale is smaller than the reference scale, or is not excessively underzoomed.
 
-            if( ( candidate_chart_scale >= reference_scale ) || ( zoom_factor > .2 ) ) {
+            if(  cte.Scale_ge( reference_scale) || ( zoom_factor > .2 ) ) {
+                bool b_add = true;
+
                 //    Special case for S57 ENC
                 //    Add the chart only if the chart's fractional area exceeds n%
                 /* if( CHART_TYPE_S57 == reference_type ) { 
@@ -1249,7 +1279,7 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
 
                             QuiltCandidate *qcnew = new QuiltCandidate;
                             qcnew->dbIndex = i;
-                            qcnew->ChartScale = candidate_chart_scale; //ChartData->GetDBChartScale( i );
+                            qcnew->SetScale ( candidate_chart_scale ); //ChartData->GetDBChartScale( i );
 
                             m_pcandidate_array->Add( qcnew );               // auto-sorted on scale
 
@@ -1277,7 +1307,7 @@ bool Quilt::BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_
 
                 QuiltCandidate *qcnew = new QuiltCandidate;
                 qcnew->dbIndex = sure_index;
-                qcnew->ChartScale = ChartData->GetDBChartScale( sure_index );
+                qcnew->SetScale ( ChartData->GetDBChartScale( sure_index ) );
                 m_pcandidate_array->Add( qcnew );               // auto-sorted on scale
 
                 b_need_resort = true;
@@ -1569,7 +1599,8 @@ bool Quilt::Compose( const ViewPort &vp_in )
                 }
             }
 #endif
-            if( cte.GetScale() >= m_reference_scale ) {
+            
+            if( cte.Scale_ge(m_reference_scale)  ) {
                 //  If this chart appears in the no-show array, then simply include it, but
                 //  don't subtract its region when determining the smaller scale charts to include.....
                 bool b_in_noshow = false;
@@ -1622,8 +1653,8 @@ bool Quilt::Compose( const ViewPort &vp_in )
                 continue;               // already did this one
 
             const ChartTableEntry &cte = ChartData->GetChartTableEntry( pqc->dbIndex );
-
-            if( cte.GetScale() >= m_reference_scale ) {
+            
+            if( cte.Scale_ge( m_reference_scale) ) {
                 bool b_in_noshow = false;
                 for( unsigned int ins = 0; ins < g_quilt_noshow_index_array.GetCount(); ins++ ) {
                     if( g_quilt_noshow_index_array.Item( ins ) == pqc->dbIndex ) // chart is in the noshow list
@@ -1676,7 +1707,7 @@ bool Quilt::Compose( const ViewPort &vp_in )
 
         if( !pqc->b_include ) {
             const ChartTableEntry &cte = ChartData->GetChartTableEntry( pqc->dbIndex );
-            if( cte.GetScale() >= m_reference_scale ) {
+            if( cte.Scale_ge( m_reference_scale) ) {
                 m_eclipsed_stack_array.Add( pqc->dbIndex );
                 pqc->b_eclipsed = true;
             }
@@ -1708,7 +1739,7 @@ bool Quilt::Compose( const ViewPort &vp_in )
                 if( CHART_TYPE_CM93COMP == ChartData->GetDBChartType( i ) ) {
                     QuiltCandidate *qcnew = new QuiltCandidate;
                     qcnew->dbIndex = i;
-                    qcnew->ChartScale = ChartData->GetDBChartScale( i );
+                    qcnew->SetScale( ChartData->GetDBChartScale( i ) );
 
                     m_pcandidate_array->Add( qcnew );
                 }
@@ -1748,7 +1779,8 @@ bool Quilt::Compose( const ViewPort &vp_in )
 
             if( !vpck_region.Empty() ) {
                 if( add_scale ) {
-                    if( add_scale == cte.GetScale() ) pqc->b_include = true;
+                    if( cte.Scale_eq(add_scale) ) 
+                        pqc->b_include = true;
                     ;
                 } else {
                     pqc->b_include = true;
@@ -1779,8 +1811,10 @@ bool Quilt::Compose( const ViewPort &vp_in )
                 QuiltPatch *pqp = new QuiltPatch;
                 pqp->dbIndex = pqc->dbIndex;
                 pqp->ProjType = m.GetChartProjectionType();
-                //pqp->quilt_region = pqc->GetCandidateRegion();
-                pqp->quilt_region = pqc->GetReducedCandidateRegion(factor);
+                // this is the region used for drawing, don't reduce it
+                // it's visible
+                pqp->quilt_region = pqc->GetCandidateRegion();
+                //pqp->quilt_region = pqc->GetReducedCandidateRegion(factor);
                 
                 pqp->b_Valid = true;
 
@@ -2339,7 +2373,8 @@ bool Quilt::DoRenderQuiltRegionViewOnDC( wxMemoryDC &dc, ViewPort &vp, OCPNRegio
                         if( !get_region.Empty() ) {
 #ifdef USE_S57
                             s57chart *Chs57 = dynamic_cast<s57chart*>( chart );
-                            Chs57->RenderOverlayRegionViewOnDC( tmp_dc, vp, get_screen_region );
+                            if (Chs57)
+                                Chs57->RenderOverlayRegionViewOnDC( tmp_dc, vp, get_screen_region );
 #endif
                             OCPNRegionIterator upd( get_screen_region );
                             while( upd.HaveRects() ) {

@@ -2082,18 +2082,21 @@ void AIS_Decoder::UpdateOneCPA( AIS_Target_Data *ptarget )
     ptarget->Range_NM = -1.;            // Defaults
     ptarget->Brg = -1.;
 
-    if( !ptarget->b_positionOnceValid || !bGPSValid ) {
-        ptarget->bCPA_Valid = false;
-        return;
-    }
-
     //    Compute the current Range/Brg to the target
+    //    This should always be possible even if GPS data is not valid
+    //    because O must always have a position for own-ship. Plugins need
+    //    AIS target range and bearing from own-ship position even if GPS is not valid.
     double brg, dist;
     DistanceBearingMercator( ptarget->Lat, ptarget->Lon, gLat, gLon, &brg, &dist );
     ptarget->Range_NM = dist;
     ptarget->Brg = brg;
 
     if( dist <= 1e-5 ) ptarget->Brg = -1.0;             // Brg is undefined if Range == 0.
+
+    if( !ptarget->b_positionOnceValid || !bGPSValid ) {
+        ptarget->bCPA_Valid = false;
+        return;
+    }
 
     //    There can be no collision between ownship and itself....
     //    This can happen if AIVDO messages are received, and there is another source of ownship position, like NMEA GLL
@@ -2325,6 +2328,17 @@ void AIS_Decoder::OnTimerAIS( wxTimerEvent& event )
                     remove_array.Add(td->MMSI);         //Add this target to removal list
             }
         }
+        
+        // Remove any targets specified as to be "ignored", so that they won't trigger phantom alerts (e.g. SARTs)
+        for(unsigned int i=0 ; i < g_MMSI_Props_Array.GetCount() ; i++){
+            MMSIProperties *props =  g_MMSI_Props_Array.Item(i);
+            if(td->MMSI == props->MMSI){
+                if(props->m_bignore)
+                    remove_array.Add(td->MMSI);         //Add this target to removal list
+                break;
+            }
+        }
+        
 
         ++it;
     }
@@ -2530,10 +2544,6 @@ AIS_Target_Data *AIS_Decoder::Get_Target_Data_From_MMSI( int mmsi )
 }
 
 
-
-#include <wx/arrimpl.cpp>
-
-WX_DEFINE_OBJARRAY(ArrayOfMMSIProperties);
 
 ArrayOfMMSIProperties   g_MMSI_Props_Array;
 

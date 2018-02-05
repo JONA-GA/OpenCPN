@@ -848,7 +848,7 @@ void OCPNPlatform::SetDefaultOptions( void )
         pConfig->Write( _T ( "bShowNationalText" ), true );
         
         pConfig->Write( _T ( "S52_MAR_SAFETY_CONTOUR" ), 3 );
-        pConfig->Write( _T ( "S52_MAR_SHALLOW_CONTOUR" ), 4 );
+        pConfig->Write( _T ( "S52_MAR_SHALLOW_CONTOUR" ), 2 );
         pConfig->Write( _T ( "S52_MAR_DEEP_CONTOUR" ), 6 );
         pConfig->Write( _T ( "S52_MAR_TWO_SHADES" ), 0  );
         pConfig->Write( _T ( "S52_DEPTH_UNIT_SHOW" ), 1 );
@@ -1128,8 +1128,11 @@ wxString &OCPNPlatform::GetPrivateDataDir()
         m_PrivateDataDir = std_path.GetUserDataDir();       // should be ~/.opencpn
 #endif
         
-        if( g_bportable )
+        if( g_bportable ){
             m_PrivateDataDir = GetHomeDir();
+            if(m_PrivateDataDir.Last() == wxFileName::GetPathSeparator())
+                m_PrivateDataDir.RemoveLast();
+        }
         
 #ifdef __OCPN__ANDROID__
         m_PrivateDataDir = androidGetPrivateDir();
@@ -1589,7 +1592,9 @@ double  OCPNPlatform::GetDisplaySizeMM()
     
 #ifdef __WXGTK__
     GdkScreen *screen = gdk_screen_get_default();
-    ret = (double)gdk_screen_get_monitor_width_mm(screen, 0);
+    double gdk_monitor_mm = gdk_screen_get_monitor_width_mm(screen, 0);
+    if(gdk_monitor_mm > 0) // if gdk detects a valid screen width (returns -1 on raspberry pi)
+        ret = gdk_monitor_mm;
 #endif    
     
     

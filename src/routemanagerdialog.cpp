@@ -1523,12 +1523,21 @@ void RouteManagerDialog::OnTrkMenuSelected( wxCommandEvent &event )
                 break;
             }
 
-            wxString choices[] = { _T("5.0"), _T("10.0"), _T("20.0"), _T("50.0"), _T("100.0") };
+            const wxString choices[] = { _T("5.0"), _T("10.0"), _T("20.0"), _T("50.0"), _T("100.0") };
+
             wxSingleChoiceDialog precisionDlg ( this,
                     _("Select the maximum error allowed (in meters)\nafter data reduction:"),
                     _("Reduce Data Precision"), 5, choices );
-
+#ifdef __WXOSX__
+            precisionDlg.ShowWindowModal();
+            while ( precisionDlg.IsShown() ) {
+                wxMilliSleep(10);
+                wxYield();
+            }
+            int result = precisionDlg.GetReturnCode();
+#else
             int result = precisionDlg.ShowModal();
+#endif
             if( result == wxID_CANCEL ) break;
             double precision = 5.0;
             switch( precisionDlg.GetSelection() ) {
@@ -1611,10 +1620,8 @@ void RouteManagerDialog::OnTrkMenuSelected( wxCommandEvent &event )
 
                 for(int i=0; i<mergeTrack->GetnPoints(); i++) {
                     tPoint = mergeTrack->GetPoint(i);
-                    newPoint = new TrackPoint( tPoint->m_lat, tPoint->m_lon );
+                    newPoint = new TrackPoint( tPoint->m_lat, tPoint->m_lon, tPoint->GetCreateTime() );
                     newPoint->m_GPXTrkSegNo = 1;
-
-                    newPoint->SetCreateTime(tPoint->GetCreateTime());
 
                     targetTrack->AddPoint( newPoint );
 
@@ -1717,7 +1724,6 @@ void RouteManagerDialog::UpdateTrkListCtrl()
 
     m_pTrkListCtrl->SortItems( SortRoutesOnName, (wxIntPtr) m_pTrkListCtrl );
 
-    m_pTrkListCtrl->SortItems( SortRoutesOnName, (wxIntPtr) m_pTrkListCtrl );
     m_pTrkListCtrl->SetColumnWidth(0, 4 * m_charWidth);
     
     // restore selection if possible
@@ -2037,11 +2043,13 @@ void RouteManagerDialog::UpdateWptListCtrl( RoutePoint *rp_select, bool b_retain
 
     if( (m_lastWptItem >= 0) && (m_pWptListCtrl->GetItemCount()) )
         m_pWptListCtrl->EnsureVisible( m_lastWptItem );
-    
-    int iwidth, iheight;
-    pWayPointMan->Getpmarkicon_image_list()->GetSize(0, iwidth, iheight);
+
+    if(pWayPointMan->Getpmarkicon_image_list()->GetImageCount()) {
+        int iwidth, iheight;
+        pWayPointMan->Getpmarkicon_image_list()->GetSize(0, iwidth, iheight);
         
-    m_pWptListCtrl->SetColumnWidth(0, wxMax(iwidth + 4, 4 * m_charWidth));
+        m_pWptListCtrl->SetColumnWidth(0, wxMax(iwidth + 4, 4 * m_charWidth));
+    }
     
     UpdateWptButtons();
 }
@@ -2370,8 +2378,15 @@ void RouteManagerDialog::OnWptSendToGPSClick( wxCommandEvent &event )
 
     wxString source;
     pdlg->Create( NULL, -1, _( "Send to GPS" ) + _T( "..." ), source );
-    pdlg->ShowModal();
 
+#ifdef __WXOSX__
+    HideWithEffect(wxSHOW_EFFECT_BLEND );
+#endif
+    pdlg->ShowModal();
+#ifdef __WXOSX__
+    ShowWithEffect(wxSHOW_EFFECT_BLEND );
+#endif
+    
     delete pdlg;
 }
 

@@ -45,26 +45,31 @@ struct SubTrack
     double            m_scale;
 };
 
-class TrackPoint : public RoutePoint
+class TrackPoint
 {
 public:
-      TrackPoint(double lat, double lon);
+      TrackPoint(double lat, double lon, wxString ts="");
+      TrackPoint(double lat, double lon, wxDateTime dt);
       TrackPoint( TrackPoint* orig );
+      ~TrackPoint();
 
       wxDateTime GetCreateTime(void);
       void SetCreateTime( wxDateTime dt );
       void Draw(ocpnDC& dc );
-      wxString GetName(void){ return _T(""); }
+      const char *GetTimeString() { return m_timestring; }
       
+      double            m_lat, m_lon;
       int               m_GPXTrkSegNo;
 private:
+      void SetCreateTime( wxString ts );
+      char             *m_timestring;
 };
 
 //----------------------------------------------------------------------------
 //    Track
 //----------------------------------------------------------------------------
 
-class Track : public Route
+class Track
 {
 public:
     Track();

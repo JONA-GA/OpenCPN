@@ -47,6 +47,7 @@ BEGIN_EVENT_TABLE ( TCWin, wxWindow ) EVT_PAINT ( TCWin::OnPaint )
 END_EVENT_TABLE()
 
 // Define a constructor
+extern wxDateTime gTimeSource;
 TCWin::TCWin( ChartCanvas *parent, int x, int y, void *pvIDX )
 {
 
@@ -55,6 +56,12 @@ TCWin::TCWin( ChartCanvas *parent, int x, int y, void *pvIDX )
     //    Then create the dialog ..WITHOUT.. borders and title bar.
     //    This way, any window decorations set by external themes, etc
     //    will not detract from night-vision
+
+    m_created = false;
+    xSpot = 0;
+    ySpot = 0;
+
+    m_pTCRolloverWin = NULL;
 
     long wstyle = wxCLIP_CHILDREN | wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER ;
     if( ( global_color_scheme != GLOBAL_COLOR_SCHEME_DAY )
@@ -68,7 +75,6 @@ TCWin::TCWin( ChartCanvas *parent, int x, int y, void *pvIDX )
     m_x = x;
     m_y = y;
     
-    m_created = false;
     RecalculateSize();
      
     wxDialog::Create( parent, wxID_ANY, wxString( _T ( "" ) ), m_position ,
@@ -93,14 +99,18 @@ TCWin::TCWin( ChartCanvas *parent, int x, int y, void *pvIDX )
         SetTitle( wxString( _( "Current" ) ) );
     }
 
-    m_pTCRolloverWin = NULL;
 
 
     int sx, sy;
     GetClientSize( &sx, &sy );
     
 //    Figure out this computer timezone minute offset
-    wxDateTime this_now = wxDateTime::Now();
+    wxDateTime this_now = gTimeSource;
+    bool cur_time = !gTimeSource.IsValid();
+
+    if (cur_time) {
+        this_now = wxDateTime::Now();
+    }
     wxDateTime this_gmt = this_now.ToGMT();
 
 #if wxCHECK_VERSION(2, 6, 2)
@@ -124,8 +134,9 @@ TCWin::TCWin( ChartCanvas *parent, int x, int y, void *pvIDX )
     if( this_now.IsDST() ) m_corr_mins += 60;
 
 //    Establish the inital drawing day as today
-    m_graphday = wxDateTime::Now();
-    wxDateTime graphday_00 = wxDateTime::Today();
+    m_graphday = this_now;
+    wxDateTime graphday_00 = this_now;
+    graphday_00.ResetTime();
     time_t t_graphday_00 = graphday_00.GetTicks();
 
     //    Correct a Bug in wxWidgets time support
@@ -452,12 +463,13 @@ void TCWin::OnPaint( wxPaintEvent& event )
         dc.SetBrush( *pltgray );
         dc.DrawRectangle( m_graph_rect.x, m_graph_rect.y, m_graph_rect.width, m_graph_rect.height );
 
-        int hour_delta = 1;
         
         //  On some platforms, we cannot draw rotated text.
         //  So, reduce the complexity of horizontal axis time labels
 #ifndef __WXMSW__
-        hour_delta = 4;
+        const int hour_delta = 4;
+#else
+        const int hour_delta = 1;
 #endif        
         
         
@@ -489,9 +501,14 @@ void TCWin::OnPaint( wxPaintEvent& event )
         }
 
         //    Make a line for "right now"
-        time_t t_now = wxDateTime::Now().GetTicks();       // now, in ticks
+        wxDateTime this_now = gTimeSource;
+        bool cur_time = !gTimeSource.IsValid();
+        if (cur_time)
+            this_now = wxDateTime::Now();
 
-        float t_ratio = m_graph_rect.width * ( t_now - m_t_graphday_00_at_station ) / ( 25 * 3600 );
+        time_t t_now = this_now.GetTicks();       // now, in ticks
+
+        float t_ratio = m_graph_rect.width * ( t_now - m_t_graphday_00_at_station ) / ( 25 * 3600.0f );
 
         //must eliminate line outside the graph (in that case put it outside the window)
         int xnow = ( t_ratio < 0 || t_ratio > m_graph_rect.width ) ? -1 : m_graph_rect.x + (int) t_ratio;
@@ -721,9 +738,8 @@ void TCWin::OnPaint( wxPaintEvent& event )
         }
 
 //    Today or tomorrow
-        if( (m_button_height * 15) < x ){        // large enough horizontally?
+        if( (m_button_height * 15) < x && cur_time){        // large enough horizontally?
             wxString sday;
-            wxDateTime this_now = wxDateTime::Now();
 
             int day = m_graphday.GetDayOfYear();
             if( m_graphday.GetYear() == this_now.GetYear() ) {
@@ -790,7 +806,11 @@ void TCWin::OnSize( wxSizeEvent& event )
     }
     m_ptextctrl->SetSize(texc_size);
     
-    OK_button->Move( wxPoint( x - (3 * m_tsy + 10), y - (m_tsy + 10) ));                            
+#ifdef __WXOSX__
+    OK_button->Move( wxPoint( x - (4 * m_tsy + 10), y - (m_tsy + 10) ));
+#else
+    OK_button->Move( wxPoint( x - (3 * m_tsy + 10), y - (m_tsy + 10) ));
+#endif
     PR_button->Move( wxPoint( 10, y - (m_tsy + 10) ) );
  
     int bsx, bsy, bpx, bpy;
@@ -825,6 +845,9 @@ void TCWin::OnTCWinPopupTimerEvent( wxTimerEvent& event )
         SetCursor( *pParent->pCursorCross );
         if( NULL == m_pTCRolloverWin ) {
             m_pTCRolloverWin = new RolloverWin( this, -1, false );
+            // doesn't really work, mouse positions are relative to rollover window
+            // not this window.
+            // effect: hide rollover window if mouse on rollover
             m_pTCRolloverWin->SetMousePropogation( 1 );
             m_pTCRolloverWin->Hide();
         }
@@ -869,9 +892,9 @@ void TCWin::OnTCWinPopupTimerEvent( wxTimerEvent& event )
         // x value is clear...
         //  Find the point in the window that is used for the curev rendering, rounding as necessary
         
-        int idx;
+        int idx = 1; // in case m_graph_rect.width is weird ie ppx never > curs_x
         for( int i = 0; i < 26; i++ ) {
-            float ppx = m_graph_rect.x + ( ( i ) * m_graph_rect.width / 25 );
+            float ppx = m_graph_rect.x + ( ( i ) * m_graph_rect.width / 25.f );
             if(ppx > curs_x){
                 idx = i;
                 break;
@@ -898,7 +921,6 @@ void TCWin::OnTCWinPopupTimerEvent( wxTimerEvent& event )
 
     if( m_pTCRolloverWin && m_pTCRolloverWin->IsShown() && !ShowRollover ) {
         m_pTCRolloverWin->Hide();
-        m_pTCRolloverWin = NULL;
     }
 
 }

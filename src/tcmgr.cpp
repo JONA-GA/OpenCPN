@@ -817,7 +817,9 @@ bool TCMgr::GetTideOrCurrent(time_t t, int idx, float &tcvalue, float& dir)
     return(true); // Got it!
 }
 
-bool TCMgr::GetTideOrCurrent15(time_t t, int idx, float &tcvalue, float& dir, bool &bnew_val)
+extern wxDateTime gTimeSource;
+
+bool TCMgr::GetTideOrCurrent15(time_t t_d, int idx, float &tcvalue, float& dir, bool &bnew_val)
 {
     int ret;
     IDX_entry *pIDX = &m_Combined_IDX_array.Item( idx );             // point to the index entry
@@ -829,7 +831,9 @@ bool TCMgr::GetTideOrCurrent15(time_t t, int idx, float &tcvalue, float& dir, bo
     }
 
     //    Figure out this computer timezone minute offset
-    wxDateTime this_now = wxDateTime::Now();
+    wxDateTime this_now = gTimeSource; // wxDateTime::Now();
+    if (this_now.IsValid() == false)
+        this_now = wxDateTime::Now();
     wxDateTime this_gmt = this_now.ToGMT();
     wxTimeSpan diff = this_gmt.Subtract(this_now);
     int diff_mins = diff.GetMinutes();
@@ -839,7 +843,8 @@ bool TCMgr::GetTideOrCurrent15(time_t t, int idx, float &tcvalue, float& dir, bo
         station_offset += 60;
     int corr_mins = station_offset - diff_mins;
 
-    wxDateTime today_00 = wxDateTime::Today();
+    wxDateTime today_00 = this_now;
+    today_00.ResetTime();
     int t_today_00 = today_00.GetTicks();
     int t_today_00_at_station = t_today_00 - (corr_mins * 60);
 
@@ -945,6 +950,19 @@ void TCMgr::GetHightOrLowTide(time_t t, int sch_step_1, int sch_step_2, float ti
             return;
     }
 
+    // Is the cache data reasonably fresh?
+    if( abs(t - pIDX->recent_highlow_calc_time) < 60){
+        if(w_t){
+            tcvalue = pIDX->recent_high_level;
+            tctime = pIDX->recent_high_time;
+        }else{
+            tcvalue = pIDX->recent_low_level;
+            tctime = pIDX->recent_low_time;
+        }
+        return;
+    }
+
+
     pIDX->max_amplitude = 0.0;                // Force multiplier re-compute
     int yott = yearoftimet( t );
     happy_new_year (pIDX, yott);
@@ -972,6 +990,18 @@ void TCMgr::GetHightOrLowTide(time_t t, int sch_step_1, int sch_step_2, float ti
     }
     tcvalue = newval;
     tctime = ttt + sch_step_2 ;
+    
+    // Cache the data
+    pIDX->recent_highlow_calc_time = t;
+    if(w_t){
+        pIDX->recent_high_level = newval;
+        pIDX->recent_high_time = tctime;
+    }
+    else{
+        pIDX->recent_low_level = newval;
+        pIDX->recent_low_time = tctime;
+    }
+        
 
 }
 
