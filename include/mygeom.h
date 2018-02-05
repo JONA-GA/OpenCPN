@@ -109,7 +109,8 @@ public:
         double      *p_vertex;              //  Pointer to vertex array, x,y,x,y.....
 
         LLBBox      box;
-
+//        double      minxt, minyt, maxxt, maxyt;
+        
         TriPrim     *p_next;                // chain link
         
 };
@@ -203,7 +204,7 @@ class PolyTessGeo
         PolyTessGeo(unsigned char *polybuf, int nrecl, int index, int senc_file_version);      // Build this from SENC file record
 
         PolyTessGeo(OGRPolygon *poly, bool bSENC_SM,
-            double ref_lat, double ref_lon,  bool bUseInternalTess, double LOD_meters);  // Build this from OGRPolygon
+            double ref_lat, double ref_lon, double LOD_meters);  // Build this from OGRPolygon
 
         PolyTessGeo(Extended_Geometry *pxGeom);
 
@@ -217,18 +218,23 @@ class PolyTessGeo
         double Get_xmax(){ return xmax;}
         double Get_ymin(){ return ymin;}
         double Get_ymax(){ return ymax;}
+        void SetExtents(double x_left, double y_bot, double x_right, double y_top);
+        
+        
         PolyTriGroup *Get_PolyTriGroup_head(){ return m_ppg_head;}
         int GetnVertexMax(){ return m_nvertex_max; }
+        void SetnVertexMax( int max ){ m_nvertex_max = max; }
+        int GetnContours(){ return m_ncnt; }
+        
         int     ErrorCode;
         void Set_PolyTriGroup_head( PolyTriGroup *head ){ m_ppg_head = head;}
         void Set_OK( bool bok ){ m_bOK = bok;}
         
+        void SetPPGHead( PolyTriGroup *head){ m_ppg_head = head; }
 
     private:
         int BuildTessGL(void);
-        int BuildTessTri(void);
         int PolyTessGeoGL(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon);
-        int PolyTessGeoTri(OGRPolygon *poly, bool bSENC_SM, double ref_lat, double ref_lon);
         int my_bufgets( char *buf, int buf_len_max );
 
 
@@ -280,6 +286,7 @@ class PolyTessGeoTrap
             double Get_ymax(){ return ymax;}
             PolyTrapGroup *Get_PolyTrapGroup_head(){ return m_ptg_head;}
             int GetnVertexMax(){ return m_nvertex_max; }
+            void SetnVertexMax( int max ){ m_nvertex_max = max; }
             bool IsOk(){ return m_bOK;}
             int     ErrorCode;
 

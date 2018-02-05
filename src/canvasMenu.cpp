@@ -63,6 +63,7 @@
 #include "AIS_Decoder.h"
 #include "AIS_Target_Data.h"
 #include "SendToGpsDlg.h"
+#include "Track.h"
 
 
 #ifdef USE_S57
@@ -185,6 +186,7 @@ enum
     ID_DEF_MENU_AISSHOWTRACK,
     ID_DEF_MENU_ACTIVATE_MEASURE,
     ID_DEF_MENU_DEACTIVATE_MEASURE,
+    ID_DEF_MENU_COPY_MMSI,
 
     ID_UNDO,
     ID_REDO,
@@ -212,6 +214,10 @@ enum
 //------------------------------------------------------------------------------
 //    CanvasMenuHandler Implementation
 //------------------------------------------------------------------------------
+int CanvasMenuHandler::GetNextContextMenuId()
+{
+    return ID_DEF_MENU_LAST + 100;  //Allowing for 100 dynamic menu item identifiers
+}
 
 // Define a constructor for my canvas
 CanvasMenuHandler::CanvasMenuHandler(ChartCanvas *parentCanvas,
@@ -248,7 +254,7 @@ void MenuPrepend1( wxMenu *menu, int id, wxString label)
     item->SetFont(*qFont);
 #endif
     
-#ifdef __WXQT__
+#ifdef __OCPN_ANDROID__
     wxFont sFont = GetOCPNGUIScaledFont(_T("Menu"));
     item->SetFont(sFont);
 #endif
@@ -265,7 +271,7 @@ void MenuAppend1( wxMenu *menu, int id, wxString label)
     item->SetFont(*qFont);
 #endif
     
-#ifdef __WXQT__
+#ifdef __OCPN_ANDROID__
     wxFont sFont = GetOCPNGUIScaledFont(_T("Menu"));
     item->SetFont(sFont);
 #endif
@@ -382,13 +388,13 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
         }
 
         if( ( Current_Ch && ( Current_Ch->GetChartFamily() == CHART_FAMILY_VECTOR ) ) || ais_areanotice ) {
-            MenuAppend1( contextMenu, ID_DEF_MENU_QUERY, _( "Object Query..." ) );
+            MenuAppend1( contextMenu, ID_DEF_MENU_QUERY, _( "Object Query" ) + _( "..." ) );
         }
 
     } else {
         ChartBase *pChartTest = parent->m_pQuilt->GetChartAtPix( parent->GetVP(), wxPoint( x, y ) );
         if( ( pChartTest && ( pChartTest->GetChartFamily() == CHART_FAMILY_VECTOR ) ) || ais_areanotice ) {
-            MenuAppend1( contextMenu, ID_DEF_MENU_QUERY, _( "Object Query..." ) );
+            MenuAppend1( contextMenu, ID_DEF_MENU_QUERY, _( "Object Query" ) + _( "..." ) );
         } else {
 #ifndef __OCPN__ANDROID__            
             if( !g_bBasicMenus && (parent->parent_frame->GetnChartStack() > 1 ) ) {
@@ -410,7 +416,7 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
         MenuAppend1( contextMenu, ID_DEF_MENU_GOTO_HERE, _( "Navigate To Here" ) );
 
     if( !g_bBasicMenus)
-        MenuAppend1( contextMenu, ID_DEF_MENU_GOTOPOSITION, _("Center View...") );
+        MenuAppend1( contextMenu, ID_DEF_MENU_GOTOPOSITION, _("Center view") + _T("...") );
 
     if( !g_bBasicMenus){
         if( !g_bCourseUp )
@@ -573,7 +579,7 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
 
     if( !g_bBasicMenus || (seltype != SELTYPE_ROUTECREATE )) {
         if( g_pAIS ) {
-            MenuAppend1( contextMenu, ID_DEF_MENU_AISTARGETLIST, _("AIS Target List...") );
+            MenuAppend1( contextMenu, ID_DEF_MENU_AISTARGETLIST, _("AIS target list") + _T("...") );
 
             if( g_bShowAIS && (seltype & SELTYPE_AISTARGET) ) {
                 MenuAppend1( menuAIS, ID_DEF_MENU_AIS_QUERY, _( "Target Query..." ) );
@@ -591,7 +597,8 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
                     else
                         MenuAppend1( menuAIS, ID_DEF_MENU_AISSHOWTRACK, _("Show Target Track") );
                 }
-                
+                MenuAppend1( menuAIS, ID_DEF_MENU_COPY_MMSI, _("Copy Target MMSI") );
+
                 menuAIS->AppendSeparator();
                 
                 if( !parent->GetVP().b_quilt ) {
@@ -620,7 +627,7 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
         if( blay ){
             delete menuRoute;
             menuRoute = new wxMenu( _("Layer Route") );
-            MenuAppend1( menuRoute, ID_RT_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuRoute, ID_RT_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
             if( m_pSelectedRoute ) {
                 if( m_pSelectedRoute->IsActive() ) {
                     int indexActive = m_pSelectedRoute->GetIndexOf( m_pSelectedRoute->m_pRouteActivePoint );
@@ -635,7 +642,7 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
             }
         }
         else {
-            MenuAppend1( menuRoute, ID_RT_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuRoute, ID_RT_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
             if( m_pSelectedRoute ) {
                 if( m_pSelectedRoute->IsActive() ) {
                     int indexActive = m_pSelectedRoute->GetIndexOf( m_pSelectedRoute->m_pRouteActivePoint );
@@ -650,8 +657,8 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
             }
             MenuAppend1( menuRoute, ID_RT_MENU_INSERT, _( "Insert Waypoint" ) );
             MenuAppend1( menuRoute, ID_RT_MENU_APPEND, _( "Append Waypoint" ) );
-            MenuAppend1( menuRoute, ID_RT_MENU_COPY, _( "Copy as KML..." ) );
-            MenuAppend1( menuRoute, ID_RT_MENU_DELETE, _( "Delete..." ) );
+            MenuAppend1( menuRoute, ID_RT_MENU_COPY, _( "Copy as KML" ) + _T( "..." ) );
+            MenuAppend1( menuRoute, ID_RT_MENU_DELETE, _( "Delete" ) + _T( "..." ) );
             MenuAppend1( menuRoute, ID_RT_MENU_REVERSE, _( "Reverse..." ) );
 
 #ifndef __OCPN__ANDROID__
@@ -684,12 +691,12 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
         if( blay ) {
             delete menuTrack;
             menuTrack = new wxMenu( _("Layer Track") );
-            MenuAppend1( menuTrack, ID_TK_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuTrack, ID_TK_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
         }
         else {
-            MenuAppend1( menuTrack, ID_TK_MENU_PROPERTIES, _( "Properties..." ) );
-            MenuAppend1( menuTrack, ID_TK_MENU_COPY, _( "Copy As KML" ) );
-            MenuAppend1( menuTrack, ID_TK_MENU_DELETE, _( "Delete..." ) );
+            MenuAppend1( menuTrack, ID_TK_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
+            MenuAppend1( menuTrack, ID_TK_MENU_COPY, _( "Copy as KML" ) );
+            MenuAppend1( menuTrack, ID_TK_MENU_DELETE, _( "Delete" ) + _T( "..." ) );
         }
 
         //      Set this menu as the "focused context menu"
@@ -704,13 +711,13 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
         if( blay ){
             delete menuWaypoint;
             menuWaypoint = new wxMenu( _("Layer Routepoint") );
-            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
 
             if( m_pSelectedRoute && m_pSelectedRoute->IsActive() )
                 MenuAppend1( menuWaypoint, ID_RT_MENU_ACTPOINT, _( "Activate" ) );
         }
         else {
-            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
             if( m_pSelectedRoute && m_pSelectedRoute->IsActive() ) {
                 if(m_pSelectedRoute->m_pRouteActivePoint != m_pFoundRoutePoint )
                     MenuAppend1( menuWaypoint, ID_RT_MENU_ACTPOINT, _( "Activate" ) );
@@ -760,10 +767,10 @@ void CanvasMenuHandler::CanvasPopupMenu( int x, int y, int seltype )
         if( blay ){
             delete menuWaypoint;
             menuWaypoint = new wxMenu( _("Layer Waypoint") );
-            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
         }
         else {
-            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties..." ) );
+            MenuAppend1( menuWaypoint, ID_WP_MENU_PROPERTIES, _( "Properties" ) + _T( "..." ) );
 
             if( !g_pRouteMan->GetpActiveRoute() )
                 MenuAppend1( menuWaypoint, ID_WP_MENU_GOTO, _( "Navigate To This" ) );
@@ -1112,6 +1119,17 @@ void CanvasMenuHandler::PopupMenuHandler( wxCommandEvent& event )
         break;
     }
 
+    case ID_DEF_MENU_COPY_MMSI:
+    {
+        // Write MMSI # as text to the clipboard
+        if (wxTheClipboard->Open())
+        {
+            wxTheClipboard->SetData(new wxTextDataObject(wxString::Format(wxT("%09d"), m_FoundAIS_MMSI)));
+            wxTheClipboard->Close();
+        }
+        break;
+    }
+
     case ID_DEF_MENU_QUILTREMOVE: {
         if( parent->GetVP().b_quilt ) {
             int dbIndex = parent->m_pQuilt->GetChartdbIndexAtPix( parent->GetVP(), wxPoint( popx, popy ) );
@@ -1297,7 +1315,7 @@ void CanvasMenuHandler::PopupMenuHandler( wxCommandEvent& event )
                  SendToGpsDlg dlg;
                  dlg.SetWaypoint( m_pFoundRoutePoint );
 
-                 dlg.Create( NULL, -1, _( "Send To GPS..." ), _T("") );
+                 dlg.Create( NULL, -1, _( "Send to GPS" ) + _T( "..." ), _T("") );
                  dlg.ShowModal();
              }
         }
@@ -1308,7 +1326,7 @@ void CanvasMenuHandler::PopupMenuHandler( wxCommandEvent& event )
             SendToGpsDlg dlg;
             dlg.SetWaypoint( m_pFoundRoutePoint );
                 
-            dlg.Create( NULL, -1, _( "Send To GPS..." ), _T("") );
+            dlg.Create( NULL, -1, _( "Send to GPS" ) + _T( "..." ), _T("") );
             dlg.ShowModal();
         }
         break;
@@ -1321,7 +1339,7 @@ void CanvasMenuHandler::PopupMenuHandler( wxCommandEvent& event )
                 SendToGpsDlg dlg;
                 dlg.SetRoute( m_pSelectedRoute );
 
-                dlg.Create( NULL, -1, _( "Send To GPS..." ), _T("") );
+                dlg.Create( NULL, -1, _( "Send to GPS" ) + _T( "..." ), _T("") );
                 dlg.ShowModal();
             }
 
@@ -1333,7 +1351,7 @@ void CanvasMenuHandler::PopupMenuHandler( wxCommandEvent& event )
             SendToGpsDlg dlg;
             dlg.SetRoute( m_pSelectedRoute );
                 
-            dlg.Create( NULL, -1, _( "Send To GPS..." ), _T("") );
+            dlg.Create( NULL, -1, _( "Send to GPS" ) + _T( "..." ), _T("") );
             dlg.ShowModal();
         }
         break;

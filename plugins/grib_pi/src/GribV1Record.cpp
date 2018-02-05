@@ -268,6 +268,13 @@ GribV1Record::~GribV1Record()
 //----------------------------------------------
 static zuint readPackedBits(zuchar *buf, zuint first, zuint nbBits)
 {
+#if 0
+    // should test when loading nbBitsInPack?
+    if (nbBits == 0 || nbBits > 31) {
+        // x >> 32 is undefined behavior, on x86 it returns x
+        return 0;
+    }
+#endif    
     zuint oct = first / 8;
     zuint bit = first % 8;
 
@@ -491,10 +498,7 @@ bool GribV1Record::readGribSection3_BMS(ZUFILE* file) {
     }
     BMSsize = sectionSize3-6;
     BMSbits = new zuchar[BMSsize];
-    if (!BMSbits) {
-        erreur("Record %d: out of memory",id);
-        ok = false;
-    }
+
     for (zuint i=0; i< BMSsize; i++) {
         BMSbits[i] = readChar(file);
     }
@@ -539,24 +543,18 @@ bool GribV1Record::readGribSection4_BDS(ZUFILE* file) {
 
     // Allocate memory for the data
     data = new double[Ni*Nj];
-    if (!data) {
-        erreur("Record %d: out of memory",id);
-        ok = false;
-    }
 
     zuint  startbit  = 0;
     int  datasize = sectionSize4-11;
     zuchar *buf = new zuchar[datasize+4]();  // +4 pour simplifier les décalages ds readPackedBits
-    if (!buf) {
-        erreur("Record %d: out of memory",id);
-        ok = false;
-    }
+
     if (zu_read(file, buf, datasize) != datasize) {
         erreur("Record %d: data read error",id);
         ok = false;
         eof = true;
     }
     if (!ok) {
+        delete [] buf;
         return ok;
     }
 
@@ -606,10 +604,7 @@ bool GribV1Record::readGribSection4_BDS(ZUFILE* file) {
         }
     }
 
-    if (buf) {
-        delete [] buf;
-        buf = NULL;
-    }
+    delete [] buf;
     return ok;
 }
 

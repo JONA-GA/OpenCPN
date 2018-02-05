@@ -42,6 +42,7 @@
 #include "navutil.h"
 #include "tinyxml.h"
 #include "kml.h"
+#include "Track.h"
 
 extern MyFrame *gFrame;
 extern double gLat;
@@ -589,12 +590,7 @@ Kml::Kml() {
 }
 
 Kml::~Kml() {
-    if( parsedTrack ) {
-        for( int i=1; i<=parsedTrack->GetnPoints(); i++ ) {
-            if( parsedTrack->GetPoint(i) ) delete parsedTrack->GetPoint(i);
-        }
-        delete parsedTrack;
-    }
+    delete parsedTrack;
     if( parsedRoute ) {
         for( int i=1; i<=parsedRoute->GetnPoints(); i++ ) {
             if( parsedRoute->GetPoint(i) ) delete parsedRoute->GetPoint(i);

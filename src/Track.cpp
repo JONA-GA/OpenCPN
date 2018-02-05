@@ -120,6 +120,12 @@ private:
 #include <wx/listimpl.cpp>
 WX_DEFINE_LIST ( TrackList );
 
+TrackPoint::TrackPoint(double lat, double lon)
+{
+    m_lat = lat;
+    m_lon = lon;
+}
+
 // Copy Constructor
 TrackPoint::TrackPoint( TrackPoint* orig )
 {
@@ -143,6 +149,39 @@ void TrackPoint::SetCreateTime( wxDateTime dt )
     m_CreateTimeX = dt;
 }
 
+void TrackPoint::Draw(ocpnDC& dc )
+{
+    wxPoint r;
+    wxRect hilitebox;
+ 
+    cc1->GetCanvasPointPix( m_lat, m_lon, &r );
+    
+    wxPen *pen;
+    pen = g_pRouteMan->GetRoutePointPen();
+        
+    int sx2 = 8;
+    int sy2 = 8;
+            
+     wxRect r1( r.x - sx2, r.y - sy2, sx2 * 2, sy2 * 2 );           // the bitmap extents
+            
+     hilitebox = r1;
+     hilitebox.x -= r.x;
+     hilitebox.y -= r.y;
+     float radius;
+     hilitebox.Inflate( 4 );
+     radius = 4.0f;
+            
+     wxColour hi_colour = pen->GetColour();
+     unsigned char transparency = 100;
+            
+     //  Highlite any selected point
+     AlphaBlending( dc, r.x + hilitebox.x, r.y + hilitebox.y, hilitebox.width, hilitebox.height, radius,
+                               hi_colour, transparency );
+            
+}
+
+
+
 //---------------------------------------------------------------------------------
 //    Track Implementation
 //---------------------------------------------------------------------------------
@@ -164,6 +203,8 @@ Track::Track()
     m_btemp = false;
 
     m_HyperlinkList = new HyperlinkList;
+    m_HighlightedTrackPoint = -1;
+    m_bisTrack = true;
 }
 
 Track::~Track( void )
@@ -474,8 +515,9 @@ void ActiveTrack::AddPointNow( bool do_add_point )
 
 void Track::AddPointToList(std::list< std::list<wxPoint> > &pointlists, int n)
 {
-    wxPoint r;
-    cc1->GetCanvasPointPix( TrackPoints[n]->m_lat, TrackPoints[n]->m_lon, &r );
+    wxPoint r(INVALID_COORD, INVALID_COORD);
+    if ( (size_t)n < TrackPoints.size() )
+        cc1->GetCanvasPointPix( TrackPoints[n]->m_lat, TrackPoints[n]->m_lon, &r );
 
     std::list<wxPoint> &pointlist = pointlists.back();
     if(r.x == INVALID_COORD) {
@@ -533,6 +575,11 @@ void Track::Segments(std::list< std::list<wxPoint> > &pointlists, const LLBBox &
 
     int level = SubTracks.size()-1, last = -2;
     Assemble(pointlists, box, 1/scale/scale, last, level, 0);
+}
+
+void Track::ClearHighlights()
+{
+    m_HighlightedTrackPoint = -1;
 }
 
 void Track::Draw( ocpnDC& dc, ViewPort &VP, const LLBBox &box )
@@ -612,10 +659,14 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP, const LLBBox &box )
 
             delete [] points;
         }
-    } else { // opengl version
+    }
+#ifdef ocpnUSE_GL    
+    else { // opengl version
         glColor3ub(col.Red(), col.Green(), col.Blue());
         glLineWidth( wxMax( g_GLMinSymbolLineWidth, width ) );
-
+        glEnable( GL_LINE_SMOOTH );
+        glEnable( GL_BLEND );
+        
         int size = 0;
         // convert from linked list to array, allocate array just once
         for(std::list< std::list<wxPoint> >::iterator lines = pointlists.begin();
@@ -642,7 +693,14 @@ void Track::Draw( ocpnDC& dc, ViewPort &VP, const LLBBox &box )
         glDisableClientState(GL_VERTEX_ARRAY);
 
         delete [] points;
+        glDisable( GL_LINE_SMOOTH );
+        glDisable( GL_BLEND );
+        
     }
+#endif
+
+    if(m_HighlightedTrackPoint >= 0)
+        TrackPoints[m_HighlightedTrackPoint]->Draw(dc);
 }
 
 TrackPoint *Track::GetPoint( int nWhichPoint )
@@ -914,12 +972,16 @@ void Track::DouglasPeuckerReducer( std::vector<TrackPoint*>& list,
 double Track::Length()
 {
     TrackPoint *l = NULL;
-    double total = 0;
+    double total = 0.0;
     for(size_t i = 0; i < TrackPoints.size(); i++) {
         TrackPoint *t = TrackPoints[i];
         if(l) {
-            double dd = DistGreatCircle( l->m_lat, l->m_lon, t->m_lat, t->m_lon );
-            total += dd;
+            const double offsetLat = 1e-6;
+            const double deltaLat = l->m_lat - t->m_lat;
+            if ( fabs( deltaLat ) > offsetLat )
+                total += DistGreatCircle( l->m_lat, l->m_lon, t->m_lat, t->m_lon );
+            else
+                total += DistGreatCircle( l->m_lat + copysign( offsetLat, deltaLat ), l->m_lon, t->m_lat, t->m_lon );
         }
         l = t;
     }
@@ -964,7 +1026,7 @@ int Track::Simplify( double maxDelta )
     return reduction;
 }
 
-Route *Track::RouteFromTrack( wxProgressDialog *pprog )
+Route *Track::RouteFromTrack( wxGenericProgressDialog *pprog )
 {
 
     Route *route = new Route();

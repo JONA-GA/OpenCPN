@@ -42,7 +42,6 @@
 #include "chartimg.h"
 
 #ifdef USE_S57
-#include "s52s57.h"
 #include "s57chart.h"               // for Object list
 #endif
 
@@ -304,6 +303,8 @@ public:
 
       bool SendMouseEventToPlugins( wxMouseEvent &event);
       bool SendKeyEventToPlugins( wxKeyEvent &event);
+
+      void SendConfigToAllPlugIns();
       
       wxArrayString GetPlugInChartClassNameArray(void);
 

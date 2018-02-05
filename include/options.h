@@ -81,6 +81,7 @@ enum {
   ID_BELLSCHECKBOX,
   ID_BUTTONADD,
   ID_BUTTONDELETE,
+  ID_BUTTONCOMPRESS,
   ID_BUTTONFONTCHOOSE,
   ID_BUTTONFONTCOLOR,
   ID_BUTTONGROUP,
@@ -164,6 +165,7 @@ enum {
   ID_ZTCCHECKBOX,
   ID_DELETECHECKBOX,
   ID_NATIONALTEXTCHECKBOX,
+  ID_TRUESHOWCHECKBOX,
   ID_MAGSHOWCHECKBOX,
   ID_MAGAPBCHECKBOX,
   ID_MOBILEBOX,
@@ -175,7 +177,10 @@ enum {
   ID_TRACKROTATETIME,
   ID_TRACKROTATEUTC,
   ID_TRACKROTATELMT,
-  ID_TRACKROTATECOMPUTER
+  ID_TRACKROTATECOMPUTER,
+  ID_SETSTDLIST,
+  ID_VECZOOM,
+  ID_INLANDECDISBOX
 };
 
 /* Define an int bit field for dialog return value
@@ -239,10 +244,11 @@ class options : private Uncopyable,
 
   void OnClose(wxCloseEvent &event);
 
+  void CreateListbookIcons();
   void CreateControls(void);
   size_t CreatePanel(const wxString &title);
   wxScrolledWindow *AddPage(size_t parent, const wxString &title);
-  bool DeletePage(wxScrolledWindow *page);
+  bool DeletePluginPage(wxScrolledWindow *page);
   void SetColorScheme(ColorScheme cs);
   void RecalculateSize(void);
 
@@ -265,6 +271,7 @@ class options : private Uncopyable,
   void OnButtonaddClick(wxCommandEvent &event);
   void OnButtondeleteClick(wxCommandEvent &event);
   void OnButtonParseENC(wxCommandEvent &event);
+  void OnButtoncompressClick(wxCommandEvent &event);
   void OnRadioboxSelected(wxCommandEvent &event);
   void OnApplyClick(wxCommandEvent &event);
   void OnXidOkClick(wxCommandEvent &event);
@@ -274,7 +281,7 @@ class options : private Uncopyable,
   void OnSizeAutoButton(wxCommandEvent &event);
   void OnSizeManualButton(wxCommandEvent &event);
 
-#ifdef __WXGTK__
+#if defined(__WXGTK__) || defined(__WXQT__)
   void OnChooseFontColor(wxCommandEvent &event);
 #endif
   void OnGLClicked(wxCommandEvent &event);
@@ -282,7 +289,8 @@ class options : private Uncopyable,
   void OnDisplayCategoryRadioButton(wxCommandEvent &event);
   void OnButtonClearClick(wxCommandEvent &event);
   void OnButtonSelectClick(wxCommandEvent &event);
-
+  void OnButtonSetStd(wxCommandEvent& event);
+      
   void OnPageChange(wxListbookEvent &event);
   void OnNBPageChange(wxNotebookEvent &event);
   void DoOnPageChange(size_t page);
@@ -337,12 +345,13 @@ class options : private Uncopyable,
   wxCheckBox *pAutoAnchorMark, *pCDOQuilting, *pCBRaster, *pCBVector;
   wxCheckBox *pCBCM93, *pCBLookAhead, *pSkewComp, *pOpenGL, *pSmoothPanZoom;
   wxCheckBox *pFullScreenQuilt, *pMobile, *pResponsive, *pOverzoomEmphasis;
-  wxCheckBox *pOZScaleVector, *pToolbarAutoHideCB;
+  wxCheckBox *pOZScaleVector, *pToolbarAutoHideCB, *pInlandEcdis;
   wxTextCtrl *pCOGUPUpdateSecs, *m_pText_OSCOG_Predictor, *pScreenMM;
   wxTextCtrl *pToolbarHideSecs, *m_pText_OSHDT_Predictor;
   wxChoice *m_pShipIconType, *m_pcTCDatasets;
   wxSlider *m_pSlider_Zoom, *m_pSlider_GUI_Factor, *m_pSlider_Chart_Factor;
-
+  wxSlider *m_pSlider_Zoom_Vector;
+  
   wxRadioButton *pCBCourseUp, *pCBNorthUp, *pRBSizeAuto, *pRBSizeManual;
   int k_tides;
 
@@ -407,18 +416,22 @@ class options : private Uncopyable,
   bool connectionsaved;
   bool m_connection_enabled;
 
+  bool b_haveWMM;
+  bool b_oldhaveWMM;
+  ColorScheme m_cs;
+  
   // For "S57" page
   wxBoxSizer *vectorPanel;
   wxScrolledWindow *ps57Ctl;
 
-#if defined(__WXMSW__) || defined(__WXOSX__)
-  wxCheckListBox *ps57CtlListBox;
-#else
+// #if defined(__WXMSW__) || defined(__WXOSX__)
+//   wxCheckListBox *ps57CtlListBox;
+// #else
   OCPNCheckedListCtrl *ps57CtlListBox;
-#endif
+// #endif
 
   wxChoice *pDispCat, *pPointStyle, *pBoundStyle, *p24Color;
-  wxButton *itemButtonClearList, *itemButtonSelectList;
+  wxButton *itemButtonClearList, *itemButtonSelectList, *itemButtonSetStd;
   wxCheckBox *pCheck_SOUNDG, *pCheck_META, *pCheck_SHOWIMPTEXT;
   wxCheckBox *pCheck_SCAMIN, *pCheck_ATONTEXT, *pCheck_LDISTEXT;
   wxCheckBox *pCheck_XLSECTTEXT, *pCheck_DECLTEXT, *pCheck_NATIONALTEXT;
@@ -430,7 +443,7 @@ class options : private Uncopyable,
 
   // For "Units" page
   wxChoice *pSDMMFormat, *pDistanceFormat, *pSpeedFormat, *pDepthUnitSelect;
-  wxCheckBox *pCBMagShow;
+  wxCheckBox *pCBTrueShow, *pCBMagShow;
   wxTextCtrl *pMagVar;
 
   // For "Charts" page
@@ -441,7 +454,7 @@ class options : private Uncopyable,
   wxStaticBox *itemActiveChartStaticBox;
   wxCheckBox *pUpdateCheckBox, *pScanCheckBox;
   wxButton *pParseENCButton;
-  wxButton *m_removeBtn;
+  wxButton *m_removeBtn, *m_compressBtn;
   int k_charts;
   int m_nCharWidthMax;
   
@@ -556,7 +569,9 @@ class options : private Uncopyable,
 
   void ClearNMEAForm(void);
   bool m_bNMEAParams_shown;
-
+  
+  void resetMarStdList(bool bsetConfig, bool bsetStd);
+  
   void SetConnectionParams(ConnectionParams *cp);
   void SetDefaultConnectionParams(void);
   void SetDSFormRWStates();

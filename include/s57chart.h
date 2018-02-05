@@ -35,11 +35,11 @@
 #include "wx/file.h"
 #include "wx/stream.h"
 #include "wx/wfstream.h"
-#include <ogrsf_frmts.h>
+#include "mygdal/ogrsf_frmts.h"
 
 #include "iso8211.h"
 
-#include "gdal.h"
+#include "mygdal/gdal.h"
 #include "s57RegistrarMgr.h"
 #include "S57ClassRegistrar.h"
 #include "S57Light.h"
@@ -130,6 +130,9 @@ public:
       virtual bool RenderRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
       virtual bool RenderOverlayRegionViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
 
+      virtual bool RenderRegionViewOnDCNoText(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
+      virtual bool RenderRegionViewOnDCTextOnly(wxMemoryDC& dc, const ViewPort& VPoint, const OCPNRegion &Region);
+      
       virtual void GetValidCanvasRegion(const ViewPort& VPoint, OCPNRegion *pValidRegion);
       virtual LLRegion GetValidRegion();
 
@@ -162,17 +165,10 @@ public:
       wxString CreateObjDescriptions( ListOfObjRazRules* rule);
       static wxString GetAttributeDecode(wxString& att, int ival);
 
-      wxFileName GetSENCFileName(){ return m_SENCFileName; }
-      void SetSENCFileName(wxFileName fn){ m_SENCFileName = fn;}
-
       int BuildRAZFromSENCFile(const wxString& SENCPath);
       static void GetChartNameFromTXT(const wxString& FullPath, wxString &Name);
+      wxString buildSENCName( const wxString& name);
       
-      int my_fgets( char *buf, int buf_len_max, wxInputStream& ifs );
-
-      //    Initialize from an existing SENC file
-      bool InitFromSENCMinimal( const wxString& FullPath );
-
       //    DEPCNT VALDCO array access
       bool GetNearestSafeContour(double safe_cnt, double &next_safe_cnt);
 
@@ -189,12 +185,13 @@ public:
       
       double GetCalculatedSafetyContour(void){ return m_next_safe_cnt; }
 
-//#ifdef ocpnUSE_GL
       virtual bool RenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
                                         const OCPNRegion &RectRegion, const LLRegion &Region);
       virtual bool RenderOverlayRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
                                                const OCPNRegion &RectRegion, const LLRegion &Region);
-//#endif
+      virtual bool RenderRegionViewOnGLNoText(const wxGLContext &glc, const ViewPort& VPoint,
+                                        const OCPNRegion &RectRegion, const LLRegion &Region);
+      virtual bool RenderViewOnGLTextOnly(const wxGLContext &glc, const ViewPort& VPoint);
       
 // Public data
 //Todo Accessors here
@@ -235,7 +232,12 @@ public:
       bool        m_b2lineLUPS;
       
       struct _chart_context     *m_this_chart_context;
+
+      InitReturn FindOrCreateSenc( const wxString& name, bool b_progress = true );
       
+protected:
+    void AssembleLineGeometry( void );
+    
 private:
       int GetLineFeaturePointArray(S57Obj *obj, void **ret_array);
       void SetSafetyContour(void);
@@ -246,19 +248,20 @@ private:
 
       int DCRenderRect(wxMemoryDC& dcinput, const ViewPort& vp, wxRect *rect);
       bool DCRenderLPB(wxMemoryDC& dcinput, const ViewPort& vp, wxRect* rect);
-
+      bool DCRenderText(wxMemoryDC& dcinput, const ViewPort& vp);
+      
 
       InitReturn PostInit( ChartInitFlag flags, ColorScheme cs );
-      InitReturn FindOrCreateSenc( const wxString& name );
-      int BuildSENCFile(const wxString& FullPath000, const wxString& SENCFileName);
+      int BuildSENCFile(const wxString& FullPath000, const wxString& SENCFileName, bool b_progress = true);
       
       void SetLinePriorities(void);
 
       bool BuildThumbnail(const wxString &bmpname);
       bool CreateHeaderDataFromENC(void);
       bool CreateHeaderDataFromSENC(void);
-      bool GetBaseFileAttr(wxFileName fn);
-
+      bool CreateHeaderDataFromoSENC(void);
+      bool GetBaseFileAttr( const wxString& file000 );
+      
       void ResetPointBBoxes(const ViewPort &vp_last, const ViewPort &vp_this);
 
            //    Access to raw ENC DataSet
@@ -271,17 +274,17 @@ private:
       const char *getName(OGRFeature *feature);
 
       bool DoRenderOnGL(const wxGLContext &glc, const ViewPort& VPoint);
+      bool DoRenderOnGLText(const wxGLContext &glc, const ViewPort& VPoint);
       bool DoRenderRegionViewOnGL(const wxGLContext &glc, const ViewPort& VPoint,
                                   const OCPNRegion &RectRegion, const LLRegion &Region, bool b_overlay);
 
-      void AssembleLineGeometry( void );
       void BuildLineVBO( void );
       
  // Private Data
       char        *hdr_buf;
       char        *mybuf_ptr;
       int         hdr_len;
-      wxFileName  m_SENCFileName;
+      wxString    m_SENCFileName;
       ObjRazRules *razRules[PRIO_NUM][LUPNAME_NUM];
 
 
@@ -313,12 +316,6 @@ private:
       int         m_nvaldco_alloc;
       double       *m_pvaldco_array;
 
-      VectorHelperHash        m_vector_helper_hash;
-
-      VE_Hash     m_ve_hash;
-      VC_Hash     m_vc_hash;
-      
-      connected_segment_hash m_connector_hash;
       
       float      *m_line_vertex_buffer;
       size_t      m_vbo_byte_length;
@@ -334,6 +331,14 @@ private:
       double      m_LOD_meters;
 
       int         m_LineVBO_name;
+      
+      VE_Hash     m_ve_hash;
+      VC_Hash     m_vc_hash;
+      std::vector<connector_segment *> m_pcs_vector;
+      std::vector<VE_Element *> m_pve_vector;
+      
+
+      wxString    m_TempFilePath;
 protected:      
       sm_parms    vp_transform;
       

@@ -221,7 +221,7 @@ protected:
 
 
       virtual int BSBScanScanline(wxInputStream *pinStream);
-      virtual int ReadBSBHdrLine( wxFFileInputStream*, char *, int );
+      virtual int ReadBSBHdrLine( wxInputStream*, char *, int );
       virtual int AnalyzeRefpoints(bool b_testSolution = true);
       virtual bool AnalyzeSkew(void);
       
@@ -274,8 +274,8 @@ protected:
 
       CachedLine  *pLineCache;
 
-      wxFFileInputStream    *ifs_hdr;
-      wxFFileInputStream    *ifss_bitmap;
+      wxInputStream    *ifs_hdr;
+      wxInputStream    *ifss_bitmap;
       wxBufferedInputStream *ifs_bitmap;
 
       wxString          *pBitmapFilePath;
@@ -429,7 +429,22 @@ class ChartPlugInWrapper : public ChartBaseBSB
             virtual void latlong_to_chartpix(double lat, double lon, double &pixx, double &pixy);
             virtual void chartpix_to_latlong(double pixx, double pixy, double *plat, double *plon);
             
-
+            
+            //  Added for API V 1.14, with PlugInChartBaseExtended
+            virtual bool RenderRegionViewOnDCNoText(wxMemoryDC &dc, const ViewPort& VPoint,
+                                                                const OCPNRegion &Region);
+            
+            virtual bool RenderRegionViewOnDCTextOnly(wxMemoryDC &dc, const ViewPort& VPoint,
+                                                    const OCPNRegion &Region);
+            
+            virtual bool RenderRegionViewOnGLNoText( const wxGLContext &glc, const ViewPort& VPoint,
+                                                       const OCPNRegion &RectRegion, const LLRegion &Region );
+            
+            virtual bool RenderRegionViewOnGLTextOnly( const wxGLContext &glc, const ViewPort& VPoint,
+                                                         const OCPNRegion &RectRegion );
+            
+            virtual void ClearPLIBTextList();
+            
       private:
             PlugInChartBase *m_ppicb;
             wxObject          *m_ppo;
