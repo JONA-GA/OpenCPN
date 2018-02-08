@@ -59,6 +59,7 @@
 //----------------------------------------------------------------------------------------------------------
 
 #define WMM_TOOL_POSITION    -1        // Request default positioning of toolbar tool
+#define PLUGIN_CATALOG_NAME  _T("opencpn-wmm_pi")
 class wmm_pi;
 
 class WmmUIDialog : public WmmUIDialogBase

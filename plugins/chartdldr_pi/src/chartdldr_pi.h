@@ -56,6 +56,7 @@
 #include "chartcatalog.h"
 
 #define UPDATE_DATA_FILENAME "chartdldr_pi.dat"
+#define PLUGIN_CATALOG_NAME  _T("opencpn-chartdldr_pi")
 
 // forward declarations
 class ChartSource;
