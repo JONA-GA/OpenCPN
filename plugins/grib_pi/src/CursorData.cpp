@@ -155,7 +155,7 @@ void CursorData::PopulateTrackingControls( bool vertical )
     wxFont *font = OCPNGetFont(_("Dialog"), 10);
     int wn, wd, ws,wl;
     GetTextExtent( _T("abcdefghih"), &wn, NULL, 0, 0, font); // normal width text control size
-    GetTextExtent( _T("abcdef"), &ws, NULL, 0, 0, font); // short width text control size for direction only
+    GetTextExtent( _T("abcdefghi"), &ws, NULL, 0, 0, font); // short width text control size for direction only
     GetTextExtent( _T("abcdefghijklmopq"), &wd, NULL, 0, 0, font); // long width text control size for double unit wind display
     GetTextExtent( _T("abcdefghijklm"), &wl, NULL, 0, 0, font); // long width text control size for double unit wave display
     //
@@ -294,7 +294,7 @@ void CursorData::UpdateTrackingControls( void )
                         .Append(wxString::Format(_T("%2d bf"), (int)round( vk))) );
         }
 
-        m_tcWindDirection->SetValue( wxString::Format( _T("%03d\u00B0"), (int) ( ang ) ));
+        m_tcWindDirection->SetValue( wxString::Format( _T("%03d\u00B0"), (int) ( ang ) ));    //  \u00B0
     } else {
         m_tcWindSpeed->SetValue( _("N/A") );
         m_tcWindSpeedBf->SetValue( _("N/A") );
