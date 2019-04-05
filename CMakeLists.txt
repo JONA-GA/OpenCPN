@@ -432,7 +432,7 @@ set (WXWIDGETS_FORCE_VERSION CACHE VERSION "Force usage of a specific wxWidgets 
 if(WXWIDGETS_FORCE_VERSION)
   set (wxWidgets_CONFIG_OPTIONS --version=${WXWIDGETS_FORCE_VERSION})
 endif()
-FIND_PACKAGE(wxWidgets REQUIRED)
+FIND_PACKAGE(wxWidgets REQUIRED COMPONENTS std,aui,gl)
 
 IF(MSYS)
 # this is to convert msys to windows paths, and handle the missing /usr
