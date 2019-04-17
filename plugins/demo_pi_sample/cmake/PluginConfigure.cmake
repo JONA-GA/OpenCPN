@@ -42,15 +42,16 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src)
 
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
 IF(NOT MSVC)
- IF(PROFILING)
-  ADD_DEFINITIONS( "-Wall -g -fprofile-arcs -ftest-coverage -fexceptions" )
- ELSE(PROFILING)
-#  ADD_DEFINITIONS( "-Wall -g -fexceptions" )
- ADD_DEFINITIONS( "-Wall -Wno-unused-result -g -O2 -fexceptions" )
+ IF (PROFILING)
+     ADD_COMPILE_OPTIONS(
+         "-Wall" "-g" "-fprofile-arcs" "-ftest-coverage" "-fexceptions")
+ ELSE ()
+   #  ADD_DEFINITIONS( "-Wall -g -fexceptions" )
+   ADD_COMPILE_OPTIONS("-Wall" "-Wno-unused-result" "-g" "-O2" "-fexceptions")
  ENDIF(PROFILING)
 
  IF(NOT APPLE)
-  SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bsymbolic")
+  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-Bsymbolic")
  ELSE(NOT APPLE)
   SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
  ENDIF(NOT APPLE)

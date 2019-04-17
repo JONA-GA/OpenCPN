@@ -5,12 +5,8 @@
 ##---------------------------------------------------------------------------
 
 # define minimum cmake version
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6.2)
-IF (COMMAND cmake_policy)
-  if (POLICY CMP0043)
-    CMAKE_POLICY(SET CMP0043 NEW)
-  endif (POLICY CMP0043)
-ENDIF (COMMAND cmake_policy)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1.1)
+CMAKE_POLICY(SET CMP0043 NEW)
 
 PROJECT(chartdldr_pi)
 
@@ -29,6 +25,8 @@ IF( NOT CMAKE_BUILD_TYPE )
        "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
        FORCE )
 ENDIF( NOT CMAKE_BUILD_TYPE )
+
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
 
 MESSAGE (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
@@ -92,11 +90,11 @@ SET(SRC_UNARR
     src/unarr/zip/parse-zip.c
     src/unarr/zip/zip.h
     src/unarr/zip/inflate.h
-    )
+)
 
 IF(UNIX AND NOT APPLE)
- INCLUDE("cmake/FindTinyXML.cmake")
- FIND_PACKAGE(TinyXML QUIET)
+  INCLUDE("cmake/FindTinyXML.cmake")
+  FIND_PACKAGE(TinyXML QUIET)
 ENDIF(UNIX AND NOT APPLE)
 
 IF(APPLE)
@@ -104,73 +102,110 @@ IF(APPLE)
   #We do not want the systemwide vrsion as it is too old and misses support for many archive formats
   LIST(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/libarchive")
   LIST(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/libarchive/lib")
-ENDIF(APPLE)
-IF(WIN32)
+ENDIF()
+
+IF(CMAKE_HOST_WIN32)
   LIST(APPEND CMAKE_PREFIX_PATH "../../buildwin/include")
   LIST(APPEND CMAKE_PREFIX_PATH "../../buildwin")
-ENDIF(WIN32)
+ENDIF()
 
 OPTION(CHARTDLDR_USE_UNARR "Use unarr to extract RAR archives instead of libarchive" ON)
 IF(CHARTDLDR_USE_UNARR)
     ADD_DEFINITIONS(-DCHARTDLDR_RAR_UNARR)
-ENDIF(CHARTDLDR_USE_UNARR)
+ENDIF()
 
 ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64)
 
 FIND_PACKAGE(LibArchive)
 IF(LibArchive_FOUND)
-  message(STATUS "Chartdldr_pi going to use LibArchive...")
+  message(STATUS "chartdldr_pi: going to use LibArchive...")
   INCLUDE_DIRECTORIES(${LibArchive_INCLUDE_DIRS})
   #Unset the unrar sources as we will not need them
   ADD_DEFINITIONS(-DDLDR_USE_LIBARCHIVE)
 ENDIF(LibArchive_FOUND)
 
 INCLUDE_DIRECTORIES(src/unarr/)
+PKG_SEARCH_MODULE(UNARR libunarr unarr)
+USE_BUNDLED_LIB(USE_BUNDLED_UNARR unarr)
+IF (UNARR_FOUND AND NOT USE_BUNDLED_UNARR)
+  message (STATUS "chartdldr_pi: Building with system unarr")
+  INCLUDE_DIRECTORIES(${UNARR_INCLUDE_DIR})
+  SET(SRC_UNARR  "")
+ELSE ()
+  message (STATUS "chartdldr_pi: Building with bundled unarr")
+  ADD_LIBRARY(UNARR ${SRC_UNARR})
+  INCLUDE_DIRECTORIES(src/unarr)
+ENDIF ()
 
 IF(TINYXML_FOUND)
- message (STATUS "Chartdldr_pi building with system tinyxml")
- INCLUDE_DIRECTORIES(${TINYXML_INCLUDE_DIR})
- ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_UNARR} ${SRC_CHARTDLDR})
- TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${TINYXML_LIBRARIES})
+  message (STATUS "chartdldr_pi: building with system tinyxml")
+  INCLUDE_DIRECTORIES(${TINYXML_INCLUDE_DIR})
+  ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_UNARR} ${SRC_CHARTDLDR})
+  TARGET_LINK_LIBRARIES(${PACKAGE_NAME} PRIVATE ${TINYXML_LIBRARIES})
 ELSE(TINYXML_FOUND)
- message (STATUS "Chartdldr_pi building with embedded tinyxml")
- INCLUDE_DIRECTORIES(src/tinyxml/)
- SET(SRC_LTINYXML
-            src/tinyxml/tinyxml.cpp
-            src/tinyxml/tinyxmlparser.cpp
-            src/tinyxml/tinyxmlerror.cpp
- )
- ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_UNARR} ${SRC_LTINYXML} ${SRC_CHARTDLDR})
+  message (STATUS "chartdldr_pi: building with bundled tinyxml")
+  INCLUDE_DIRECTORIES(src/tinyxml/)
+  SET(SRC_LTINYXML
+             src/tinyxml/tinyxml.cpp
+             src/tinyxml/tinyxmlparser.cpp
+             src/tinyxml/tinyxmlerror.cpp
+  )
+  ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_UNARR} ${SRC_LTINYXML} ${SRC_CHARTDLDR})
 ENDIF(TINYXML_FOUND)
 ADD_DEFINITIONS(-DTIXML_USE_STL)
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|AppleClang")
+    # FIXME: This is to broad, needs better handling after 5.0.0
+    target_compile_options(${PACKAGE_NAME} PRIVATE -Wno-overloaded-virtual)
+    target_compile_options(${PACKAGE_NAME} PRIVATE -Wno-unknown-pragmas)
+    target_compile_options(${PACKAGE_NAME} PRIVATE -Wno-unused-variable)
+endif ()
+
+IF (UNARR_LIBRARIES)
+    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} PRIVATE ${UNARR_LIBRARIES})
+ENDIF()
 
 IF(LibArchive_FOUND)
-    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${LibArchive_LIBRARIES})
+    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} PRIVATE ${LibArchive_LIBRARIES})
 ELSE(LibArchive_FOUND)
-    #We do not have libarchive, try to make unarr more powerful...
-    #ADD_DEFINITIONS(-DHAVE_7Z) #TODO if we decide it is needed, quite a bit more work here
-    FIND_PACKAGE(ZLIB)
-    IF(ZLIB_FOUND)
-        ADD_DEFINITIONS(-DHAVE_ZLIB)
-        INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIRS})
-        TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${ZLIB_LIBRARIES})
-    ENDIF(ZLIB_FOUND)
-    FIND_PACKAGE(BZip2)
-    IF(BZIP2_FOUND)
-        ADD_DEFINITIONS(-DHAVE_BZIP2)
-        INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIRS})
-        TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${BZIP2_LIBRARIES})
-    ENDIF(BZIP2_FOUND)
+  #We do not have libarchive, try to make unarr more powerful...
+  #ADD_DEFINITIONS(-DHAVE_7Z) #TODO if we decide it is needed, quite a bit more work here
+  FIND_PACKAGE(ZLIB)
+  IF(ZLIB_FOUND)
+    ADD_DEFINITIONS(-DHAVE_ZLIB)
+    INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIRS})
+    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} PRIVATE ${ZLIB_LIBRARIES})
+  ENDIF(ZLIB_FOUND)
+  FIND_PACKAGE(BZip2)
+  IF(BZIP2_FOUND)
+    ADD_DEFINITIONS(-DHAVE_BZIP2)
+    INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIRS})
+    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} PRIVATE ${BZIP2_LIBRARIES})
+  ENDIF(BZIP2_FOUND)
 ENDIF(LibArchive_FOUND)
 
-TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} )
+TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE 
+    ${wxWidgets_LIBRARIES}
+    ocpn::wxjson
+    ocpn::wxsvg
+    ocpn::opencpn 
+)
+
 
 IF (QT_ANDROID )
-    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${OCPN_Core_LIBRARIES} )
-    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} "-lgnustl_shared")
-    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} "-lz" )
+    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE ${OCPN_Core_LIBRARIES} )
+    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE "-lgnustl_shared")
+    TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} PRIVATE "-lz" )
 ENDIF(QT_ANDROID)
 
+IF( APPLE )
+    target_compile_options(${PACKAGE_NAME} PRIVATE
+        "-Wall" "-Wno-unused" "-fexceptions"
+        "-Wno-overloaded-virtual"
+        "-Wno-deprecated" "-Wno-deprecated-declarations"
+        "-Wno-unknown-pragmas"
+        "-D_WCHAR_H_CPLUSPLUS_98_CONFORMANCE_"
+    )
+ENDIF(APPLE)
 
 INCLUDE("cmake/PluginInstall.cmake")
 INCLUDE("cmake/PluginLocalization.cmake")

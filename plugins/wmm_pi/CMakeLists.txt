@@ -5,12 +5,8 @@
 ##---------------------------------------------------------------------------
  
 # define minimum cmake version
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6.2)
-IF (COMMAND cmake_policy)
-  if (POLICY CMP0043)
-    CMAKE_POLICY(SET CMP0043 NEW)
-  endif (POLICY CMP0043)
-ENDIF (COMMAND cmake_policy)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1.1)
+CMAKE_POLICY(SET CMP0043 NEW)
 
 PROJECT(wmm_pi)
 
@@ -30,6 +26,8 @@ IF( NOT CMAKE_BUILD_TYPE )
        FORCE )
 ENDIF( NOT CMAKE_BUILD_TYPE )
 
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include)
+
 MESSAGE (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 #SET(CMAKE_BUILD_TYPE Debug)
@@ -38,41 +36,66 @@ SET(CMAKE_MACOSX_RPATH "ON")
 INCLUDE("cmake/PluginConfigure.cmake")
 
 SET(SRC_WMM
-            src/wmm_pi.h
-            src/wmm_pi.cpp
-            src/MagneticPlotMap.h
-            src/MagneticPlotMap.cpp
-            src/icons.h
-            src/icons.cpp
-	    src/WMMHeader.h
-	    src/WMM_SubLibrary.c
-	    src/WmmUIDialog.h
-	    src/WmmUIDialog.cpp
-	    src/WMM_COF.h
-            src/TexFont.cpp
-            src/TexFont.h
+    src/wmm_pi.h
+    src/wmm_pi.cpp
+    src/MagneticPlotMap.h
+    src/MagneticPlotMap.cpp
+    src/icons.h
+    src/icons.cpp
+    src/GeomagnetismHeader.h
+    src/GeomagnetismLibrary.c
+    src/EGM9615.h
+    src/WmmUIDialog.h
+    src/WmmUIDialog.cpp
+    src/TexFont.cpp
+    src/TexFont.h
 	)
 
-IF(WIN32)
 SET(SRC_JSON
-	    src/json_defs.h
-	    src/jsonreader.h
-	    src/jsonval.h
-	    src/jsonwriter.h
-	    src/jsonreader.cpp
-	    src/jsonval.cpp
-	    src/jsonwriter.cpp
-        )
-ENDIF(WIN32)
+    src/json_defs.h
+    src/jsonreader.h
+    src/jsonval.h
+    src/jsonwriter.h
+    src/jsonreader.cpp
+    src/jsonval.cpp
+    src/jsonwriter.cpp
+    )
 
 ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_WMM} ${SRC_JSON})
 
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang|AppleClang")
+    target_compile_options(${PACKAGE_NAME} PRIVATE
+        -Wno-unknown-pragmas
+        -Wno-overloaded-virtual
+    )
+endif ()
+
 TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} )
+
+if (TARGET ocpn::wxjson)
+    target_link_libraries(${PACKAGE_NAME} ocpn::wxjson)
+endif() 
+
+if (TARGET ocpn::wxsvg)
+    target_link_libraries(${PACKAGE_NAME} ocpn::wxsvg)
+endif()
 
 IF (QT_ANDROID )
     TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${OCPN_Core_LIBRARIES} )
     TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} "-lgnustl_shared")
 ENDIF(QT_ANDROID)
+
+IF( APPLE )
+    target_compile_options(${PACKAGE_NAME} PRIVATE
+        "-Wall" "-Wno-unused" "-fexceptions"
+        "-Wno-overloaded-virtual"
+        "-Wno-deprecated" "-Wno-deprecated-declarations"
+        "-Wno-unknown-pragmas"
+        "-D_WCHAR_H_CPLUSPLUS_98_CONFORMANCE_"
+    )
+ENDIF(APPLE)
+
+target_link_libraries(${PACKAGE_NAME} ocpn::opencpn )
 
 INCLUDE("cmake/PluginInstall.cmake")
 INCLUDE("cmake/PluginLocalization.cmake")

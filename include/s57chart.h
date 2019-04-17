@@ -35,11 +35,11 @@
 #include "wx/file.h"
 #include "wx/stream.h"
 #include "wx/wfstream.h"
-#include "mygdal/ogrsf_frmts.h"
+#include "gdal/ogrsf_frmts.h"
 
 #include "iso8211.h"
 
-#include "mygdal/gdal.h"
+#include "gdal/gdal.h"
 #include "s57RegistrarMgr.h"
 #include "S57ClassRegistrar.h"
 #include "S57Light.h"
@@ -48,7 +48,10 @@
 #include "OCPNRegion.h"
 #include "ocpndc.h"
 #include "viewport.h"
+#include "SencManager.h"
+#include <memory>
 
+class ChartCanvas;
 // ----------------------------------------------------------------------------
 // Useful Prototypes
 // ----------------------------------------------------------------------------
@@ -60,7 +63,7 @@
 extern "C" bool s57_GetChartExtent(const wxString& FullPath, Extent *pext);
 
 void s57_DrawExtendedLightSectors( ocpnDC& temp_dc, ViewPort& VPoint, std::vector<s57Sector_t>& sectorlegs );
-bool s57_CheckExtendedLightSectors( int mx, int my, ViewPort& VPoint, std::vector<s57Sector_t>& sectorlegs );
+bool s57_CheckExtendedLightSectors( ChartCanvas *cc, int mx, int my, ViewPort& VPoint, std::vector<s57Sector_t>& sectorlegs );
 
 //----------------------------------------------------------------------------
 // Constants
@@ -70,7 +73,8 @@ enum
 {
       BUILD_SENC_OK,
       BUILD_SENC_NOK_RETRY,
-      BUILD_SENC_NOK_PERMANENT
+      BUILD_SENC_NOK_PERMANENT,
+      BUILD_SENC_PENDING
 };
 
 //----------------------------------------------------------------------------
@@ -100,8 +104,6 @@ WX_DECLARE_LIST(S57Obj, ListOfS57Obj);
 
 
 WX_DECLARE_LIST(ObjRazRules, ListOfObjRazRules);
-
-
 
 //----------------------------------------------------------------------------
 // s57 Chart object class
@@ -160,7 +162,7 @@ public:
       bool IsPointInObjArea(float lat, float lon, float select_radius, S57Obj *obj);
       wxString GetObjectAttributeValueAsString( S57Obj *obj, int iatt, wxString curAttrName );
       static wxString GetAttributeValueAsString( S57attVal *pAttrVal, wxString AttrName );
-      static int CompareLights( const void** l1, const void** l2 );
+      static bool CompareLights( const S57Light* l1, const S57Light* l2 );
       wxString CreateObjDescriptions( ListOfObjRazRules* rule);
       static wxString GetAttributeDecode(wxString& att, int ival);
 
@@ -199,6 +201,7 @@ public:
       wxArrayPtrVoid *pRigidATONArray;
 
       double        ref_lat, ref_lon;             // Common reference point, derived from FullExtent
+      double        m_LOD_meters;
       Extent        m_FullExtent;
       bool          m_bExtentSet;
       bool          m_bLinePrioritySet;
@@ -212,7 +215,7 @@ public:
       ViewPort    m_last_vp;
       OCPNRegion    m_last_Region;
 
-      virtual bool IsCacheValid(){ return (pDIB != NULL); }
+      virtual bool IsCacheValid(){ return (pDIB != nullptr); }
       virtual void InvalidateCache();
       virtual bool RenderViewOnDC(wxMemoryDC& dc, const ViewPort& VPoint);
 
@@ -223,19 +226,26 @@ public:
       static int GetUpdateFileArray(const wxFileName file000, wxArrayString *UpFiles,
                                     wxDateTime date000, wxString edtn000 );
       wxString GetISDT(void);
+      InitReturn PostInit( ChartInitFlag flags, ColorScheme cs );
 
       char GetUsageChar(void){ return m_usage_char; }
       static bool IsCellOverlayType(char *pFullPath);
 
       bool        m_b2pointLUPS;
       bool        m_b2lineLUPS;
+      bool        m_RAZBuilt;
       
       struct _chart_context     *m_this_chart_context;
 
-      InitReturn FindOrCreateSenc( const wxString& name, bool b_progress = true );
+      int FindOrCreateSenc( const wxString& name, bool b_progress = true );
+      void DisableBackgroundSENC(){ m_disableBackgroundSENC = true; }
+      void EnableBackgroundSENC(){ m_disableBackgroundSENC = false; }
       
+      SENCThreadStatus m_SENCthreadStatus;
 protected:
-    void AssembleLineGeometry( void );
+      void AssembleLineGeometry( void );
+
+      ObjRazRules *razRules[PRIO_NUM][LUPNAME_NUM];
     
 private:
       int GetLineFeaturePointArray(S57Obj *obj, void **ret_array);
@@ -250,7 +260,6 @@ private:
       bool DCRenderText(wxMemoryDC& dcinput, const ViewPort& vp);
       
 
-      InitReturn PostInit( ChartInitFlag flags, ColorScheme cs );
       int BuildSENCFile(const wxString& FullPath000, const wxString& SENCFileName, bool b_progress = true);
       
       void SetLinePriorities(void);
@@ -287,14 +296,12 @@ private:
       char        *mybuf_ptr;
       int         hdr_len;
       wxString    m_SENCFileName;
-      ObjRazRules *razRules[PRIO_NUM][LUPNAME_NUM];
 
 
       wxArrayString *m_tmpup_array;
-      PixelCache   *pDIB;
+      std::unique_ptr<PixelCache> pDIB;
 
-      wxBitmap     *m_pCloneBM;
-      wxMask       *m_pMask;
+      std::unique_ptr<wxBitmap> m_pCloneBM;
 
       bool         bGLUWarningSent;
 
@@ -311,7 +318,7 @@ private:
 
 
 //  Raw ENC DataSet members
-      OGRS57DataSource  *m_pENCDS;
+      std::unique_ptr<OGRS57DataSource> m_pENCDS;
 
 //  DEPCNT VALDCO array members
       int         m_nvaldco;
@@ -330,7 +337,6 @@ private:
       char        m_usage_char;
       
       double      m_next_safe_cnt;
-      double      m_LOD_meters;
 
       int         m_LineVBO_name;
       
@@ -339,8 +345,8 @@ private:
       std::vector<connector_segment *> m_pcs_vector;
       std::vector<VE_Element *> m_pve_vector;
       
-
       wxString    m_TempFilePath;
+      bool        m_disableBackgroundSENC;
 protected:      
       sm_parms    vp_transform;
       

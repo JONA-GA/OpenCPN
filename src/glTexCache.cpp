@@ -27,8 +27,11 @@
 #include <wx/wxprec.h>
 #include <wx/tokenzr.h>
 #include <wx/filename.h>
+#include <wx/wx.h>
 
 #include <stdint.h>
+
+#include "config.h"
 
 #include "dychart.h"
 
@@ -61,8 +64,6 @@ extern GLuint g_raster_format;
 extern int          g_nCacheLimit;
 extern int          g_memCacheLimit;
 
-extern ChartCanvas *cc1;
-extern ChartBase *Current_Ch;
 extern ColorScheme global_color_scheme;
 
 extern ChartDB      *ChartData;
@@ -74,7 +75,6 @@ extern int              g_uncompressed_tile_size;
 
 extern PFNGLCOMPRESSEDTEXIMAGE2DPROC s_glCompressedTexImage2D;
 extern PFNGLGENERATEMIPMAPEXTPROC          s_glGenerateMipmap;
-extern bool GetMemoryStatus( int *mem_total, int *mem_used );
 
 extern wxString CompressedCachePath(wxString path);
 extern glTextureManager   *g_glTextureManager;
@@ -151,7 +151,8 @@ glTexFactory::glTexFactory(ChartBase *chart, int raster_format)
 
     m_fs = 0;
     m_LRUtime = 0;
-
+    m_ntex = 0;
+    m_tiles = NULL;
     for (int i = 0; i < N_COLOR_SCHEMES; i++) {
         for (int j = 0; j < MAX_TEX_LEVEL; j++) {
             m_cache[i][j] = NULL;
@@ -176,7 +177,6 @@ glTexFactory::glTexFactory(ChartBase *chart, int raster_format)
     m_td_array = (glTextureDescriptor **)calloc(m_ntex, sizeof(glTextureDescriptor *));
 
     m_prepared_projection_type = 0;
-    m_tiles = NULL;
 }
 
 glTexFactory::~glTexFactory()
@@ -630,7 +630,7 @@ bool glTexFactory::BuildTexture(glTextureDescriptor *ptd, int base_level, const 
     return true;
 }
 
-bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorScheme color_scheme )
+bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorScheme color_scheme, int mem_used )
 {    
     glTextureDescriptor *ptd = NULL;
 
@@ -658,21 +658,29 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
         // Free the map in ram
         ptd->FreeMap();
     }
-    
+
+#if 0
+ /* this is not a good place to call GetMemoryStatus
+    function as implemented takes for me 1 millisecond to execute.
+    In the worst case zoomed out charts can reach thousands of textures and several seconds to render one frame instead of 20-30fps disabling this here
+
+    Memory is already freed in glTextureManager::FactoryCrunch(double factor)
+    so the below is probably not needed.*/
+
     //   If global memory is getting short, we can crunch here.
     //   All mipmaps >= ptd->level_min have been uploaded to the GPU,
     //   so there is no reason to save the bits forever.
     //   Of course, this means that if the texture is deleted elsewhere, then the bits will need to be
     //   regenerated.  The price to pay for memory limits....
-    
-    int mem_used;
-    GetMemoryStatus(0, &mem_used);
-    //    qDebug() << mem_used;
-    if((g_memCacheLimit > 0) && (mem_used > g_memCacheLimit * 7 / 10))
-        ptd->FreeMap();
+    if (g_memCacheLimit > 0) {
+        // GetMemoryStatus is slow on linux
+        if(mem_used > g_memCacheLimit * 7 / 10)
+            ptd->FreeMap();
 
-    if((g_memCacheLimit > 0) && (mem_used > g_memCacheLimit * 9 / 10))
-        ptd->FreeAll();
+        if(mem_used > g_memCacheLimit * 9 / 10)
+            ptd->FreeAll();
+    }
+#endif
 
 //    g_Platform->HideBusySpinner();
     
@@ -691,13 +699,9 @@ bool glTexFactory::PrepareTexture( int base_level, const wxRect &rect, ColorSche
 void glTexFactory::PrepareTiles(const ViewPort &vp, bool use_norm_vp, ChartBase *chart)
 {
     ChartBaseBSB *pChartBSB = dynamic_cast<ChartBaseBSB*>( chart );
-    ChartPlugInWrapper *cpw = NULL;
-    if(chart->GetChartType() == CHART_TYPE_PLUGIN){
-        cpw = dynamic_cast<ChartPlugInWrapper*> ( chart );
-        if( !cpw) return;
-    }
-    else if( !pChartBSB ) return;
-    
+    if( !pChartBSB ) 
+      return;
+
     // detect changing north/south polar
     if(vp.m_projection_type == PROJECTION_POLAR) {
         bool north = vp.clat > 0;
@@ -740,10 +744,7 @@ void glTexFactory::PrepareTiles(const ViewPort &vp, bool use_norm_vp, ChartBase 
         // split more near poles
         if(vp.m_projection_type == PROJECTION_ORTHOGRAPHIC) {
             Extent e;
-            if(cpw)
-                cpw->GetChartExtent(&e);
-            else
-                pChartBSB->GetChartExtent(&e);
+            pChartBSB->GetChartExtent(&e);
             xsplits = xsplits * wxMax(fabsf(e.NLAT), fabsf(e.SLAT)) / 90;
         }
         
@@ -764,10 +765,7 @@ void glTexFactory::PrepareTiles(const ViewPort &vp, bool use_norm_vp, ChartBase 
 
     ViewPort nvp;
     if(use_norm_vp) {
-        if(cpw)
-            cpw->chartpix_to_latlong(m_size_X/2, m_size_Y/2, &m_clat, &m_clon);
-        else
-            pChartBSB->chartpix_to_latlong(m_size_X/2, m_size_Y/2, &m_clat, &m_clon);
+        pChartBSB->chartpix_to_latlong(m_size_X/2, m_size_Y/2, &m_clat, &m_clon);
         nvp = glChartCanvas::NormalizedViewPort(vp, m_clat, m_clon);
     }
 
@@ -789,10 +787,7 @@ void glTexFactory::PrepareTiles(const ViewPort &vp, bool use_norm_vp, ChartBase 
             int y[4] = {rect.y+rect.height, rect.y, rect.y, rect.y+rect.height};
 
             for(int k=0; k<4; k++) {
-                if(cpw)
-                    cpw->chartpix_to_latlong(x[k], y[k], &lat, &lon);
-                else
-                    pChartBSB->chartpix_to_latlong(x[k], y[k], &lat, &lon);
+                pChartBSB->chartpix_to_latlong(x[k], y[k], &lat, &lon);
                 ll[2*k+0] = lon, ll[2*k+1] = lat;
             }
 
@@ -842,10 +837,7 @@ void glTexFactory::PrepareTiles(const ViewPort &vp, bool use_norm_vp, ChartBase 
                     double xc[4] = {x1, x1, x2, x2}, yc[4] = {y2, y1, y1, y2};
                     double lat[4], lon[4];
                     for(int k=0; k<4; k++){
-                        if(cpw)
-                            cpw->chartpix_to_latlong(xc[k], yc[k], lat+k, lon+k);
-                        else
-                            pChartBSB->chartpix_to_latlong(xc[k], yc[k], lat+k, lon+k);
+                        pChartBSB->chartpix_to_latlong(xc[k], yc[k], lat+k, lon+k);
                     }
 
                     double u[4] = {u1, u1, u2, u2}, v[4] = {v2, v1, v1, v2};

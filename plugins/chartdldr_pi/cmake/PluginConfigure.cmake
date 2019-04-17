@@ -31,18 +31,22 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src)
 
 #  IF NOT DEBUGGING CFLAGS="-O2 -march=native"
 IF(NOT MSVC)
+ ADD_COMPILE_OPTIONS( "-fvisibility=hidden" )
  IF(PROFILING)
-  ADD_DEFINITIONS( "-Wall -g -fprofile-arcs -ftest-coverage -fexceptions" )
- ELSE(PROFILING)
-#  ADD_DEFINITIONS( "-Wall -g -fexceptions" )
- ADD_DEFINITIONS( "-Wall -Wno-unused-result -g -O2 -fexceptions" )
- ENDIF(PROFILING)
+     ADD_COMPILE_OPTIONS(
+         "-Wall" "-g" "-fprofile-arcs" "-ftest-coverage" "-fexceptions" )
+ ELSE()
+   #  ADD_DEFINITIONS( "-Wall -g -fexceptions" )
+   ADD_COMPILE_OPTIONS(
+       "-Wall" "-Wno-unused-result" "-g" "-O2" "-fexceptions")
+ ENDIF()
 
- IF(NOT APPLE)
-  SET(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bsymbolic")
- ELSE(NOT APPLE)
-  SET(CMAKE_SHARED_LINKER_FLAGS "-Wl -undefined dynamic_lookup")
- ENDIF(NOT APPLE)
+ IF(CMAKE_SYSTEM_NAME MATCHES ".*Linux")
+  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-Bsymbolic")
+ ENDIF(CMAKE_SYSTEM_NAME MATCHES ".*Linux")
+ IF(APPLE)
+  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl -undefined dynamic_lookup")
+ ENDIF(APPLE)
 
 ENDIF(NOT MSVC)
 
@@ -50,6 +54,7 @@ ENDIF(NOT MSVC)
 IF(MSVC)
     ADD_DEFINITIONS(-D__MSVC__)
     ADD_DEFINITIONS(-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
+    ADD_DEFINITIONS(-DMAKING_PLUGIN)
 ENDIF(MSVC)
 
 SET_PROPERTY(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS TRUE)

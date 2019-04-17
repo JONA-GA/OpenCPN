@@ -27,6 +27,7 @@
 #define __CHARTDBS_H__
 
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "ocpn_types.h"
@@ -220,8 +221,8 @@ struct ChartTableEntry
     float GetLatMax() const { return LatMax; }
     float GetLatMin() const { return LatMin; }
     int GetScale() const { return Scale; }
-    int GetChartType() const;
-    int GetChartFamily() const;
+    int GetChartType() const { return ChartType; }
+    int GetChartFamily() const { return ChartFamily; }
     int GetChartProjectionType() const { return ProjectionType; }
     float GetChartSkew() const { return Skew; }
 
@@ -230,9 +231,9 @@ struct ChartTableEntry
     const wxString *GetpFileName(void) const { return m_pfilename; }
     wxString *GetpsFullPath(void){ return m_psFullPath; }
     
-    const ArrayOfInts &GetGroupArray(void) const { return m_GroupArray; }
-    void ClearGroupArray(void) { m_GroupArray.Clear(); }
-    void AddIntToGroupArray( int val ) { m_GroupArray.Add( val ); }
+    const std::vector<int> &GetGroupArray(void) const { return m_GroupArray; }
+    void ClearGroupArray(void) { m_GroupArray.clear(); }
+    void AddIntToGroupArray( int val ) { m_GroupArray.push_back( val ); }
     void SetAvailable(bool avail ){ m_bavail = avail;}
 
     std::vector<float> GetReducedPlyPoints();
@@ -270,7 +271,7 @@ struct ChartTableEntry
     int         *pNoCovrCntTable;
     float       **pNoCovrPlyTable;
     
-    ArrayOfInts m_GroupArray;
+    std::vector<int> m_GroupArray;
     wxString    *m_pfilename;             // a helper member, not on disk
     wxString    *m_psFullPath;
     LLBBox m_bbox;
@@ -409,26 +410,23 @@ private:
 class ChartGroupElement;
 class ChartGroup;
 
-WX_DEFINE_ARRAY_PTR(ChartGroupElement*, ChartGroupElementArray);
 WX_DEFINE_ARRAY_PTR(ChartGroup*, ChartGroupArray);
 
 class ChartGroupElement
 {
+  // ChartGroupElements need nothing special to delete since
+  // m_missing_name_array is a wxArrayString which manages
+  // memory for the strings cleanly without need for a .Clear.
 public:
-      wxString          m_element_name;
-
-//      ChartGroupElementArray m_missing_name_array;
+      wxString      m_element_name;
       wxArrayString m_missing_name_array;
 };
 
 class ChartGroup
 {
 public:
-      ChartGroup(){};
-      ~ChartGroup(){ for (unsigned int i=0 ; i < m_element_array.GetCount() ; i++){ delete m_element_array.Item(i);}}
-      
-      wxString                m_group_name;
-      ChartGroupElementArray  m_element_array;
+      wxString                                         m_group_name;
+      std::vector<std::unique_ptr<ChartGroupElement>>  m_element_array;
 };
 
 

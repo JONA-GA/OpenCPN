@@ -27,6 +27,8 @@
 #include <wx/textfile.h>
 #include <wx/filename.h>
 
+#include "config.h"
+
 #include "s57RegistrarMgr.h"
 #include "S57ClassRegistrar.h"
 
@@ -34,9 +36,8 @@
 extern S57ClassRegistrar *g_poRegistrar;
 #endif
 
-static int s57_initialize( const wxString& csv_dir, FILE *flog )
+static void s57_initialize( const wxString& csv_dir )
 {
-
     //      Get one instance of the s57classregistrar,
     //      And be prepared to give it to any module that needs it
 
@@ -44,21 +45,17 @@ static int s57_initialize( const wxString& csv_dir, FILE *flog )
         g_poRegistrar = new S57ClassRegistrar();
 
         if( !g_poRegistrar->LoadInfo( csv_dir.mb_str(), FALSE ) ) {
-            wxString msg( _T("   Error: Could not load S57 ClassInfo from ") );
-            msg.Append( csv_dir );
-            wxLogMessage( msg );
+            wxLogMessage( _T("   Error: Could not load S57 ClassInfo from %s"), csv_dir.mb_str() );
 
             delete g_poRegistrar;
             g_poRegistrar = NULL;
         }
     }
-
-    return 0;
 }
 
-s57RegistrarMgr::s57RegistrarMgr( const wxString& csv_dir, FILE *flog )
+s57RegistrarMgr::s57RegistrarMgr( const wxString& csv_dir )
 {
-    s57_initialize( csv_dir, flog );
+    s57_initialize( csv_dir );
     
     //  Create and initialize the S57 Attribute helpers
     s57_attr_init( csv_dir );

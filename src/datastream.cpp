@@ -47,13 +47,18 @@
 #include <netinet/tcp.h>
 #endif
 
+#include "config.h"
+
 #include "dychart.h"
 
 #include "datastream.h"
 #include "OCPN_DataStreamEvent.h"
 #include "OCP_DataStreamInput_Thread.h"
-#include "garmin/jeeps/garmin_wrapper.h"
-#include "Seatalk.h"
+#include "nmea0183.h"
+
+#ifdef USE_GARMINHOST
+#include "garmin_wrapper.h"
+#endif
 
 #ifdef __OCPN__ANDROID__
 #include "androidUTIL.h"
@@ -94,9 +99,8 @@ bool CheckSumCheck(const std::string& sentence)
         return false; // * not found, or it didn't have 2 characters following it.
         
     std::string check_str = sentence.substr(check_start+1,2);
-    unsigned long checksum;
-    //    if(!check_str.ToULong(&checksum,16))
-    if(!(checksum = strtol(check_str.c_str(), 0, 16)))
+    unsigned long checksum = strtol(check_str.c_str(), 0, 16);
+    if(checksum == 0L && check_str != "00")
         return false;
     
     unsigned char calculated_checksum = 0;
@@ -663,6 +667,7 @@ void DataStream::OnSocketEvent(wxSocketEvent& event)
                 break;
             }
         }
+        // FALL THROUGH
 
         case wxSOCKET_CONNECTION :
         {
@@ -749,7 +754,7 @@ bool DataStream::SentencePassesFilter(const wxString& sentence, FilterDirection 
     wxString fs;
     for (size_t i = 0; i < filter.Count(); i++)
     {
-        fs = filter.Item(i);
+        fs = filter[i];
         switch (fs.Length())
         {
             case 2:
@@ -1759,8 +1764,9 @@ GARMIN_USB_Thread::~GARMIN_USB_Thread()
 void *GARMIN_USB_Thread::Entry()
 {
       garmin_usb_packet iresp;
-          int n_short_read = 0;
+      int n_short_read = 0;
       m_receive_state = rs_fromintr;
+      memset(&iresp, 0, (sizeof iresp));    // Prevent compiler warnings.
 
       //    Here comes the big while loop
       while(m_parent->m_Thread_run_flag > 0)

@@ -5,7 +5,7 @@
 ##---------------------------------------------------------------------------
 
 IF(NOT APPLE)
-  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} ${EXTRA_LIBS} )
+  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${wxWidgets_LIBRARIES} ${PLUGINS_LIBS} )
 ENDIF(NOT APPLE)
 
 IF(WIN32)
@@ -16,21 +16,14 @@ IF(WIN32)
 #	gdiplus.lib
 #	glu32.lib)
     TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${OPENGL_LIBRARIES})
-    IF(STANDALONE MATCHES "BUNDLED")
-        ADD_DEPENDENCIES(${PACKAGE_NAME} ${PARENT})
-    ENDIF(STANDALONE MATCHES "BUNDLED")
-    SET(OPENCPN_IMPORT_LIB "../../${CMAKE_CFG_INTDIR}/${PARENT}")
   ENDIF(MSVC)
 
   IF(MINGW)
-# assuming wxwidgets is compiled with unicode, this is needed for mingw headers
+    # assuming wxwidgets is compiled with unicode, needed for mingw headers
     ADD_DEFINITIONS( " -DUNICODE" )
     TARGET_LINK_LIBRARIES(${PACKAGE_NAME} ${OPENGL_LIBRARIES})
-    SET(OPENCPN_IMPORT_LIB "${PARENT}.dll")
-    SET( CMAKE_SHARED_LINKER_FLAGS "-L../buildwin" )
   ENDIF(MINGW)
 
-  TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} ${OPENCPN_IMPORT_LIB} )
 ENDIF(WIN32)
 
 IF(UNIX)
@@ -42,7 +35,7 @@ IF(UNIX)
     /usr/lib/gcc/i686-pc-linux-gnu/4.7
     )
 
-  SET(EXTRA_LIBS ${EXTRA_LIBS} ${GCOV_LIBRARY})
+  SET(PLUGINS_LIBS ${PLUGINS_LIBS} ${GCOV_LIBRARY})
  ENDIF(PROFILING)
 ENDIF(UNIX)
 
