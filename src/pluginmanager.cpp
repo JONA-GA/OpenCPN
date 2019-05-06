@@ -23,6 +23,8 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
  **************************************************************************/
 
+#include <config.h>
+
 #include <typeinfo>
 #ifdef __linux__
 #include <wordexp.h>
@@ -42,6 +44,10 @@
 #include <stdint.h>
 #include <fcntl.h>
 #include <errno.h>
+
+#ifdef ocpnUSE_SVG
+#include <wxSVG/svg.h>
+#endif // ocpnUSE_SVG
 
 #ifdef USE_LIBELF
 #include <elf.h>
@@ -4920,9 +4926,7 @@ bool ChartPlugInWrapper::RenderRegionViewOnGL(const wxGLContext &glc, const View
                     
                     glChartCanvas::SetClipRect(cvp, upd.GetRect(), false);
 
-#ifdef USE_S57
                     ps52plib->m_last_clip_rect = upd.GetRect();
-#endif                    
                     glPushMatrix(); //    Adjust for rotation
                     glChartCanvas::RotateToViewPort(VPoint);
 
@@ -4994,9 +4998,7 @@ bool ChartPlugInWrapper::RenderRegionViewOnGLNoText(const wxGLContext &glc, cons
                     
                     glChartCanvas::SetClipRect(cvp, upd.GetRect(), false);
                     
- #ifdef USE_S57
                     ps52plib->m_last_clip_rect = upd.GetRect();
- #endif                    
                     glPushMatrix(); //    Adjust for rotation
                     glChartCanvas::RotateToViewPort(VPoint);
                     
@@ -5368,7 +5370,6 @@ wxString PlugInManager::CreateObjDescriptions( ChartPlugInWrapper *target, ListO
 }
 
 
-#ifdef USE_S57
 //      API 1.11 Access to S52 PLIB
 wxString PI_GetPLIBColorScheme()
 {
@@ -6016,7 +6017,6 @@ int PI_PLIBRenderObjectToGL( const wxGLContext &glcc, PI_S57Obj *pObj,
     return 1;
     
 }
-#endif  //USE_S57
 
 /* API 1.13  */
 

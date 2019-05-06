@@ -57,6 +57,10 @@
 #include <wx/colordlg.h>
 #endif
 
+#ifdef ocpnUSE_SVG
+#include <wxSVG/svg.h>
+#endif // ocpnUSE_SVG
+
 #include "config.h"
 
 #include "dychart.h"
@@ -88,11 +92,9 @@ extern GLuint g_raster_format;
 
 #include "navutil.h"
 
-#ifdef USE_S57
 #include "s52plib.h"
 #include "s52utils.h"
 #include "cm93.h"
-#endif
 
 #ifdef __OCPN__ANDROID__
 #include "androidUTIL.h"
@@ -269,9 +271,7 @@ extern double g_overzoom_emphasis_base;
 extern bool g_oz_vector_scale;
 extern bool g_bShowStatusBar;
 
-#ifdef USE_S57
 extern s52plib* ps52plib;
-#endif
 
 extern wxString g_locale;
 extern bool g_bportable;
@@ -2861,7 +2861,11 @@ void options::CreatePanel_Ownship(size_t parent, int border_size,
   
 #if wxCHECK_VERSION(2, 9, 0)
   pTrackDaily->SetLabel(_("Automatic Daily Tracks at"));
+#ifdef __WXGTK__
+  pTrackRotateTime = new TimeCtrl( itemPanelShip, ID_TRACKROTATETIME, wxDateTime((time_t)g_track_rotate_time).ToUTC(), wxDefaultPosition, wxDefaultSize, 0 );
+#else
   pTrackRotateTime = new wxTimePickerCtrl( itemPanelShip, ID_TRACKROTATETIME, wxDateTime((time_t)g_track_rotate_time).ToUTC(), wxDefaultPosition, wxDefaultSize, 0 );
+#endif
   trackSizer1->Add( pTrackRotateTime, 0, wxALIGN_CENTER_VERTICAL|wxRIGHT, border_size );
 #endif
     
@@ -4045,7 +4049,6 @@ void options::CreatePanel_VectorCharts(size_t parent, int border_size,
     optionsColumn->Add(0, border_size * 4);
     optionsColumn->Add(0, border_size * 4);
 
-#ifdef USE_S57
     int slider_width = wxMax(m_fontHeight * 4, 150);
 
     optionsColumn->Add(
@@ -4060,8 +4063,6 @@ void options::CreatePanel_VectorCharts(size_t parent, int border_size,
 
 #ifdef __OCPN__ANDROID__
     m_pSlider_CM93_Zoom->GetHandle()->setStyleSheet(getQtStyleSheet());
-#endif
-
 #endif
 
     // 2nd column, Display Category / Mariner's Standard options
@@ -4256,7 +4257,6 @@ void options::CreatePanel_VectorCharts(size_t parent, int border_size,
     optionsColumn->Add(0, border_size * 4);
     optionsColumn->Add(0, border_size * 4);
 
-#ifdef USE_S57
     int slider_width = wxMax(m_fontHeight * 4, 150);
 
     optionsColumn->Add(
@@ -4271,8 +4271,6 @@ void options::CreatePanel_VectorCharts(size_t parent, int border_size,
 
 #ifdef __OCPN__ANDROID__
     m_pSlider_CM93_Zoom->GetHandle()->setStyleSheet(getQtStyleSheet());
-#endif
-
 #endif
 
     //  Display Category / Mariner's Standard options
@@ -6231,7 +6229,6 @@ void options::resetMarStdList(bool bsetConfig, bool bsetStd)
 
 void options::SetInitialVectorSettings(void)
 {
-#ifdef USE_S57
     m_pSlider_CM93_Zoom->SetValue(g_cm93_zoom_factor);
     
     //    Diplay Category
@@ -6305,7 +6302,6 @@ void options::SetInitialVectorSettings(void)
             p24Color->SetSelection(1);
         
     }
-#endif
 }
 
 
@@ -6323,7 +6319,6 @@ void options::UpdateOptionsUnits(void) {
     conv = 0.3048f * 6;     // 1 fathom is 6 feet
 
   // set depth input values
-#ifdef USE_S57
 
     // set depth unit labels
   wxString depthUnitStrings[] = {_("feet"), _("meters"), _("fathoms")};
@@ -6344,7 +6339,6 @@ void options::UpdateOptionsUnits(void) {
   s.Printf(_T( "%6.2f" ), S52_getMarinerParam(S52_MAR_DEEP_CONTOUR) / conv);
   s.Trim(FALSE);
   m_DeepCtl->SetValue(s);
-#endif
 /*
   int oldLength = itemStaticTextUserVar->GetLabel().Length();
 
@@ -7226,7 +7220,6 @@ void options::OnApplyClick(wxCommandEvent& event) {
   if (g_bopengl != pOpenGL->GetValue()) m_returnChanges |= GL_CHANGED;
   g_bopengl = pOpenGL->GetValue();
 
-#ifdef USE_S57
   //   Handle Vector Charts Tab
   g_cm93_zoom_factor = m_pSlider_CM93_Zoom->GetValue();
  
@@ -7338,7 +7331,6 @@ void options::OnApplyClick(wxCommandEvent& event) {
         m_returnChanges |= S52_CHANGED;
 
   }
-#endif
 
 // User Interface Panel
 #if wxUSE_XLOCALE || !wxCHECK_VERSION(3, 0, 0)

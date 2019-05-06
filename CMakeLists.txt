@@ -46,6 +46,9 @@ Renamed options:
 Installation paths:
   - Since TBD OpenCPN supports the GNU install paths, see
     https://cmake.org/cmake/help/v3.0/module/GNUInstallDirs.html
+  - Use CMAKE_INSTALL_LIBDIR to change the base directory for plugins;
+    defaults to library location on most platforms, but is 'lib' on
+    Debian.
 
 Sound:
   - Without options, defaults to MswSound on Windows, PortAudioSound
@@ -142,10 +145,11 @@ set(
 include(FindPkgConfig)
 include(CMakeDependentOption)
 
-# Per default, use CMAKE_INSTALL_LIBDIR=/usr/lib on Debian to avoid multilib
-# plugin paths. After all, we do not install any "real" libraries.
+# Per default, use CMAKE_INSTALL_LIBDIR=lib on Debian (and derivatives)
+# to avoid multilib plugin paths. After all, we do not install any
+# "real" libraries.
 if (EXISTS /etc/debian_version AND NOT DEFINED CMAKE_INSTALL_LIBDIR)
-  set(CMAKE_INSTALL_LIBDIR "/usr/lib")
+  set(CMAKE_INSTALL_LIBDIR "lib")
 endif ()
 include(GNUInstallDirs)
 
@@ -218,7 +222,7 @@ option(OCPN_USE_GARMINHOST "Enable Garmin Host Mode support" ON)
 
 set(
   OCPN_WXWIDGETS_FORCE_VERSION
-  CACHE VERSION "Force usage of a specific wxWidgets version."
+  CACHE STRING "Force usage of a specific wxWidgets version."
 )
 
 set(
@@ -275,12 +279,11 @@ set(
     "Use bundled libraries instead of system's [ON, OFF or comma-sep list]"
 )
 
-option(OCPN_NEW_SERIAL "Use new serial communication implementation" ON)
+option(OCPN_USE_NEWSERIAL "Use new serial communication implementation" ON)
 option(OCPN_USE_CURL "Use Curl libraries" ON)
 option(OCPN_USE_SVG "Use SVG graphics" ON)
 option(OCPN_USE_LZMA "Use LZMA for chart compression" ON)
 option(OCPN_CI_BUILD "Use CI build versioning rules" OFF)
-option(OCPN_USE_S57 "Use S57 ENC chart support" ON)
 
 option(
   OCPN_ENABLE_SYSTEM_CMD_SOUND
@@ -407,7 +410,7 @@ if (MINGW)
     "-fno-strict-aliasing"
   )
   add_definitions("-DPSAPI_VERSION=1")
-  add_definitions("-DUNICODE")
+  add_definitions("-DUNICODE" "-D_UNICODE")
 endif (MINGW)
 
 if (APPLE)
@@ -542,26 +545,11 @@ else (OCPN_BUNDLE_DOCS MATCHES "ON")
 endif (OCPN_BUNDLE_DOCS MATCHES "ON")
 
 #
-# Linux: set up GTK
+# Linux: set up GTK (wxWidgets prerequisite).
 #
 if (NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
-  if (NOT OCPN_FORCE_GTK3)
-    find_package(GTK2)
-  endif ()
-  if (GTK2_FOUND)
-    include_directories(${GTK2_INCLUDE_DIRS})
-    set(GTK_LIBRARIES ${GTK2_LIBRARIES})
-    message(STATUS "Building against GTK2...")
-  else (GTK2_FOUND)
-    find_package(GTK3)
-    include_directories(${GTK3_INCLUDE_DIRS})
-    set(GTK_LIBRARIES ${GTK3_LIBRARIES})
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__WXGTK3__")
-    message(STATUS "Building against GTK3...")
-  endif (GTK2_FOUND)
-endif (NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
-
-message(STATUS "Using sources: ${SRCS} ${HDRS}")
+  include(OcpnFindGtk)
+endif ()
 
 # set a build flag for arm architecture, to catch any rPI runtime changes
 # required
@@ -734,208 +722,207 @@ endif (QT_ANDROID)
 
 set(
   HDRS
-  include/ocpn_types.h
-  include/ocpndc.h
-  include/chart1.h
+  include/AboutFrame.h
+  include/AboutFrameImpl.h
+  include/AIS_Bitstring.h
+  include/AIS_Decoder.h
+  include/ais.h
+  include/AISTargetAlertDialog.h
+  include/AIS_Target_Data.h
+  include/AISTargetListDialog.h
+  include/AISTargetQueryDialog.h
   include/bbox.h
-  include/ocpn_pixel.h
+  include/canvasMenu.h
+  include/chart1.h
+  include/ChartDataInputStream.h
   include/chartdb.h
   include/chartdbs.h
   include/chartimg.h
-  include/ChartDataInputStream.h
   include/chcanv.h
-  include/timers.h
-  include/emboss_data.h
-  include/AISTargetQueryDialog.h
-  include/AIS_Bitstring.h
-  include/AISTargetListDialog.h
-  include/OCPNListCtrl.h
-  include/AISTargetAlertDialog.h
-  include/AIS_Decoder.h
-  include/AIS_Target_Data.h
-  include/DetailSlider.h
-  include/GoToPositionDialog.h
-  include/RolloverWin.h
-  include/S57QueryDialog.h
-  include/S57ObjectDesc.h
-  include/S57Light.h
-  include/S57ClassRegistrar.h
-  include/MarkIcon.h
-  include/SendToGpsDlg.h
-  include/TCWin.h
-  include/tide_time.h
   include/ChInfoWin.h
-  include/ocpCursor.h
-  include/Quilt.h
-  include/Hyperlink.h
-  include/NavObjectCollection.h
-  include/RoutePoint.h
-  include/Route.h
-  include/Track.h
-  include/SelectItem.h
-  include/Select.h
-  include/FontMgr.h
-  include/FontDesc.h
-  include/vector2D.h
-  include/NMEALogWindow.h
-  include/WindowDestroyListener.h
-  include/TTYWindow.h
-  include/TTYScroll.h
-  include/Layer.h
+  include/compass.h
   include/concanv.h
+  include/ConnectionParams.h
   include/cutil.h
+  include/datastream.h
+  include/DetailSlider.h
+  include/dsPortType.h
+  include/emboss_data.h
+  include/FlexHash.h
+  include/FontDesc.h
+  include/FontMgr.h
+  include/geodesic.h
   include/georef.h
-  include/navutil.h
-  include/routeman.h
-  include/routemanagerdialog.h
+  include/GoToPositionDialog.h
+  include/gshhs.h
+  include/Hyperlink.h
+  include/IDX_entry.h
+  include/iENCToolbar.h
+  include/kml.h
+  include/Layer.h
+  include/LinkPropDlg.h
+  include/LLRegion.h
+  include/MarkIcon.h
   include/MarkInfo.h
-  include/RoutePropDlg.h
-  include/RoutePropDlgImpl.h
-  include/routeprintout.h
-  include/trackprintout.h
+  include/mbtiles.h
+  include/multiplexer.h
+  include/NavObjectCollection.h
+  include/navutil.h
+  include/NMEALogWindow.h
+  include/ocpCursor.h
+  include/OCP_DataStreamInput_Thread.h
+  include/OCPN_DataStreamEvent.h
+  include/ocpndc.h
+  include/OCPNListCtrl.h
+  include/ocpn_pixel.h
+  include/OCPNPlatform.h
+  include/ocpn_plugin.h
+  include/OCPNRegion.h
+  include/ocpn_types.h
+  include/options.h
+  include/piano.h
+  include/pluginmanager.h
   include/PositionParser.h
   include/printtable.h
-  include/piano.h
-  include/tcmgr.h
+  include/Quilt.h
+  include/RolloverWin.h
+  include/Route.h
+  include/routemanagerdialog.h
+  include/routeman.h
+  include/RoutePoint.h
+  include/routeprintout.h
+  include/RoutePropDlg.h
+  include/RoutePropDlgImpl.h
+  include/S57ClassRegistrar.h
+  include/S57Light.h
+  include/S57ObjectDesc.h
+  include/S57QueryDialog.h
+  include/S57Sector.h
+  include/Select.h
+  include/SelectItem.h
+  include/SendToGpsDlg.h
   include/Station_Data.h
-  include/IDX_entry.h
-  include/TC_Error_Code.h
+  include/styles.h
   include/TCDataFactory.h
+  include/TCDataSource.h
   include/TCDS_Ascii_Harmonic.h
   include/TCDS_Binary_Harmonic.h
-  include/TCDataSource.h
+  include/TC_Error_Code.h
+  include/tcmgr.h
+  include/TCWin.h
   include/thumbwin.h
-  include/options.h
-  include/gshhs.h
-  include/kml.h
-  include/undo.h
-  include/AboutFrame.h
-  include/AboutFrameImpl.h
-  include/ais.h
-  include/pluginmanager.h
-  include/ocpn_plugin.h
-  include/styles.h
+  include/tide_time.h
+  include/timers.h
   include/toolbar.h
-  include/compass.h
-  include/geodesic.h
-  include/datastream.h
-  include/OCPN_DataStreamEvent.h
-  include/ConnectionParams.h
-  include/OCP_DataStreamInput_Thread.h
-  include/dsPortType.h
-  include/multiplexer.h
-  include/OCPNRegion.h
-  include/LLRegion.h
+  include/Track.h
+  include/trackprintout.h
   include/TrackPropDlg.h
-  include/LinkPropDlg.h
+  include/TTYScroll.h
+  include/TTYWindow.h
+  include/undo.h
+  include/vector2D.h
   include/viewport.h
-  include/canvasMenu.h
-  include/OCPNPlatform.h
-  include/S57Sector.h
-  include/FlexHash.h
-  include/iENCToolbar.h
-  include/mbtiles.h
   include/Seatalk.h
-	
+  include/WindowDestroyListener.h
   ${CMAKE_BINARY_DIR}/include/config.h
 )
 
 set(
   SRCS
-  src/chart1.cpp
+  src/AboutFrame.cpp
+  src/AboutFrameImpl.cpp
+  src/AIS_Bitstring.cpp
+  src/ais.cpp
+  src/AIS_Decoder.cpp
+  src/AISTargetAlertDialog.cpp
+  src/AIS_Target_Data.cpp
+  src/AISTargetListDialog.cpp
+  src/AISTargetQueryDialog.cpp
   src/bbox.cpp
-  src/ocpn_pixel.cpp
-  src/ocpndc.cpp
+  src/CanvasConfig.cpp
+  src/canvasMenu.cpp
+  src/CanvasOptions.cpp
+  src/chart1.cpp
+  src/ChartDataInputStream.cpp
   src/chartdb.cpp
   src/chartdbs.cpp
   src/chartimg.cpp
-  src/ChartDataInputStream.cpp
   src/chcanv.cpp
-  src/ocpCursor.cpp
-  src/TCWin.cpp
-  src/S57QueryDialog.cpp
-  src/GoToPositionDialog.cpp
-  src/DetailSlider.cpp
-  src/RolloverWin.cpp
   src/ChInfoWin.cpp
-  src/AISTargetQueryDialog.cpp
-  src/AIS_Bitstring.cpp
-  src/AISTargetListDialog.cpp
-  src/AISTargetAlertDialog.cpp
-  src/AIS_Decoder.cpp
-  src/AIS_Target_Data.cpp
-  src/OCPNListCtrl.cpp
-  src/Quilt.cpp
-  src/Hyperlink.cpp
-  src/NavObjectCollection.cpp
-  src/RoutePoint.cpp
-  src/Route.cpp
-  src/Track.cpp
-  src/SelectItem.cpp
-  src/Select.cpp
-  src/FontMgr.cpp
-  src/FontDesc.cpp
-  src/NMEALogWindow.cpp
-  src/TTYWindow.cpp
-  src/TTYScroll.cpp
-  src/SendToGpsDlg.cpp
-  src/Layer.cpp
+  src/compass.cpp
   src/concanv.cpp
+  src/ConfigMgr.cpp
+  src/ConnectionParams.cpp
   src/cutil.cpp
+  src/datastream.cpp
+  src/DetailSlider.cpp
+  src/FlexHash.cpp
+  src/FontDesc.cpp
+  src/FontMgr.cpp
+  src/garmin_wrapper.h
+  src/geodesic.cpp
   src/georef.cpp
-  src/navutil.cpp
-  src/routeman.cpp
-  src/routemanagerdialog.cpp
+  src/GoToPositionDialog.cpp
+  src/gshhs.cpp
+  src/Hyperlink.cpp
+  src/IDX_entry.cpp
+  src/iENCToolbar.cpp
+  src/kml.cpp
+  src/Layer.cpp
+  src/LinkPropDlg.cpp
+  src/LLRegion.cpp
   src/MarkInfo.cpp
-  src/RoutePropDlg.cpp
-  src/RoutePropDlgImpl.cpp
-  src/routeprintout.cpp
-  src/trackprintout.cpp
+  src/mbtiles.cpp
+  src/MUIBar.cpp
+  src/multiplexer.cpp
+  src/NavObjectCollection.cpp
+  src/navutil.cpp
+  src/NMEALogWindow.cpp
+  src/ocpCursor.cpp
+  src/OCP_DataStreamInput_Thread.cpp
+  src/OCPN_AUIManager.cpp
+  src/OCPN_DataStreamEvent.cpp
+  src/ocpndc.cpp
+  src/OCPNListCtrl.cpp
+  src/ocpn_pixel.cpp
+  src/OCPNPlatform.cpp
+  src/OCPNRegion.cpp
+  src/options.cpp
+  src/piano.cpp
+  src/pluginmanager.cpp
   src/PositionParser.cpp
   src/printtable.cpp
-  src/piano.cpp
-  src/tcmgr.cpp
+  src/pugixml.cpp
+  src/Quilt.cpp
+  src/RolloverWin.cpp
+  src/Route.cpp
+  src/routemanagerdialog.cpp
+  src/routeman.cpp
+  src/RoutePoint.cpp
+  src/routeprintout.cpp
+  src/RoutePropDlg.cpp
+  src/RoutePropDlgImpl.cpp
+  src/S57QueryDialog.cpp
+  src/Select.cpp
+  src/SelectItem.cpp
+  src/SendToGpsDlg.cpp
   src/Station_Data.cpp
-  src/IDX_entry.cpp
+  src/styles.cpp
   src/TCDataFactory.cpp
+  src/TCDataSource.cpp
   src/TCDS_Ascii_Harmonic.cpp
   src/TCDS_Binary_Harmonic.cpp
-  src/TCDataSource.cpp
+  src/tcmgr.cpp
+  src/TCWin.cpp
   src/thumbwin.cpp
-  src/options.cpp
-  src/gshhs.cpp
-  src/kml.cpp
-  src/undo.cpp
-  src/AboutFrame.cpp
-  src/AboutFrameImpl.cpp
-  src/ais.cpp
-  src/pluginmanager.cpp
-  src/styles.cpp
   src/toolbar.cpp
-  src/compass.cpp
-  src/geodesic.cpp
-  src/datastream.cpp
-  src/OCPN_DataStreamEvent.cpp
-  src/ConnectionParams.cpp
-  src/OCP_DataStreamInput_Thread.cpp
-  src/multiplexer.cpp
-  src/pugixml.cpp
-  src/OCPNRegion.cpp
-  src/LLRegion.cpp
+  src/Track.cpp
+  src/trackprintout.cpp
   src/TrackPropDlg.cpp
-  src/LinkPropDlg.cpp
+  src/TTYScroll.cpp
+  src/TTYWindow.cpp
+  src/undo.cpp
   src/viewport.cpp
-  src/canvasMenu.cpp
-  src/OCPNPlatform.cpp
-  src/FlexHash.cpp
-  src/iENCToolbar.cpp
-  src/mbtiles.cpp
-  src/ConfigMgr.cpp
-  src/CanvasOptions.cpp
-  src/MUIBar.cpp
-  src/OCPN_AUIManager.cpp
-  src/CanvasConfig.cpp
-  src/garmin_wrapper.h
   src/Seatalk.cpp
 )
 
@@ -1254,11 +1241,11 @@ if (OCPN_USE_SVG)
   endif (NOT QT_ANDROID)
 endif (OCPN_USE_SVG)
 
-if (OCPN_NEW_SERIAL)
+if (OCPN_USE_NEWSERIAL)
   add_subdirectory("libs/serial")
   target_link_libraries(${PACKAGE_NAME} PRIVATE ocpn::serial)
   message(STATUS "Using new serial library...")
-endif (OCPN_NEW_SERIAL)
+endif (OCPN_USE_NEWSERIAL)
 
 # Search for opengles, short of running a program to test the speed of
 # acceleration, I simply use gles on "native linux" arm systems
@@ -1344,7 +1331,6 @@ endif (TINYXML_FOUND)
 set(TIXML_USE_STL 1) # -> config.h
 
 message(STATUS "S57 ENC support: enabled")
-set(USE_S57 1) # -> config.h
 set(
   SRC_S57ENC
   include/cm93.h
@@ -1430,7 +1416,8 @@ if (OPENGL_FOUND)
 endif (OPENGL_FOUND)
 
 pkg_search_module(LZ4 liblz4 lz4)
-if (LZ4_FOUND AND USE_BUNDLED_LIBS MATCHES "OFF")
+USE_BUNDLED_LIB(USE_BUNDLED_LZ4 lz4)
+if (LZ4_FOUND AND NOT USE_BUNDLED_LZ4)
   message(STATUS "Building with system lz4")
   include_directories(${LZ4_INCLUDE_DIR})
   if (COMMAND target_link_directories)
@@ -1461,6 +1448,24 @@ endif ()
 # GL_LIBS="-lGL -lGLU" AC_SUBST(GL_LIBS)
 #
 # GL_CFLAGS="-DUSE_GLU_TESS" AC_SUBST(GL_CFLAGS) fi
+
+if (UNIX AND NOT APPLE)
+  find_path(LIBELF_INCLUDE_DIR NAMES libelf.h gelf.h PATH_SUFFIXES libelf)
+  find_library(LIBELF_LIBRARY NAMES elf)
+  if (LIBELF_INCLUDE_DIR AND LIBELF_LIBRARY)
+    message(STATUS "Found LibELF...")
+    message(STATUS "    ELF Lib: ${LIBELF_INCLUDE_DIR}")
+    message(STATUS "    ELF Include: ${LIBELF_LIBRARY}")
+    target_include_directories(${PACKAGE_NAME} PUBLIC "${LIBELF_INCLUDE_DIR}")
+    target_link_libraries(${PACKAGE_NAME} PRIVATE "${LIBELF_LIBRARY}")
+    set(USE_LIBELF ON)   # => config.h
+  else ()
+    message(
+      WARNING
+        "Did not found LibELF, plugin compatibility check will be simplified."
+    )
+  endif ()
+endif (UNIX AND NOT APPLE)
 
 configure_file(config.h.in ${CMAKE_BINARY_DIR}/include/config.h)
 include_directories(BEFORE "${CMAKE_BINARY_DIR}/include")
@@ -1597,20 +1602,18 @@ set(
   src/bitmaps/iENC_RMinus.svg
 )
 
-if (OCPN_USE_S57)
-  set(
-    s57data
-    data/s57data/attdecode.csv
-    data/s57data/S52RAZDS.RLE
-    data/s57data/s57attributes.csv
-    data/s57data/s57expectedinput.csv
-    data/s57data/s57objectclasses.csv
-    data/s57data/rastersymbols-dark.png
-    data/s57data/rastersymbols-day.png
-    data/s57data/rastersymbols-dusk.png
-    data/s57data/chartsymbols.xml
-  )
-endif (OCPN_USE_S57)
+set(
+  s57data
+  data/s57data/attdecode.csv
+  data/s57data/S52RAZDS.RLE
+  data/s57data/s57attributes.csv
+  data/s57data/s57expectedinput.csv
+  data/s57data/s57objectclasses.csv
+  data/s57data/rastersymbols-dark.png
+  data/s57data/rastersymbols-day.png
+  data/s57data/rastersymbols-dusk.png
+  data/s57data/chartsymbols.xml
+)
 
 if (OCPN_BUNDLE_TCDATA MATCHES "ON")
   set(
@@ -1929,23 +1932,6 @@ if (UNIX)
   target_link_libraries(${PACKAGE_NAME} PRIVATE dl)
 endif ()
 
-if (UNIX AND NOT APPLE)
-  find_path(LIBELF_INCLUDE_DIR NAMES libelf.h gelf.h PATH_SUFFIXES libelf)
-  find_library(LIBELF_LIBRARY NAMES elf)
-  if (LIBELF_INCLUDE_DIR AND LIBELF_LIBRARY)
-    message(STATUS "Found LibELF...")
-    message(STATUS "    ELF Lib: ${LIBELF_INCLUDE_DIR}")
-    message(STATUS "    ELF Include: ${LIBELF_LIBRARY}")
-    target_include_directories(${PACKAGE_NAME} PUBLIC "${LIBELF_INCLUDE_DIR}")
-    target_link_libraries(${PACKAGE_NAME} PRIVATE "${LIBELF_LIBRARY}")
-  else ()
-    message(
-      WARNING
-        "Did not found LibELF, plugin compatibility check will be simplified."
-    )
-  endif ()
-endif (UNIX AND NOT APPLE)
-
 #
 # Install
 #
@@ -1996,9 +1982,7 @@ if (NOT APPLE)
     )
   endif (OCPN_USE_SVG)
 
-  if (OCPN_USE_S57)
-    install(FILES ${s57data} DESTINATION ${PREFIX_PKGDATA}/s57data)
-  endif ()
+  install(FILES ${s57data} DESTINATION ${PREFIX_PKGDATA}/s57data)
 
   if (OCPN_BUNDLE_TCDATA MATCHES "ON")
     install(FILES ${tcData} DESTINATION ${PREFIX_PKGDATA}/tcdata)
@@ -2198,94 +2182,6 @@ if (GETTEXT_MSGFMT_EXECUTABLE)
 
 endif (GETTEXT_MSGFMT_EXECUTABLE)
 
-if (WIN32 AND NOT UNIX)
-  if (NOT SKIP_VERSION_CONFIG)
-    configure_file(
-      ${CMAKE_SOURCE_DIR}/src/opencpn.rc.in ${CMAKE_SOURCE_DIR}/src/opencpn.rc
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_GERMAN.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_GERMAN.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_FRENCH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_FRENCH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_CZECH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_CZECH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_DANISH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_DANISH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_SPANISH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_SPANISH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_ITALIAN.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_ITALIAN.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_DUTCH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_DUTCH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_POLISH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_POLISH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_PORTUGUESEBR.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_PORTUGUESEBR.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_PORTUGUESE.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_PORTUGUESE.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_RUSSIAN.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_RUSSIAN.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_SWEDISH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_SWEDISH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_FINNISH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_FINNISH.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_NORWEGIAN.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_NORWEGIAN.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_CHINESETW.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_CHINESETW.nsh"
-      @ONLY
-    )
-    configure_file(
-      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_TURKISH.nsh.in"
-      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_TURKISH.nsh"
-      @ONLY
-    )
-  endif (NOT SKIP_VERSION_CONFIG)
-endif (WIN32 AND NOT UNIX)
-
 #
 # Install wxstd.mo in Windows and Mac
 #
@@ -2427,9 +2323,6 @@ set(
 )
 set(CPACK_PACKAGE_EXECUTABLES ${PACKAGE_NAME} "OpenCPN")
 
-set(CPACK_NSIS_DIR "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode") # Gunther
-set(CPACK_BUILDWIN_DIR "${CMAKE_SOURCE_DIR}/buildwin") # Gunther
-
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/README")
   set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README")
   set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README")
@@ -2451,11 +2344,99 @@ set(
 # Windows NSIS package setup.
 #
 if (WIN32 AND NOT UNIX)
+  if (NOT SKIP_VERSION_CONFIG)
+    configure_file(
+      ${CMAKE_SOURCE_DIR}/src/opencpn.rc.in ${CMAKE_SOURCE_DIR}/src/opencpn.rc
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_GERMAN.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_GERMAN.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_FRENCH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_FRENCH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_CZECH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_CZECH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_DANISH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_DANISH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_SPANISH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_SPANISH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_ITALIAN.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_ITALIAN.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_DUTCH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_DUTCH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_POLISH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_POLISH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_PORTUGUESEBR.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_PORTUGUESEBR.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_PORTUGUESE.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_PORTUGUESE.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_RUSSIAN.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_RUSSIAN.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_SWEDISH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_SWEDISH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_FINNISH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_FINNISH.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_NORWEGIAN.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_NORWEGIAN.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_CHINESETW.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_CHINESETW.nsh"
+      @ONLY
+    )
+    configure_file(
+      "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode/Language files/Langstrings_TURKISH.nsh.in"
+      "${CMAKE_SOURCE_DIR}//buildwin/NSIS_Unicode/Include/Langstrings_TURKISH.nsh"
+      @ONLY
+    )
+  endif (NOT SKIP_VERSION_CONFIG)
+
   # There is a bug in NSI that does not handle full unix paths properly. Make
   # sure there is at least one set of four (4) backlasshes.
 
   set(CPACK_NSIS_INSTALLED_ICON_NAME "opencpn.exe")
   set(CPACK_NSIS_PACKAGE_NAME_LC "opencpn")
+  set(CPACK_NSIS_DIR "${CMAKE_SOURCE_DIR}/buildwin/NSIS_Unicode") # Gunther
+  set(CPACK_BUILDWIN_DIR "${CMAKE_SOURCE_DIR}/buildwin") # Gunther
 
   # These lines set the name of the Windows Start Menu shortcut and the icon
   # that goes with it
@@ -2607,9 +2588,7 @@ if (MSVC)
   add_custom_command(
     TARGET ${PACKAGE_NAME} POST_BUILD
     COMMAND
-      cmake -E copy "${CMAKE_BUILD_TYPE}/opencpn.pdb"
-      "${CMAKE_BUILD_TYPE}/${PACKAGE_NAME}-${PACKAGE_VERSION}.pdb"
+    cmake -E copy "${CMAKE_BINARY_DIR}/$<CONFIG>/opencpn.pdb"
+    "${CMAKE_BINARY_DIR}/$<CONFIG>/${PACKAGE_NAME}-${PACKAGE_VERSION}.pdb"
   )
 endif (MSVC)
-
-message(STATUS "Writing spec file...")
