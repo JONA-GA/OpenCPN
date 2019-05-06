@@ -835,6 +835,8 @@ set(
   include/FlexHash.h
   include/iENCToolbar.h
   include/mbtiles.h
+  include/Seatalk.h
+	
   ${CMAKE_BINARY_DIR}/include/config.h
 )
 
@@ -934,6 +936,7 @@ set(
   src/OCPN_AUIManager.cpp
   src/CanvasConfig.cpp
   src/garmin_wrapper.h
+  src/Seatalk.cpp
 )
 
 if (OCPN_USE_GARMINHOST)

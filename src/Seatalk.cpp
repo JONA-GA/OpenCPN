@@ -35,7 +35,7 @@
 
 
 #include "dychart.h"
-#include "nmea0183/nmea0183.h"
+#include "nmea0183.h"
 #include "datastream.h"
 #include "OCP_DataStreamInput_Thread.h"
 #include "OCPN_DataStreamEvent.h"

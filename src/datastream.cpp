@@ -55,6 +55,7 @@
 #include "OCPN_DataStreamEvent.h"
 #include "OCP_DataStreamInput_Thread.h"
 #include "nmea0183.h"
+#include "Seatalk.h"
 
 #ifdef USE_GARMINHOST
 #include "garmin_wrapper.h"

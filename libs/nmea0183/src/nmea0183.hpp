@@ -181,11 +181,11 @@ class NMEA0183
       P   Proprietary;
       RMA Rma;
 */
-	   DPT Dpt;
-	   MWD Mwd;
-	   MWV Mwv;
+       DPT Dpt;
+       MWD Mwd;
+       MWV Mwv;
        MTW Mtw;
-	   HDM Hdm;
+       HDM Hdm;
        HDG Hdg;
        HDT Hdt;
        RMB Rmb;
@@ -199,7 +199,7 @@ class NMEA0183
        GPWPL GPwpl;
        APB Apb;
        XTE Xte;
-		VHW Vhw;
+       VHW Vhw;
  /*
       ROT Rot;
       RPM Rpm;

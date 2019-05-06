@@ -115,7 +115,7 @@ public:
     void OnExit(void);
 
 
-private:
+// private:
 #ifdef OCPN_USE_NEWSERIAL
     serial::Serial m_serial;
     void ThreadMessage(const wxString &msg);
