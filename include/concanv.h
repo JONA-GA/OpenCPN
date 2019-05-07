@@ -36,7 +36,11 @@
 #include "chart1.h"             // for ColorScheme
 
 
+#define SPEED_VMG 0
+#define SPEED_SOG 1
+
 #define ID_LEGROUTE 1000
+#define SECONDS_PER_DAY 86400
 
 // Class declarations
 class Routeman;
@@ -107,7 +111,7 @@ DECLARE_EVENT_TABLE()
 //----------------------------------------------------------------------------
 // ConsoleCanvas
 //----------------------------------------------------------------------------
-class ConsoleCanvas: public wxDialog
+class ConsoleCanvas: public wxFrame
 {
 public:
       ConsoleCanvas(wxWindow *frame);
@@ -120,9 +124,10 @@ public:
       void OnContextMenu( wxContextMenuEvent& event );
       void OnContextMenuSelection( wxCommandEvent& event );
       void RefreshConsoleData(void);
+      void ToggleRouteTotalDisplay();
       
       wxWindow          *m_pParent;
-      wxStaticText       *pThisLegText;
+      wxStaticText      *pThisLegText;
       wxBoxSizer        *m_pitemBoxSizerLeg;
 
       AnnunText         *pXTE;
@@ -133,13 +138,13 @@ public:
       CDI               *pCDI;
 
       wxFont            *pThisLegFont;
-      bool              m_bShowRouteTotal;
       bool              m_bNeedClear;
       wxBrush           *pbackBrush;
 
 private:
       void OnPaint(wxPaintEvent& event);
       void OnShow(wxShowEvent& event);
+      char m_speedUsed;
 
 DECLARE_EVENT_TABLE()
 };

@@ -43,8 +43,10 @@ class FontMgr
     public:
         static FontMgr & Get();
     
+        void SetLocale( wxString &newLocale );
         wxFont *GetFont(const wxString &TextElement, int default_size = 0);
         wxColour GetFontColor( const wxString &TextElement ) const;
+        bool SetFontColor( const wxString &TextElement, const wxColour color ) const;
     
         int GetNumFonts(void) const;
         const wxString & GetConfigString(int i) const;
@@ -59,7 +61,8 @@ class FontMgr
         void LoadFontNative(wxString *pConfigString, wxString *pNativeDesc);
         bool SetFont(const wxString &TextElement, wxFont *pFont, wxColour color);
         void ScrubList( );
-
+        MyFontDesc *FindFontByConfigString( wxString pConfigString );
+        
         wxFont* FindOrCreateFont( int point_size, wxFontFamily family, 
                     wxFontStyle style, wxFontWeight weight, bool underline = false,
                     const wxString &facename = wxEmptyString,

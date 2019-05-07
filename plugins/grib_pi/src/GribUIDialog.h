@@ -70,7 +70,7 @@ enum ZoneSelection { AUTO_SELECTION, SAVED_SELECTION, START_SELECTION, DRAW_SELE
 class GribTimelineRecordSet : public GribRecordSet
 {
 public:
-    GribTimelineRecordSet();
+    GribTimelineRecordSet(unsigned int cnt);
 //    GribTimelineRecordSet(GribRecordSet &GRS1, GribRecordSet &GRS2, double interp_const);
     ~GribTimelineRecordSet();
 
@@ -98,7 +98,7 @@ public:
     GribTimelineRecordSet* GetTimeLineRecordSet(wxDateTime time);
     void StopPlayBack();
     void TimelineChanged();
-    void CreateActiveFileFromName( wxString filename );
+    void CreateActiveFileFromNames( const wxArrayString &filenames );
     void PopulateComboDataList();
     void ComputeBestForecastForNow();
     void SetViewPort( PlugIn_ViewPort *vp );
@@ -112,7 +112,13 @@ public:
     GRIBUICData *GetCDataDialog() { return m_gGRIBUICData; }
     bool InDataPlot (int id) { return id > wxID_ANY && id < (int)GribOverlaySettings::GEO_ALTITUDE; }
     void SetScaledBitmap( double factor );
-	wxBitmap GetScaledBitmap(wxBitmap bitmap, const wxString svgFileName, double scale_factor);
+    wxBitmap GetScaledBitmap(wxBitmap bitmap, const wxString svgFileName, double scale_factor);
+    void OpenFileFromJSON( wxString json);
+        
+    // 
+    double getTimeInterpolatedValue ( int idx, double lon, double lat, wxDateTime t);
+    bool getTimeInterpolatedValues ( double &M, double &A, int idx1, int idx2, double lon, double lat, wxDateTime t);
+
 
     wxWindow *pParent;
     GribOverlaySettings m_OverlaySettings;
@@ -127,7 +133,9 @@ public:
 	bool            m_CDataIsShown;
     int             m_ZoneSelAllowed;
     int             m_old_DialogStyle;
-	double			m_ScaledFactor;
+    double			m_ScaledFactor;
+    void DoZoomToCenter();
+    
 private:
     void OnClose( wxCloseEvent& event );
     void OnSize( wxSizeEvent& event );
@@ -135,7 +143,7 @@ private:
     void OnSettings( wxCommandEvent& event );
     void OnPlayStop( wxCommandEvent& event );
     void OnPlayStopTimer( wxTimerEvent & event);
-	void OnMove( wxMoveEvent& event );
+    void OnMove( wxMoveEvent& event );
     void OnMenuEvent( wxMenuEvent& event );
     void MenuAppend( wxMenu *menu, int id, wxString label, wxItemKind kind, wxBitmap bitmap = wxNullBitmap, wxMenu *submenu = NULL );
     void OnZoomToCenterClick( wxCommandEvent& event );
@@ -146,12 +154,13 @@ private:
     void OnAltitude( wxCommandEvent& event );
     void OnOpenFile( wxCommandEvent& event );
     void OnRequest(  wxCommandEvent& event );
-
+    void OnCompositeDialog( wxCommandEvent& event );
+    
     void OnTimeline( wxScrollEvent& event );
 	void OnShowCursorData( wxCommandEvent& event );
 
     wxDateTime MinTime();
-    wxString GetNewestFileInDirectory();
+    wxArrayString GetFilesInDirectory();
     void SetGribTimelineRecordSet(GribTimelineRecordSet *pTimelineSet);
     int GetNearestIndex(wxDateTime time, int model);
     int GetNearestValue(wxDateTime time, int model);
@@ -178,7 +187,7 @@ private:
     bool             m_SelectionIsSaved;
     int              m_Selection_index;
     wxString         m_Selection_label;
-    wxString         m_file_name;   /* selected file */
+    wxArrayString    m_file_names;   /* selected files */
     wxString         m_grib_dir;
 	wxSize           m_DialogsOffset;
 };
@@ -189,16 +198,16 @@ private:
 class GRIBFile {
 public:
 
-    GRIBFile( const wxString file_name, bool CumRec, bool WaveRec );
+    GRIBFile( const wxArrayString & file_names, bool CumRec, bool WaveRec, bool newestFile = false );
     ~GRIBFile();
 
     bool IsOK( void )
     {
         return m_bOK;
     }
-    wxString GetFileName( void )
+    wxArrayString &GetFileNames( void )
     {
-        return m_FileName;
+        return m_FileNames;
     }
     wxString GetLastMessage( void )
     {
@@ -213,14 +222,21 @@ public:
         return m_pRefDateTime;
     }
 
+    const unsigned int GetCounter( )
+    {
+        return m_counter;
+    }
+
     WX_DEFINE_ARRAY_INT(int, GribIdxArray);
     GribIdxArray m_GribIdxArray;
 
 private:
+    static unsigned int ID;
 
+    const unsigned int m_counter;
     bool m_bOK;
     wxString m_last_message;
-    wxString m_FileName;
+    wxArrayString m_FileNames;
     GribReader *m_pGribReader;
     time_t m_pRefDateTime;
 
@@ -240,7 +256,7 @@ public:
     GRIBUICData( GRIBUICtrlBar &parent );
     ~GRIBUICData() {}
 
-    GribGrabberWin      *m_gGrabber;
+    // GribGrabberWin      *m_gGrabber;
     GRIBUICtrlBar       &m_gpparent;
     CursorData          *m_gCursorData;
 private:

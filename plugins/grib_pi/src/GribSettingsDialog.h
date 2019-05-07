@@ -30,6 +30,8 @@
 
 #include "GribUIDialogBase.h"
 
+#include "jsonval.h"
+
 //----------------------------------------------------------------------------------------------------------
 //    Grib OverlaySettings Specification
 //----------------------------------------------------------------------------------------------------------
@@ -41,6 +43,10 @@ struct GribOverlaySettings
     void Write();
     void SaveSettingGroups(wxFileConfig *pConf, int settings, int group);
 
+    wxString SettingsToJSON(wxString json);
+    bool JSONToSettings(wxString json);
+    bool UpdateJSONval( wxJSONValue &v, int settings, int group);
+    
     double CalibrationOffset(int settings);
     double CalibrationFactor(int settings, double input, bool reverse = false);
     double CalibrateValue(int settings, double input)
@@ -65,7 +71,7 @@ struct GribOverlaySettings
     wxString m_iCtrlBarCtrlVisible[2];
 
     enum SettingsType {WIND, WIND_GUST, PRESSURE, WAVE, CURRENT, PRECIPITATION, CLOUD, 
-                       AIR_TEMPERATURE, SEA_TEMPERATURE, CAPE, GEO_ALTITUDE, REL_HUMIDITY, SETTINGS_COUNT};
+                       AIR_TEMPERATURE, SEA_TEMPERATURE, CAPE, COMP_REFL, GEO_ALTITUDE, REL_HUMIDITY, SETTINGS_COUNT};
     enum Units0 {KNOTS, M_S, MPH, KPH, BFS};
     enum Units1 {MILLIBARS, MMHG, INHG};
     enum Units2 {METERS, FEET};
@@ -73,6 +79,7 @@ struct GribOverlaySettings
     enum Units4 {MILLIMETERS, INCHES};
     enum Units5 {PERCENTAGE};
     enum Units6 {JPKG};
+    enum Units7 {DBZ};
 
     struct OverlayDataSettings {
         int m_Units;
@@ -82,6 +89,7 @@ struct GribOverlaySettings
 		bool m_bBarbArrFixSpac;
 		int m_iBarbArrSpacing;
         bool m_bIsoBars;
+        bool m_bAbbrIsoBarsNumbers;
         bool m_iIsoBarVisibility;
         double m_iIsoBarSpacing;
         bool m_bDirectionArrows;

@@ -26,6 +26,9 @@
 #define __GLCHARTCANVAS_H__
 
 #include <wx/glcanvas.h>
+
+#include "dychart.h"
+
 #include "ocpn_types.h"
 #include "OCPNRegion.h"
 #include "LLRegion.h"
@@ -38,12 +41,48 @@
 #include "wx/qt/private/wxQtGesture.h"
 #endif
 
+
 class glTexFactory;
+class ChartCanvas;
 
 #define GESTURE_EVENT_TIMER 78334
 
-//      This is a hashmap with Chart full path as key, and glTexFactory as value
-WX_DECLARE_STRING_HASH_MAP( glTexFactory*, ChartPathHashTexfactType );
+typedef class{
+  public:
+    wxString Renderer;
+    GLenum TextureRectangleFormat;
+    
+    bool bOldIntel;
+    bool bCanDoVBO;
+    bool bCanDoFBO;
+    
+    //      Vertex Buffer Object (VBO) support
+    PFNGLGENBUFFERSPROC                 m_glGenBuffers;
+    PFNGLBINDBUFFERPROC                 m_glBindBuffer;
+    PFNGLBUFFERDATAPROC                 m_glBufferData;
+    PFNGLDELETEBUFFERSPROC              m_glDeleteBuffers;
+
+    //      Frame Buffer Object (FBO) support
+    PFNGLGENFRAMEBUFFERSEXTPROC         m_glGenFramebuffers;
+    PFNGLGENRENDERBUFFERSEXTPROC        m_glGenRenderbuffers;
+    PFNGLFRAMEBUFFERTEXTURE2DEXTPROC    m_glFramebufferTexture2D;
+    PFNGLBINDFRAMEBUFFEREXTPROC         m_glBindFramebuffer;
+    PFNGLFRAMEBUFFERRENDERBUFFEREXTPROC m_glFramebufferRenderbuffer;
+    PFNGLRENDERBUFFERSTORAGEEXTPROC     m_glRenderbufferStorage;
+    PFNGLBINDRENDERBUFFEREXTPROC        m_glBindRenderbuffer;
+    PFNGLCHECKFRAMEBUFFERSTATUSEXTPROC  m_glCheckFramebufferStatus;
+    PFNGLDELETEFRAMEBUFFERSEXTPROC      m_glDeleteFramebuffers;
+    PFNGLDELETERENDERBUFFERSEXTPROC     m_glDeleteRenderbuffers;
+    
+    PFNGLCOMPRESSEDTEXIMAGE2DPROC       m_glCompressedTexImage2D;
+    PFNGLGETCOMPRESSEDTEXIMAGEPROC      m_glGetCompressedTexImage;
+
+    
+}OCPN_GLCaps;
+
+void GetglEntryPoints( OCPN_GLCaps *pcaps );
+GLboolean QueryExtension( const char *extName );
+
 
 class ocpnGLOptions
 {
@@ -56,7 +95,20 @@ public:
 
     int m_iTextureDimension;
     int m_iTextureMemorySize;
+    
+    bool m_GLPolygonSmoothing;
+    bool m_GLLineSmoothing;
 };
+
+
+class glTestCanvas : public wxGLCanvas
+{
+public:
+    glTestCanvas(wxWindow *parent);
+    ~glTestCanvas() {};
+
+};
+
 
 class ocpnDC;
 class emboss_data;
@@ -83,7 +135,9 @@ public:
     static bool         s_b_useScissorTest;
     static bool         s_b_useStencil;
     static bool         s_b_useStencilAP;
-    static bool         s_b_UploadFullMipmaps;
+    static bool         s_b_useFBO;
+    
+    void SendJSONConfigMessage();
     
     glChartCanvas(wxWindow *parent);
     ~glChartCanvas();
@@ -98,7 +152,7 @@ public:
     void MouseEvent(wxMouseEvent& event);
     void FastPan(int dx, int dy);
     void FastZoom(float factor);
-    void RenderCanvasBackingChart( ocpnDC dc, OCPNRegion chart_get_region);
+    void RenderCanvasBackingChart( ocpnDC &dc, OCPNRegion chart_get_region);
     
 #ifdef __OCPN__ANDROID__    
     void OnEvtPanGesture( wxQT_PanGestureEvent &event);
@@ -110,16 +164,15 @@ public:
     wxString GetVersionString(){ return m_version; }
     void EnablePaint(bool b_enable){ m_b_paint_enable = b_enable; }
 
-    static void Invalidate();
+    void Invalidate();
     void RenderRasterChartRegionGL(ChartBase *chart, ViewPort &vp, LLRegion &region);
-    bool PurgeChartTextures(ChartBase *pc, bool b_purge_factory = false);
-    void ClearAllRasterTextures(void);
+    
     void DrawGLOverLayObjects(void);
     void GridDraw( );
     void FlushFBO( void );
     
-    void DrawDynamicRoutesAndWaypoints( ViewPort &vp );
-    void DrawStaticRoutesAndWaypoints( ViewPort &vp );
+    void DrawDynamicRoutesTracksAndWaypoints( ViewPort &vp );
+    void DrawStaticRoutesTracksAndWaypoints( ViewPort &vp );
     
     void RenderAllChartOutlines( ocpnDC &dc, ViewPort &VP );
     void RenderChartOutline( int dbIndex, ViewPort &VP );
@@ -137,15 +190,17 @@ public:
     double mvmatrix[16], projmatrix[16];
 
 protected:
+    void RenderGLAlertMessage();
+
     void RenderQuiltViewGL( ViewPort &vp, const OCPNRegion &rect_region );
+    void RenderQuiltViewGLText( ViewPort &vp, const OCPNRegion &rect_region );
+    
     void BuildFBO();
     void SetupOpenGL();
-    bool TextureCrunch(double factor);
-    bool FactoryCrunch(double factor);
     
 //    void ComputeRenderQuiltViewGLRegion( ViewPort &vp, OCPNRegion &Region );
     void RenderCharts(ocpnDC &dc, const OCPNRegion &rect_region);
-    void RenderNoDTA(ViewPort &vp, const LLRegion &region);
+    void RenderNoDTA(ViewPort &vp, const LLRegion &region, int transparency = 255);
     void RenderNoDTA(ViewPort &vp, ChartBase *chart);
     void RenderWorldChart(ocpnDC &dc, ViewPort &vp, wxRect &rect, bool &world_view);
 
@@ -167,17 +222,11 @@ protected:
 
     wxString m_renderer;
     wxString m_version;
-    wxString m_extensions;
-
-    //    This is a hash table
-    //    key is Chart full path
-    //    Value is glTexFactory*
-    ChartPathHashTexfactType   m_chart_texfactory_hash;
-    
+    wxString m_extensions;    
     
     ViewPort    m_cache_vp;
     ChartBase   *m_cache_current_ch;
-
+    
     bool        m_b_paint_enable;
     int         m_in_glpaint;
 
@@ -192,8 +241,6 @@ protected:
     GLuint       m_cache_page;
     int          m_cache_tex_x;
     int          m_cache_tex_y;
-
-    int		m_prevMemUsed;
 
     GLuint      ownship_tex;
     int         ownship_color;
@@ -227,10 +274,14 @@ protected:
     int          m_currentTexWidth;
     int          m_currentTexHeight;
     
+    ChartCanvas *m_pParentCanvas;
+    
     DECLARE_EVENT_TABLE()
 };
 
 extern void BuildCompressedCache();
 
+#include "glTextureManager.h"
+extern glTextureManager   *g_glTextureManager;
 
 #endif

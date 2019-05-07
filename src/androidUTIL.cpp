@@ -32,6 +32,7 @@
 
 #include <QtAndroidExtras/QAndroidJniObject>
 
+#include "config.h"
 #include "dychart.h"
 #include "androidUTIL.h"
 #include "OCPN_DataStreamEvent.h"
@@ -70,7 +71,6 @@ extern AISTargetListDialog       *g_pAISTargetList;
 extern MarkInfoImpl              *pMarkPropDialog;
 extern RouteProp                 *pRoutePropDialog;
 extern TrackPropDlg              *pTrackPropDialog;
-extern MarkInfoImpl              *pMarkInfoDialog;
 extern S57QueryDialog            *g_pObjectQueryDialog;
 extern options                   *g_options;
 extern bool                       g_bSleep;
@@ -148,8 +148,6 @@ extern bool             g_bPreserveScaleOnX;
 extern bool             g_bPlayShipsBells;
 extern int              g_iSoundDeviceIndex;
 extern bool             g_bFullscreenToolbar;
-extern bool             g_bTransparentToolbar;
-extern bool             g_bTransparentToolbarInOpenGLOK;
 
 extern int              g_OwnShipIconType;
 extern double           g_n_ownship_length_meters;
@@ -211,14 +209,11 @@ extern bool             g_bShowStatusBar;
 
 
 
-//#ifdef USE_S57
 extern s52plib          *ps52plib;
-//#endif
 
 extern wxString         g_locale;
 extern bool             g_bportable;
 extern bool             g_bdisable_opengl;
-extern wxString         *pHome_Locn;
 
 extern ChartGroupArray  *g_pGroupArray;
 
@@ -2066,7 +2061,7 @@ wxString BuildAndroidSettingsString( void )
 
         for(unsigned int i=0 ; i < chart_dir_array.GetCount() ; i++){
             result += _T("ChartDir:");
-            result += chart_dir_array.Item(i);
+            result += chart_dir_array[i];
             result += _T(";");
         }
     }

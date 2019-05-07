@@ -27,18 +27,18 @@
 #include "vector2D.h"
 #include "navutil.h"
 #include "chcanv.h"
+#include "Track.h"
+#include "routeman.h"
+#include "Route.h"
+#include "OCPNPlatform.h"
 
-extern ChartCanvas *cc1;
+extern Routeman    *g_pRouteMan;
+extern OCPNPlatform *g_Platform;
 
 Select::Select()
 {
     pSelectList = new SelectableItemList;
-    pixelRadius = 8;
-    int w,h;
-    wxDisplaySize( &w, &h );
-    if( h > 800 ) pixelRadius = 10;
-    if( h > 1024 ) pixelRadius = 12;
-    
+    pixelRadius = g_Platform->GetSelectRadiusPix();
 }
 
 Select::~Select()
@@ -116,23 +116,16 @@ bool Select::DeleteAllSelectableRouteSegments( Route *pr )
 
     while( node ) {
         pFindSel = node->GetData();
-        if( pFindSel->m_seltype == SELTYPE_ROUTESEGMENT ) {
-
-//                  RoutePoint *ps1 = (RoutePoint *)pFindSel->m_pData1;
-//                  RoutePoint *ps2 = (RoutePoint *)pFindSel->m_pData2;
-
-            if( (Route *) pFindSel->m_pData3 == pr ) {
+        if( pFindSel->m_seltype == SELTYPE_ROUTESEGMENT && 
+            (Route *) pFindSel->m_pData3 == pr ) 
+        {
                 delete pFindSel;
-                pSelectList->DeleteNode( node );   //delete node;
-
-                node = pSelectList->GetFirst();     // reset the top node
-
-                goto got_next_outer_node;
-            }
+                wxSelectableItemListNode *d = node;
+                node = node->GetNext();
+                pSelectList->DeleteNode( d );   //delete node;
         }
-
-        node = node->GetNext();
-        got_next_outer_node: continue;
+        else 
+            node = node->GetNext();
     }
 
     return true;
@@ -221,22 +214,18 @@ bool Select::AddAllSelectableRouteSegments( Route *pr )
         return false;
 }
 
-bool Select::AddAllSelectableTrackSegments( Route *pr )
+bool Select::AddAllSelectableTrackSegments( Track *pr )
 {
     wxPoint rpt, rptn;
     float slat1, slon1, slat2, slon2;
 
-    if( pr->pRoutePointList->GetCount() ) {
-        wxRoutePointListNode *node = ( pr->pRoutePointList )->GetFirst();
-
-        RoutePoint *prp0 = node->GetData();
+    if( pr->GetnPoints() ) {
+        TrackPoint *prp0 = pr->GetPoint(0);
         slat1 = prp0->m_lat;
         slon1 = prp0->m_lon;
 
-        node = node->GetNext();
-
-        while( node ) {
-            RoutePoint *prp = node->GetData();
+        for(int i=1; i<pr->GetnPoints(); i++) {
+            TrackPoint *prp = pr->GetPoint(i);
             slat2 = prp->m_lat;
             slon2 = prp->m_lon;
 
@@ -245,8 +234,6 @@ bool Select::AddAllSelectableTrackSegments( Route *pr )
             slat1 = slat2;
             slon1 = slon2;
             prp0 = prp;
-
-            node = node->GetNext();
         }
         return true;
     } else
@@ -411,7 +398,7 @@ bool Select::ModifySelectablePoint( float lat, float lon, void *data, int Seltyp
 }
 
 bool Select::AddSelectableTrackSegment( float slat1, float slon1, float slat2, float slon2,
-        RoutePoint *pRoutePointAdd1, RoutePoint *pRoutePointAdd2, Route *pRoute )
+        TrackPoint *pTrackPointAdd1, TrackPoint *pTrackPointAdd2, Track *pTrack )
 {
     SelectItem *pSelItem = new SelectItem;
     pSelItem->m_slat = slat1;
@@ -420,18 +407,18 @@ bool Select::AddSelectableTrackSegment( float slat1, float slon1, float slat2, f
     pSelItem->m_slon2 = slon2;
     pSelItem->m_seltype = SELTYPE_TRACKSEGMENT;
     pSelItem->m_bIsSelected = false;
-    pSelItem->m_pData1 = pRoutePointAdd1;
-    pSelItem->m_pData2 = pRoutePointAdd2;
-    pSelItem->m_pData3 = pRoute;
+    pSelItem->m_pData1 = pTrackPointAdd1;
+    pSelItem->m_pData2 = pTrackPointAdd2;
+    pSelItem->m_pData3 = pTrack;
 
-    if( pRoute->m_bIsInLayer ) pSelectList->Append( pSelItem );
+    if( pTrack->m_bIsInLayer ) pSelectList->Append( pSelItem );
     else
         pSelectList->Insert( pSelItem );
 
     return true;
 }
 
-bool Select::DeleteAllSelectableTrackSegments( Route *pr )
+bool Select::DeleteAllSelectableTrackSegments( Track *pt )
 {
     SelectItem *pFindSel;
 
@@ -440,23 +427,21 @@ bool Select::DeleteAllSelectableTrackSegments( Route *pr )
 
     while( node ) {
         pFindSel = node->GetData();
-        if( pFindSel->m_seltype == SELTYPE_TRACKSEGMENT ) {
-
-            if( (Route *) pFindSel->m_pData3 == pr ) {
-                delete pFindSel;
-                pSelectList->DeleteNode( node );   //delete node;
-
-                node = pSelectList->GetFirst();     // reset the top node
-                goto got_next_outer_node;
-            }
+        if( pFindSel->m_seltype == SELTYPE_TRACKSEGMENT && 
+          (Track *) pFindSel->m_pData3 == pt  ) 
+        {
+            delete pFindSel;
+            wxSelectableItemListNode *d = node;
+            node = node->GetNext();
+            pSelectList->DeleteNode( d );   //delete node;
         }
-        node = node->GetNext();
-        got_next_outer_node: continue;
+        else 
+            node = node->GetNext();
     }
     return true;
 }
 
-bool Select::DeletePointSelectableTrackSegments( RoutePoint *pr )
+bool Select::DeletePointSelectableTrackSegments( TrackPoint *pt )
 {
     SelectItem *pFindSel;
 
@@ -465,18 +450,15 @@ bool Select::DeletePointSelectableTrackSegments( RoutePoint *pr )
 
     while( node ) {
         pFindSel = node->GetData();
-        if( pFindSel->m_seltype == SELTYPE_TRACKSEGMENT ) {
-
-            if( (RoutePoint *) pFindSel->m_pData1 == pr || (RoutePoint *) pFindSel->m_pData2 == pr ) {
+        if( pFindSel->m_seltype == SELTYPE_TRACKSEGMENT &&
+            ( (TrackPoint *) pFindSel->m_pData1 == pt ||
+              (TrackPoint *) pFindSel->m_pData2 == pt ) ) {
                 delete pFindSel;
-                pSelectList->DeleteNode( node );   //delete node;
-
-                node = pSelectList->GetFirst();     // reset the top node
-                goto got_next_outer_node;
-            }
-        }
-        node = node->GetNext();
-        got_next_outer_node: continue;
+                wxSelectableItemListNode *d = node;
+                node = node->GetNext();
+                pSelectList->DeleteNode( d );   //delete node;
+        } else
+            node = node->GetNext();
     }
     return true;
 }
@@ -484,6 +466,15 @@ bool Select::DeletePointSelectableTrackSegments( RoutePoint *pr )
 bool Select::IsSegmentSelected( float a, float b, float c, float d, float slat, float slon )
 {
     double adder = 0.;
+
+    // Track segments for some reason can have longitude values > 180.
+    // Therefore, we normalize all the lat/lon values here.
+    if (a > 90.0) a -= 180.0;
+    if (b > 90.0) b -= 180.0;
+    if (c > 180.0) c -= 360.0;
+    if (d > 180.0) d -= 360.0;
+    if (slat > 90.0) slat -= 180.0;
+    if (slon > 180.0) slon -= 360.0;
 
     if( ( c * d ) < 0. ) {
         //    Arrange for points to be increasing longitude, c to d
@@ -532,17 +523,17 @@ bool Select::IsSegmentSelected( float a, float b, float c, float d, float slat, 
     return false;
 }
 
-void Select::CalcSelectRadius()
+void Select::CalcSelectRadius(ChartCanvas *cc)
 {
-    selectRadius = pixelRadius / ( cc1->GetCanvasTrueScale() * 1852 * 60 );
+    selectRadius = pixelRadius / ( cc->GetCanvasTrueScale() * 1852 * 60 );
 }
 
-SelectItem *Select::FindSelection( float slat, float slon, int fseltype )
+SelectItem *Select::FindSelection( ChartCanvas *cc, float slat, float slon, int fseltype )
 {
     float a, b, c, d;
     SelectItem *pFindSel;
 
-    CalcSelectRadius();
+    CalcSelectRadius(cc);
 
 //    Iterate on the list
     wxSelectableItemListNode *node = pSelectList->GetFirst();
@@ -583,7 +574,7 @@ SelectItem *Select::FindSelection( float slat, float slon, int fseltype )
     find_ok: return pFindSel;
 }
 
-bool Select::IsSelectableSegmentSelected( float slat, float slon, SelectItem *pFindSel )
+bool Select::IsSelectableSegmentSelected( ChartCanvas *cc, float slat, float slon, SelectItem *pFindSel )
 {
     bool valid = false;
     wxSelectableItemListNode *node = pSelectList->GetFirst();
@@ -600,7 +591,7 @@ bool Select::IsSelectableSegmentSelected( float slat, float slon, SelectItem *pF
         // not in the list anymore
         return false;
     }
-    CalcSelectRadius();
+    CalcSelectRadius(cc);
 
     float a = pFindSel->m_slat;
     float b = pFindSel->m_slat2;
@@ -610,13 +601,29 @@ bool Select::IsSelectableSegmentSelected( float slat, float slon, SelectItem *pF
     return IsSegmentSelected( a, b, c, d, slat, slon );
 }
 
-SelectableItemList Select::FindSelectionList( float slat, float slon, int fseltype )
+static bool is_selectable_wp(ChartCanvas *cc, RoutePoint *wp)
+{
+    if (cc->m_bShowNavobjects)
+        return true;
+
+    if (wp->m_bIsActive)
+        return true;
+
+    Route *rte;
+    rte = g_pRouteMan->FindRouteContainingWaypoint( wp );
+    if (rte && rte->IsActive())
+        return true;
+
+    return false;
+}
+
+SelectableItemList Select::FindSelectionList( ChartCanvas *cc, float slat, float slon, int fseltype )
 {
     float a, b, c, d;
     SelectItem *pFindSel;
     SelectableItemList ret_list;
 
-    CalcSelectRadius();
+    CalcSelectRadius(cc);
 
 //    Iterate on the list
     wxSelectableItemListNode *node = pSelectList->GetFirst();
@@ -626,12 +633,20 @@ SelectableItemList Select::FindSelectionList( float slat, float slon, int fselty
         if( pFindSel->m_seltype == fseltype ) {
             switch( fseltype ){
                 case SELTYPE_ROUTEPOINT:
+                    if( ( fabs( slat - pFindSel->m_slat ) < selectRadius )
+                            && ( fabs( slon - pFindSel->m_slon ) < selectRadius ) )
+                        if (is_selectable_wp(cc, (RoutePoint *)pFindSel->m_pData1))
+                            if( ( (RoutePoint *)pFindSel->m_pData1 )->IsVisibleSelectable(cc) )
+                                ret_list.Append( pFindSel );
+                    break;
                 case SELTYPE_TIDEPOINT:
                 case SELTYPE_CURRENTPOINT:
                 case SELTYPE_AISTARGET:
+                case SELTYPE_DRAGHANDLE:    
                     if( ( fabs( slat - pFindSel->m_slat ) < selectRadius )
                             && ( fabs( slon - pFindSel->m_slon ) < selectRadius ) ) {
-                        ret_list.Append( pFindSel );
+                        if (is_selectable_wp(cc, (RoutePoint *)pFindSel->m_pData1))
+                            ret_list.Append( pFindSel );
                     }
                     break;
                 case SELTYPE_ROUTESEGMENT:
@@ -641,7 +656,14 @@ SelectableItemList Select::FindSelectionList( float slat, float slon, int fselty
                     c = pFindSel->m_slon;
                     d = pFindSel->m_slon2;
 
-                    if( IsSegmentSelected( a, b, c, d, slat, slon ) ) ret_list.Append( pFindSel );
+                    if( IsSegmentSelected( a, b, c, d, slat, slon ) )
+                    {
+                        if (cc->m_bShowNavobjects ||
+                            (fseltype == SELTYPE_ROUTESEGMENT && ((Route *)pFindSel->m_pData3)->m_bRtIsActive ))
+                        {
+                            ret_list.Append( pFindSel );
+                        }
+                    }
 
                     break;
                 }

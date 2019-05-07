@@ -59,7 +59,7 @@ LLRegion::LLRegion( float minlat, float minlon, float maxlat, float maxlon)
 
 LLRegion::LLRegion( const LLBBox& llbbox )
 {
-    InitBox(llbbox.GetMinY(), llbbox.GetMinX(), llbbox.GetMaxY(), llbbox.GetMaxX());
+    InitBox(llbbox.GetMinLat(), llbbox.GetMinLon(), llbbox.GetMaxLat(), llbbox.GetMaxLon());
 }
 
 LLRegion::LLRegion( size_t n, const float *points )
@@ -167,23 +167,22 @@ LLBBox LLRegion::GetBox() const
             mink = k;
 
     LLBBox &box = const_cast<LLBBox&>(m_box);
-    box.SetMin(minlon[mink], minlat);
-    box.SetMax(maxlon[mink], maxlat);
+    box.Set(minlat, minlon[mink], maxlat, maxlon[mink]);
     return m_box;
 }
 
 static inline int ComputeState(const LLBBox &box, const contour_pt &p)
 {
     int state = 0;
-    if(p.x >= box.GetMinX()) {
-        if(p.x > box.GetMaxX())
+    if(p.x >= box.GetMinLon()) {
+        if(p.x > box.GetMaxLon())
             state = 2;
         else
             state = 1;
     }
 
-    if(p.y >= box.GetMinY()) {
-        if(p.y > box.GetMaxY())
+    if(p.y >= box.GetMinLat()) {
+        if(p.y > box.GetMaxLat())
             state += 6;
         else
             state += 3;
@@ -309,7 +308,8 @@ static void /*APIENTRY*/ LLerrorCallback(GLenum errorCode)
     const GLubyte *estring;
     estring = gluErrorString(errorCode);
     fprintf (stderr, "Tessellation Error: %s\n", estring);
-    exit (0);
+    wxLogMessage( _T("Tessellation Error: %s"), (char *)estring );
+    //exit (0);
 }
 
 void LLRegion::Intersect(const LLRegion& region)
@@ -379,7 +379,7 @@ bool LLRegion::NoIntersection(const LLBBox& box) const
     return false; // there are occasional false positives we must fix first
 
 #if 0    
-    double minx = box.GetMinX(), maxx = box.GetMaxX(), miny = box.GetMinY(), maxy = box.GetMaxY();
+    double minx = box.GetMinLon(), maxx = box.GetMaxLon(), miny = box.GetMinLat(), maxy = box.GetMaxLat();
     if(Contains(miny, minx))
         return false;
 
@@ -500,7 +500,7 @@ void LLRegion::Put( const LLRegion& region, int winding_rule, bool reverse)
     gluTessEndPolygon( w.tobj ); 
 
     Optimize();
-    m_box.SetValid(false);
+    m_box.Invalidate();
 }
 
 // same result as union, but only allowed if there is no intersection
@@ -508,7 +508,7 @@ void LLRegion::Combine(const LLRegion& region)
 {
     for(std::list<poly_contour>::const_iterator i = region.contours.begin(); i != region.contours.end(); i++)
         contours.push_back(*i);
-    m_box.SetValid(false);
+    m_box.Invalidate();
 }
 
 void LLRegion::InitBox( float minlat, float minlon, float maxlat, float maxlon)
@@ -590,23 +590,45 @@ void LLRegion::Optimize()
             continue;
         }
 
+        // Round coordinates to avoid numerical errors in region computations
+        const double eps = 6e-6;  // about 1cm on earth's surface at equator
+        for(poly_contour::iterator j = i->begin(); j != i->end(); j++) {
+            //j->x -= fmod(j->x, 1e-8);
+            j->x = round(j->x/eps)*eps;
+            j->y = round(j->y/eps)*eps;
+        }
+
+#if 0
         // round toward 180 and -180 as this is where adjusted longitudes
         // are split, and so zero contours can get eliminated by the next step
         for(poly_contour::iterator j = i->begin(); j != i->end(); j++)
             if(fabs(j->x - 180) < 2e-4) j->x = 180;
             else if(fabs(j->x + 180) < 2e-4) j->x = -180;
+#endif
 
         // eliminiate parallel segments
-        contour_pt l = *i->rbegin();
-        poly_contour::iterator j = i->begin(), k = j;
-        k++;
-        while(k != i->end()) {
-            if(fabs(cross(vector(*j, l), vector(*j, *k))) < 1e-12)
-                i->erase(j);
-            else
-                l = *j;
-            j = k;
+        bool end = false;
+        poly_contour::iterator j = i->begin();
+        int s = i->size();
+        for(int c=0; c<s; c++) {
+            poly_contour::iterator l = j, k = j;
+            
+            if (l == i->begin())
+                l = i->end();
+            l--;
+            
             k++;
+            if(k == i->end())
+                k = i->begin();
+            
+            if(l == k)
+                break;
+            if(fabs(cross(vector(*j, *l), vector(*j, *k))) < 1e-12) {
+                i->erase(j);
+                j = l;
+                c--;
+            } else
+                j = k;
         }
 
         // erase zero contours

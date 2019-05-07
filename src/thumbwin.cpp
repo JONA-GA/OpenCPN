@@ -42,19 +42,7 @@
 #include "thumbwin.h"
 #include "chart1.h"
 #include "chartdb.h"
-#include "chcanv.h"
 #include "wx28compat.h"
-
-//------------------------------------------------------------------------------
-//    External Static Storage
-//------------------------------------------------------------------------------
-extern ChartDB          *ChartData;
-extern ChartStack       *pCurrentStack;
-
-extern MyFrame          *gFrame;
-extern ChartBase        *Current_Ch;
-extern ChartCanvas      *cc1;
-
 
 //------------------------------------------------------------------------------
 //    Thumbwin Implementation
@@ -81,8 +69,8 @@ void ThumbWin::Resize( void )
 {
     if( pThumbChart ) {
         if( pThumbChart->GetThumbData()->pDIBThumb ) {
-            int newheight = __min(m_max_size.y, pThumbChart->GetThumbData()->pDIBThumb->GetHeight());
-            int newwidth = __min(m_max_size.x, pThumbChart->GetThumbData()->pDIBThumb->GetWidth());
+            int newheight = std::min(m_max_size.y, pThumbChart->GetThumbData()->pDIBThumb->GetHeight());
+            int newwidth = std::min(m_max_size.x, pThumbChart->GetThumbData()->pDIBThumb->GetWidth());
             SetSize( 0, 0, newwidth, newheight );
         }
     }

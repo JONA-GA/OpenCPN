@@ -26,6 +26,7 @@
  ***************************************************************************
  */
 
+
 #include "dial.h"
 #include "wx28compat.h"
 
@@ -42,6 +43,7 @@
     #include <wx/wx.h>
 #endif
 
+#include <cmath>
 #include "wx/tokenzr.h"
 
 double rad2deg(double angle)
@@ -93,12 +95,14 @@ wxSize DashboardInstrument_Dial::GetSize( int orient, wxSize hint )
 
 void DashboardInstrument_Dial::SetData(int st, double data, wxString unit)
 {
-      if ( (st == m_MainValueCap) && (data < 200.0) )
+    // Filter out undefined data, normally comes through as "999".
+    // Test value must be greater than 360 to enable some compass-type displays.
+      if ( (st == m_MainValueCap) && (data < 1200.0) )
       {
             m_MainValue = data;
             m_MainValueUnit = unit;
       }
-      else if ( (st == m_ExtraValueCap) && (data < 200.0) )
+      else if ( (st == m_ExtraValueCap) && (data < 1200.0) )
       {
             m_ExtraValue = data;
             m_ExtraValueUnit = unit;
@@ -139,10 +143,10 @@ void DashboardInstrument_Dial::DrawFrame( wxGCDC* dc )
     GetGlobalColor( _T("DASHL"), &cl );
     dc->SetTextForeground( cl );
     dc->SetBrush( *wxTRANSPARENT_BRUSH);
-
+    
     int penwidth = 1 + size.x / 100;
     wxPen pen( cl, penwidth, wxPENSTYLE_SOLID );
-
+    
     if( m_MarkerOption == DIAL_MARKER_REDGREENBAR ) {
         pen.SetWidth( penwidth * 2 );
         GetGlobalColor( _T("DASHR"), &cl );
@@ -156,25 +160,42 @@ void DashboardInstrument_Dial::DrawFrame( wxGCDC* dc )
         wxCoord x2 = m_cx + ( ( radi ) * cos( angle2 ) );
         wxCoord y2 = m_cy + ( ( radi ) * sin( angle2 ) );
         dc->DrawArc( x1, y1, x2, y2, m_cx, m_cy );
+        
         GetGlobalColor( _T("DASHG"), &cl );
         pen.SetColour( cl );
         dc->SetPen( pen );
-        angle1 = deg2rad( 90 ); // 305-ANGLE_OFFSET
-        angle2 = deg2rad( 270 ); // 55-ANGLE_OFFSET
+        angle1 = deg2rad( 89 ); // 305-ANGLE_OFFSET
+        angle2 = deg2rad( 271 ); // 55-ANGLE_OFFSET
         x1 = m_cx + ( ( radi ) * cos( angle1 ) );
         y1 = m_cy + ( ( radi ) * sin( angle1 ) );
         x2 = m_cx + ( ( radi ) * cos( angle2 ) );
         y2 = m_cy + ( ( radi ) * sin( angle2 ) );
         dc->DrawArc( x1, y1, x2, y2, m_cx, m_cy );
+
+        // Some platforms have trouble with transparent pen.
+        // so we simply draw arcs for the outer ring.
         GetGlobalColor( _T("DASHF"), &cl );
         pen.SetWidth( penwidth );
+        pen.SetColour( cl );
+        dc->SetPen( pen );
+        angle1 = deg2rad( 0 ); 
+        angle2 = deg2rad( 180 );
+        radi = m_radius - 1;
+        
+        x1 = m_cx + ( ( radi ) * cos( angle1 ) );
+        y1 = m_cy + ( ( radi ) * sin( angle1 ) );
+        x2 = m_cx + ( ( radi ) * cos( angle2 ) );
+        y2 = m_cy + ( ( radi ) * sin( angle2 ) );
+        dc->DrawArc( x1, y1, x2, y2, m_cx, m_cy );
+        dc->DrawArc( x2, y2, x1, y1, m_cx, m_cy );
+        
     }
-
-    GetGlobalColor( _T("DASHF"), &cl );
-    pen.SetColour( cl );
-    dc->SetPen( pen );
-
-    dc->DrawCircle( m_cx, m_cy, m_radius );
+    else{
+        GetGlobalColor( _T("DASHF"), &cl );
+        pen.SetColour( cl );
+        dc->SetPen( pen );
+        dc->DrawCircle( m_cx, m_cy, m_radius );
+    }
 }
 
 void DashboardInstrument_Dial::DrawMarkers(wxGCDC* dc)
@@ -341,7 +362,7 @@ void DashboardInstrument_Dial::DrawData(wxGCDC* dc, double value,
       wxSize size = GetClientSize();
 
       wxString text;
-      if(!wxIsNaN(value))
+      if(!std::isnan(value))
       {
           if (unit == _T("\u00B0"))
                text = wxString::Format(format, value)+DEGREE_SIGN;

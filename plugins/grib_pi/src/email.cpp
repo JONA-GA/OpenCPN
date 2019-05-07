@@ -43,6 +43,16 @@
 bool wxEmail::Send(wxMailMessage& message,  int sendMethod, const wxString& profileName,
     const wxString& sendMail2, const wxString& sendMail1, const wxString& sendMail0)
 {
+    wxString mailURL = _T("mailto:");
+    mailURL += message.m_to[0] + _T("?&subject=") + message.m_subject + _T("&body=");
+    wxString msgBody =  message.m_body;
+    msgBody.Replace(" ", "%20");
+    msgBody.Replace("\n", "%0A");
+    mailURL += msgBody;
+
+    wxLaunchDefaultBrowser(mailURL);
+    return true;
+#if 0    
    // wxASSERT (message.m_to.GetCount() > 0) ;
     wxASSERT (!message.m_to.IsEmpty()) ;
     wxString profile(profileName);
@@ -57,6 +67,7 @@ bool wxEmail::Send(wxMailMessage& message,  int sendMethod, const wxString& prof
         return FALSE;
 
     return session.Send(message);
+#endif    
 }
 #elif defined(__UNIX__)
 bool wxEmail::Send(wxMailMessage& message,  int sendMethod, const wxString& profileName,
@@ -73,7 +84,18 @@ bool wxEmail::Send(wxMailMessage& message,  int sendMethod, const wxString& prof
     wxString msg,sendmail;
 
     if(sendMethod == 0) {                    //with xdg-email via local mail system (MUA)
-
+#ifdef __WXMAC__
+    wxString addr;
+    for (size_t rcpt = 0; rcpt < message.m_to.GetCount(); rcpt++)
+    {
+        if ( rcpt > 0)
+            addr << ",";
+        addr << message.m_to[rcpt];
+    }
+    wxString msg = wxString::Format("sh -c \"open 'mailto:%s?subject=%s&body=%s'\"", addr.c_str(), message.m_subject.c_str(), message.m_body.c_str());
+    long ret = wxExecute(msg.c_str());
+    return ret != 0; // 0 means the execution failed
+#else
     if(wxFileExists(sendMail0))
         sendmail << sendMail0;
     else if(wxFileExists(sendMail1))
@@ -125,7 +147,9 @@ bool wxEmail::Send(wxMailMessage& message,  int sendMethod, const wxString& prof
         wxRemoveFile(filename);
 
         return TRUE;
+#endif
     }
+    return FALSE;
 }
 #else
     wxLogMessage(_T("Send eMail not yet implemented for this platform") );

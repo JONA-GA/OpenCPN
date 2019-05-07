@@ -25,11 +25,16 @@
 
 #include "wx/wx.h"
 
+#include "config.h"
 #include "multiplexer.h"
 #include "navutil.h"
 #include "NMEALogWindow.h"
-#include "garmin/jeeps/garmin_wrapper.h"
 #include "OCPN_DataStreamEvent.h"
+#include "Route.h"
+
+#ifdef USE_GARMINHOST
+#include "garmin_wrapper.h"
+#endif
 
 extern PlugInManager    *g_pi_manager;
 extern wxString         g_GPS_Ident;
@@ -38,6 +43,8 @@ extern bool             g_bWplIsAprsPosition;
 extern wxArrayOfConnPrm  *g_pConnectionParams;
 extern bool             g_bserial_access_checked;
 extern bool             g_b_legacy_input_filter_behaviour;
+extern int              g_maxWPNameLength;
+extern wxString         g_TalkerIdText;
 
 extern "C" bool CheckSerialAccess( void );
 
@@ -47,6 +54,8 @@ Multiplexer::Multiplexer()
     m_gpsconsumer = NULL;
     Connect(wxEVT_OCPN_DATASTREAM, (wxObjectEventFunction)(wxEventFunction)&Multiplexer::OnEvtStream);
     m_pdatastreams = new wxArrayOfDataStreams();
+    if(g_GPS_Ident.IsEmpty())
+        g_GPS_Ident = wxT("Generic");
 }
 
 Multiplexer::~Multiplexer()
@@ -242,30 +251,9 @@ void Multiplexer::SetGPSHandler(wxEvtHandler *handler)
     m_gpsconsumer = handler;
 }
 
-wxString Multiplexer::ProcessNMEA4Tags( wxString msg)
-{
-    int idxFirst =  msg.Find('\\');
-    
-    if(wxNOT_FOUND == idxFirst)
-        return msg;
-    
-    if(idxFirst < (int)msg.Length()-1){
-        int idxSecond = msg.Mid(idxFirst + 1).Find('\\') + 1;
-        if(wxNOT_FOUND != idxSecond){
-            if(idxSecond < (int)msg.Length()-1){
-                
-                //wxString tag = msg.Mid(idxFirst+1, (idxSecond - idxFirst) -1);
-                return msg.Mid(idxSecond + 1);
-            }
-        }
-    }
-    
-    return msg;
-}
-
 void Multiplexer::OnEvtStream(OCPN_DataStreamEvent& event)
 {
-    wxString message = ProcessNMEA4Tags(wxString(event.GetNMEAString().c_str(), wxConvUTF8) );
+    wxString message = event.ProcessNMEA4Tags();
     
     DataStream *stream = event.GetStream();
     wxString port(_T("Virtual:"));
@@ -284,7 +272,7 @@ void Multiplexer::OnEvtStream(OCPN_DataStreamEvent& event)
         if( bpass ) {
             if( message.Mid(3,3).IsSameAs(_T("VDM")) ||
                 message.Mid(1,5).IsSameAs(_T("FRPOS")) ||
-                message.Mid(1,2).IsSameAs(_T("CD")) ||
+                message.Mid(1,4).IsSameAs(_T("CDDS")) ||
                 message.Mid(3,3).IsSameAs(_T("TLL")) ||
                 message.Mid(3,3).IsSameAs(_T("TTM")) ||
                 message.Mid(3,3).IsSameAs(_T("OSD")) ||
@@ -298,6 +286,28 @@ void Multiplexer::OnEvtStream(OCPN_DataStreamEvent& event)
                 if( m_gpsconsumer )
                     m_gpsconsumer->AddPendingEvent(event);
             }
+        }
+
+            //Send to the Debug Window, if open
+            //  Special formatting for non-printable characters helps debugging NMEA problems
+        if (NMEALogWindow::Get().Active()) {
+            std::string str= event.GetNMEAString();    
+            wxString fmsg;
+            
+            bool b_error = false;
+            for ( std::string::iterator it=str.begin(); it!=str.end(); ++it){
+                if(isprint(*it))
+                    fmsg += *it;
+                else{
+                    wxString bin_print;
+                    bin_print.Printf(_T("<0x%02X>"), *it);
+                    fmsg += bin_print;
+                    if((*it != 0x0a) && (*it != 0x0d))
+                        b_error = true;
+                }
+                
+            }
+            LogInputMessage( fmsg, port, !bpass, b_error );
         }
 
         if ((g_b_legacy_input_filter_behaviour && !bpass) || bpass) {
@@ -343,28 +353,6 @@ void Multiplexer::OnEvtStream(OCPN_DataStreamEvent& event)
                     }
                 }
             }
-        }
-
-            //Send to the Debug Window, if open
-            //  Special formatting for non-printable characters helps debugging NMEA problems
-        if (NMEALogWindow::Get().Active()) {
-            std::string str= event.GetNMEAString();    
-            wxString fmsg;
-            
-            bool b_error = false;
-            for ( std::string::iterator it=str.begin(); it!=str.end(); ++it){
-                if(isprint(*it))
-                    fmsg += *it;
-                else{
-                    wxString bin_print;
-                    bin_print.Printf(_T("<0x%02X>"), *it);
-                    fmsg += bin_print;
-                    if((*it != 0x0a) && (*it != 0x0d))
-                        b_error = true;
-                }
-                
-            }
-            LogInputMessage( fmsg, port, !bpass, b_error );
         }
     }
 }
@@ -629,13 +617,17 @@ ret_point:
                         else
                             oNMEA0183.Wpl.Position.Longitude.Set ( prp->m_lon, _T ( "E" ) );
 
-                        oNMEA0183.Wpl.To = prp->GetName().Truncate ( 6 );
+                        oNMEA0183.Wpl.To = prp->GetName().Truncate ( g_maxWPNameLength );
 
                         oNMEA0183.Wpl.Write ( snt );
 
                     }
                     else if(g_GPS_Ident == _T("FurunoGP3X"))
                     {
+                        //  Furuno has its own talker ID, so do not allow the global override
+                        wxString talker_save = g_TalkerIdText;
+                        g_TalkerIdText.Clear();
+                        
                         oNMEA0183.TalkerID = _T ( "PFEC," );
 
                         if ( prp->m_lat < 0. )
@@ -650,10 +642,12 @@ ret_point:
 
                         wxString name = prp->GetName();
                         name += _T("000000");
-                        name.Truncate( 6 );
+                        name.Truncate( g_maxWPNameLength );
                         oNMEA0183.GPwpl.To = name;
 
                         oNMEA0183.GPwpl.Write ( snt );
+                        
+                        g_TalkerIdText = talker_save;
                     }
 
                     wxString payload = snt.Sentence;
@@ -664,10 +658,14 @@ ret_point:
                     // a delay is needed and a new string of waypoints may be sent.
                     // To ensure all waypoints will arrive, we can simply send each one twice.
                     // This ensures that the gps  will get the waypoint and also allows us to send as many as we like
-                    payload += _T("\r\n") + payload;
+                    //
+                    //  We need only send once for FurunoGP3X models
                     
-                    if( dstr->SendSentence( payload ) )
+                    if( dstr->SendSentence( payload ) ) {
+                        if(g_GPS_Ident != _T("FurunoGP3X"))
+                            dstr->SendSentence( payload );
                         LogOutputMessage( snt.Sentence, dstr->GetPort(), false );
+                    }
 
                     wxString msg(_T("-->GPS Port:"));
                     msg += com_name;
@@ -702,6 +700,11 @@ ret_point:
                 max_wp = 6;
             }
 
+            //  Furuno has its own talker ID, so do not allow the global override
+            wxString talker_save = g_TalkerIdText;
+            if(g_GPS_Ident == _T("FurunoGP3X"))
+                g_TalkerIdText.Clear();
+            
             oNMEA0183.Rte.Empty();
             oNMEA0183.Rte.TypeOfRoute = CompleteRoute;
 
@@ -726,13 +729,13 @@ ret_point:
             while ( node )
             {
                 RoutePoint *prp = node->GetData();
-                wxString name = prp->GetName().Truncate ( 6 );
+                wxString name = prp->GetName().Truncate ( g_maxWPNameLength );
 
                 if(g_GPS_Ident == _T("FurunoGP3X"))
                 {
                     name = prp->GetName();
                     name += _T("000000");
-                    name.Truncate( 6 );
+                    name.Truncate( g_maxWPNameLength );
                     name .Prepend( _T(" "));        // What Furuno calls "Skip Code", space means use the WP
                 }
 
@@ -783,7 +786,7 @@ ret_point:
                 while ( node )
                 {
                     RoutePoint *prp = node->GetData();
-                    unsigned int name_len = prp->GetName().Truncate ( 6 ).Len();
+                    unsigned int name_len = prp->GetName().Truncate ( g_maxWPNameLength ).Len();
                     if(g_GPS_Ident == _T("FurunoGP3X"))
                         name_len = 7;           // six chars, with leading space for "Skip Code"
 
@@ -822,12 +825,12 @@ ret_point:
                 while ( node )
                 {
                     RoutePoint *prp = node->GetData();
-                    wxString name = prp->GetName().Truncate ( 6 );
+                    wxString name = prp->GetName().Truncate ( g_maxWPNameLength );
                     if(g_GPS_Ident == _T("FurunoGP3X"))
                     {
                         name = prp->GetName();
                         name += _T("000000");
-                        name.Truncate( 6 );
+                        name.Truncate( g_maxWPNameLength );
                         name .Prepend( _T(" "));        // What Furuno calls "Skip Code", space means use the WP
                     }
 
@@ -889,7 +892,7 @@ ret_point:
 
                 for(unsigned int ii=0 ; ii < sentence_array.GetCount(); ii++)
                 {
-                    wxString sentence = sentence_array.Item(ii);
+                    wxString sentence = sentence_array[ii];
                     
                     if(dstr->SendSentence( sentence ) )
                         LogOutputMessage( sentence, dstr->GetPort(), false );
@@ -947,6 +950,10 @@ ret_point:
 
             //  All finished with the temp port
             dstr->Close();
+            
+            if(g_GPS_Ident == _T("FurunoGP3X"))
+                g_TalkerIdText = talker_save;
+            
         }
     }
 
@@ -1149,7 +1156,7 @@ int Multiplexer::SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wx
             else
                 oNMEA0183.Wpl.Position.Longitude.Set ( prp->m_lon, _T ( "E" ) );
 
-            oNMEA0183.Wpl.To = prp->GetName().Truncate ( 6 );
+            oNMEA0183.Wpl.To = prp->GetName().Truncate ( g_maxWPNameLength );
 
             oNMEA0183.Wpl.Write ( snt );
         }
@@ -1170,7 +1177,7 @@ int Multiplexer::SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wx
 
             wxString name = prp->GetName();
             name += _T("000000");
-            name.Truncate( 6 );
+            name.Truncate( g_maxWPNameLength );
 
             oNMEA0183.GPwpl.To = name;
 

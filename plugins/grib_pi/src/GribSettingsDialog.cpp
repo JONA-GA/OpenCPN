@@ -36,21 +36,24 @@ static const wxString units4_names[] = {_("Millimeters"), _("Inches"), wxEmptySt
 static const wxString units5_names[] = {_("Percentage"), wxEmptyString};
 static const wxString units6_names[] = {_("j/kg"), wxEmptyString};
 static const wxString units7_names[] = {_("Knots"), _("m/s"), _("mph"), _("km/h"), wxEmptyString};
+static const wxString units8_names[] = {_("dBZ"), wxEmptyString};
 static const wxString *unit_names[] = {units0_names, units1_names, units2_names,
-                                       units3_names, units4_names, units5_names, units6_names, units7_names};
+                                       units3_names, units4_names, units5_names,
+                                       units6_names, units7_names, units8_names};
 
 static const wxString name_from_index[] = {_T("Wind"), _T("WindGust"), _T("Pressure"),
                                            _T("Waves"), _T("Current"),
                                            _T("Rainfall"), _T("CloudCover"),
                                            _T("AirTemperature"), _T("SeaTemperature"), _T("CAPE"),
-                                           _T("Altitude"), _T("RelativeHumidity") };
+                                           _T("CompositeReflectivity"),_T("Altitude"), _T("RelativeHumidity") };
 static const wxString tname_from_index[] = {_("Wind"), _("Wind Gust"),  _("Pressure"),
                                             _("Waves"), _("Current"),
                                             _("Rainfall"), _("Cloud Cover"),
                                             _("Air Temperature"), _("Sea Temperature"), _("CAPE"),
+                                            _T("Composite Reflectivity"),
                                             _("Altitude(Geopotential)"), _("Relative Humidity") };
 
-static const int unittype[GribOverlaySettings::SETTINGS_COUNT] = {0, 0, 1, 2, 7, 4, 5, 3, 3, 6, 2, 5};
+static const int unittype[GribOverlaySettings::SETTINGS_COUNT] = {0, 0, 1, 2, 7, 4, 5, 3, 3, 6, 8, 2, 5};
 
 static const int minuttes_from_index [] = { 2, 5, 10, 20, 30, 60, 90, 180, 360, 720, 1440 };
 
@@ -60,7 +63,72 @@ static const wxString altitude_from_index[3][5] = {
     {_T("Std"), _T("25.2"), _T("20.7"), _T("14.8"), _T("8.9")}
     };
 
-enum SettingsDisplay {B_ARROWS, ISO_LINE, ISO_LINE_VISI, ISO_LINE_SHORT, D_ARROWS, OVERLAY, NUMBERS, PARTICLES};
+enum SettingsDisplay {B_ARROWS, ISO_LINE, ISO_ABBR, ISO_LINE_VISI, ISO_LINE_SHORT, D_ARROWS, OVERLAY,
+                        NUMBERS, PARTICLES};
+
+#ifdef __OCPN__ANDROID__
+
+QString qtStyleSheet = "QScrollBar:horizontal {\
+border: 0px solid grey;\
+background-color: rgb(240, 240, 240);\
+height: 35px;\
+margin: 0px 1px 0 1px;\
+}\
+QScrollBar::handle:horizontal {\
+background-color: rgb(200, 200, 200);\
+min-width: 20px;\
+border-radius: 10px;\
+}\
+QScrollBar::add-line:horizontal {\
+border: 0px solid grey;\
+background: #32CC99;\
+width: 0px;\
+subcontrol-position: right;\
+subcontrol-origin: margin;\
+}\
+QScrollBar::sub-line:horizontal {\
+border: 0px solid grey;\
+background: #32CC99;\
+width: 0px;\
+subcontrol-position: left;\
+subcontrol-origin: margin;\
+}\
+QScrollBar:vertical {\
+border: 0px solid grey;\
+background-color: rgb(240, 240, 240);\
+width: 35px;\
+margin: 1px 0px 1px 0px;\
+}\
+QScrollBar::handle:vertical {\
+background-color: rgb(200, 200, 200);\
+min-height: 20px;\
+border-radius: 10px;\
+}\
+QScrollBar::add-line:vertical {\
+border: 0px solid grey;\
+background: #32CC99;\
+height: 0px;\
+subcontrol-position: top;\
+subcontrol-origin: margin;\
+}\
+QScrollBar::sub-line:vertical {\
+border: 0px solid grey;\
+background: #32CC99;\
+height: 0px;\
+subcontrol-position: bottom;\
+subcontrol-origin: margin;\
+}\
+QCheckBox {\
+spacing: 25px;\
+}\
+QCheckBox::indicator {\
+width: 30px;\
+height: 30px;\
+}\
+";
+
+#endif
+
 
 extern int   m_DialogStyle;
 
@@ -94,17 +162,18 @@ void GribOverlaySettings::Read()
     pConf->Read ( _T ( "LoopMode" ), &m_bLoopMode, false );
     pConf->Read ( _T ( "LoopStartPoint" ), &m_LoopStartPoint, 0 );
     pConf->Read ( _T ( "SlicesPerUpdate" ), &m_SlicesPerUpdate, 5);
-    pConf->Read ( _T ( "UpdatesPerSecond" ), &m_UpdatesPerSecond, 2);
+    pConf->Read ( _T ( "UpdatesPerSecond" ), &m_UpdatesPerSecond, 4);
 	pConf->Read ( _T ( "Interpolate" ), &m_bInterpolate, false );
 	//gui options
     m_iCtrlandDataStyle = m_DialogStyle;
     wxString s1, s2;
-    pConf->Read ( _T( "CtrlBarCtrlVisibility1" ), &s1, _T( "XXXXXXXXX" ) );
-    if(s1.Len() != wxString (_T( "XXXXXXXXX" ) ).Len() )
-        s1 = _T( "XXXXXXXXX" );
-    pConf->Read ( _T( "CtrlBarCtrlVisibility2" ), &s2, _T( "XXXXXXXXX" ) );
-    if(s2.Len() != wxString (_T( "XXXXXXXXX" ) ).Len() )
-        s2 = _T( "XXXXXXXXX" );
+    wxString const dflt = _T( "XXXXXXXXX" );
+    pConf->Read ( _T( "CtrlBarCtrlVisibility1" ), &s1, dflt );
+    if(s1.Len() != dflt.Len() )
+        s1 = dflt;
+    pConf->Read ( _T( "CtrlBarCtrlVisibility2" ), &s2, dflt );
+    if(s2.Len() != dflt.Len() )
+        s2 = dflt;
     m_iCtrlBarCtrlVisible[0] = s1;
     m_iCtrlBarCtrlVisible[1] = s2;
 	//data options
@@ -124,6 +193,8 @@ void GribOverlaySettings::Read()
         pConf->Read ( Name + _T ( "BarbedArrowSpacing" ), &Settings[i].m_iBarbArrSpacing, 50);
 
         pConf->Read ( Name + _T ( "Display Isobars" ), &Settings[i].m_bIsoBars, i==PRESSURE);
+        pConf->Read ( Name + _T ( "Abbreviated Isobars Numbers" ), &Settings[i].m_bAbbrIsoBarsNumbers, i==PRESSURE);
+
         double defspacing[SETTINGS_COUNT] = {4, 4, 4, 0, 0, 0, 0, 2, 2, 100};
         pConf->Read ( Name + _T ( "IsoBarSpacing" ), &Settings[i].m_iIsoBarSpacing, defspacing[i]);
         pConf->Read ( Name + _T ( "IsoBarVisibility" ), &Settings[i].m_iIsoBarVisibility, i==PRESSURE);
@@ -136,7 +207,7 @@ void GribOverlaySettings::Read()
         pConf->Read ( Name + _T ( "DirectionArrowSpacing" ), &Settings[i].m_iDirArrSpacing, 50);
 
         pConf->Read ( Name + _T ( "OverlayMap" ), &Settings[i].m_bOverlayMap, i!=WIND && i!=PRESSURE);
-        int defcolor[SETTINGS_COUNT] = {1, 1, 0, 0, 6, 4, 5, 2, 3, 0};
+        int defcolor[SETTINGS_COUNT] = {1, 1, 0, 0, 6, 4, 5, 2, 3, 7};
         pConf->Read ( Name + _T ( "OverlayMapColors" ), &Settings[i].m_iOverlayMapColors, defcolor[i]);
 
         pConf->Read ( Name + _T ( "Numbers" ), &Settings[i].m_bNumbers, false);
@@ -182,7 +253,7 @@ void GribOverlaySettings::Write()
             SaveSettingGroups(pConf, i, NUMBERS);
             SaveSettingGroups(pConf, i, PARTICLES);
         }
-        else if(i == WIND_GUST || i == AIR_TEMPERATURE || i == SEA_TEMPERATURE || i == CAPE) {
+        else if(i == WIND_GUST || i == AIR_TEMPERATURE || i == SEA_TEMPERATURE || i == CAPE || i == COMP_REFL) {
             SaveSettingGroups(pConf, i, ISO_LINE_SHORT);
             SaveSettingGroups(pConf, i, OVERLAY);
             SaveSettingGroups(pConf, i, NUMBERS);
@@ -220,6 +291,7 @@ void GribOverlaySettings::SaveSettingGroups(wxFileConfig *pConf, int settings, i
         break;
     case ISO_LINE_SHORT:
         pConf->Write ( Name + _T ( "Display Isobars" ), Settings[settings].m_bIsoBars);
+        pConf->Write ( Name + _T ( "Abbreviated Isobars Numbers" ), Settings[settings].m_bAbbrIsoBarsNumbers);
         pConf->Write ( Name + _T ( "IsoBarSpacing" ), Settings[settings].m_iIsoBarSpacing);
         break;
     case ISO_LINE_VISI:
@@ -289,7 +361,8 @@ double GribOverlaySettings::CalibrationFactor(int settings, double input, bool r
         case INCHES:      return 1./25.4;
         } break;
     case 5:
-    case 6: return 1;
+    case 6: 
+    case 8: return 1;
     }
 
     return 1;
@@ -391,6 +464,9 @@ wxString GribOverlaySettings::GetUnitSymbol(int settings)
         case MPH:    return _T("mph");
         case KPH:    return _T("km/h");
         } break;
+    case 8: switch(Settings[settings].m_Units) {
+        case DBZ:  return _T("dBZ");
+        } break;
     }
     return _T("");
 }
@@ -419,7 +495,8 @@ double GribOverlaySettings::GetMax(int settings)
     case CLOUD:           max = 100;     break; /* percent */
     case AIR_TEMPERATURE: max = 273.15+50;  break; /* kelvin */
     case SEA_TEMPERATURE: max = 273.15+50;  break; /* kelvin */
-    case CAPE:            max = 4000;    break; /* j/kg */
+    case CAPE:            max = 3500;    break; /* j/kg */
+    case COMP_REFL:       max = 80;    break; /* dBZ */
     }
     return CalibrateValue(settings, max);
 }
@@ -459,9 +536,13 @@ GribSettingsDialog::GribSettingsDialog(GRIBUICtrlBar &parent, GribOverlaySetting
     m_sSlicesPerUpdate->SetSelection(m_Settings.m_SlicesPerUpdate);
     m_sUpdatesPerSecond->SetValue(m_Settings.m_UpdatesPerSecond);
     m_sTransparency->SetValue(100. - ((float) m_Settings.m_iOverlayTransparency * 100. / 254.));
-    if(!m_cInterpolate->IsChecked() ) {              //hide no suiting parameters
-        m_tSlicesPerUpdate->Hide();
-        m_sSlicesPerUpdate->Hide();
+    if(!m_cInterpolate->IsChecked() ) {              //eventually disable parameters
+        m_tSlicesPerUpdate->Disable();
+        m_sSlicesPerUpdate->Disable();
+    }
+    if( !m_cLoopMode->IsChecked() ) {
+        m_staticText26->Disable();
+        m_cLoopStartPoint->Disable();
     }
 
 	m_rbCurDataAttaWCap->SetValue( m_Settings.m_iCtrlandDataStyle == 0 );
@@ -474,6 +555,7 @@ GribSettingsDialog::GribSettingsDialog(GRIBUICtrlBar &parent, GribOverlaySetting
         ((wxCheckBox*) FindWindow( i + 1 + AC0 ) )->SetValue( m_Settings.m_iCtrlBarCtrlVisible[1].GetChar(i / 2) == _T('X') );
     }
 
+    m_cDataType->Clear();
     for(int i=0; i<GribOverlaySettings::SETTINGS_COUNT; i++)
         m_cDataType->Append( wxGetTranslation(tname_from_index[i]) );
 
@@ -483,6 +565,10 @@ GribSettingsDialog::GribSettingsDialog(GRIBUICtrlBar &parent, GribOverlaySetting
     m_sButtonApply->SetLabel(_("Apply"));
 
     DimeWindow( this );                             //aplly global colours scheme
+
+#ifdef __OCPN__ANDROID__
+    GetHandle()->setStyleSheet( qtStyleSheet);
+#endif
 
     Fit();
 }
@@ -501,48 +587,71 @@ void GribSettingsDialog::SaveLastPage()
 void GribSettingsDialog::OnPageChange( wxNotebookEvent& event )
 {
 	m_SetBookpageIndex = event.GetSelection();
-
-#if defined __WXMSW__ || defined ( __WXOSX__ )
-	for( size_t i = 0; i < m_nSettingsBook->GetPageCount(); i++ ) {
-		wxScrolledWindow *sc = ((wxScrolledWindow*) m_nSettingsBook->GetPage( i ));
-        sc->Show( i == (unsigned int ) m_SetBookpageIndex );
-    }
-#endif
-
-	Layout();
-    Fit();
-	Refresh();
+    SetSettingsDialogSize();
 }
 
 void GribSettingsDialog::SetSettingsDialogSize()
 {
+#ifdef __OCPN__ANDROID__
+    /*Sizing do not work with wxScolledWindow so we need to compute it
+    using fixed X/Y margin to try to center nicely the dialog in the screen*/
+	int wt,ht,w,h;
+        ::wxDisplaySize( &wt, &ht);                                                         // the screen size
+
+	int XMargin = 100, YMargin = 200;													//set margins
+	w = wt - XMargin;																	//maximum scolled window size
+    h = ht - ( m_sButton->GetSize().GetY() + YMargin );
+	wxSize scroll(0, 0);
+#else        
     /*Sizing do not work with wxScolledWindow so we need to compute it*/
-    int w = GetOCPNCanvasWindow()->GetClientSize().x;           // the display size
-    int h = GetOCPNCanvasWindow()->GetClientSize().y;
+    
+    wxWindow *frame = wxTheApp->GetTopWindow();  
+
+    int w = frame->GetClientSize().x;           // the display size
+    int h = frame->GetClientSize().y;
     int dMargin = 80;                          //set a margin
 	w -= dMargin;								//width available for the scrolled window
     h -= (2 * m_sButton->GetSize().GetY()) + dMargin; //height available for the scrolled window
                                                       //two times the button's height to handle pages tab's height
+#endif
+#ifdef __WXGTK__
+    SetMinSize( wxSize( 0, 0 ) );
+#endif
 	for( size_t i = 0; i < m_nSettingsBook->GetPageCount(); i++ ) {						//compute and set scrolled windows size
 		wxScrolledWindow *sc = ((wxScrolledWindow*) m_nSettingsBook->GetPage( i ));
+		sc->SetMinSize( wxSize( 0, 0 ) );
 		wxSize scr;
-		switch( i ) {
-			case 0:
-				scr = m_fgSetDataSizer->Fit( sc ); break;
-			case 1:
-				scr = m_fgSetPlaybackSizer->Fit( sc ); break;
-			case 2:
-				scr = m_fgSetGuiSizer->Fit( sc ); break;
-		}
-		sc->SetMinSize( wxSize(wxMin( scr.x, w ), h) );
+		if( (int)i == m_SetBookpageIndex ) {
+            switch( i ) {
+                case 0:
+                    scr = m_fgSetDataSizer->Fit( sc ); break;
+                case 1:
+                    //set a reasonable speed slider's width
+                    m_sUpdatesPerSecond->SetMinSize( wxSize( m_cLoopStartPoint->GetSize().x, -1) );
+                    scr = m_fgSetPlaybackSizer->Fit( sc );
+                    break;
+                case 2:
+                    scr = m_fgSetGuiSizer->Fit( sc );
+            }
+            sc->SetMinSize( wxSize(wxMin( scr.x, w ), wxMin( scr.y, h )) );
 #if defined __WXMSW__ || defined ( __WXOSX__ )
-        sc->Show( i == (unsigned int) m_SetBookpageIndex );
+            sc->Show();
 #endif
-       } // end compute
+        }
+    } // end compute
 
+#ifdef __OCPN__ANDROID__
+	m_nSettingsBook->SetSize( wt, -1);
+#endif
 
 	Layout();
     Fit();
+#ifdef __WXGTK__
+    wxSize sd = GetSize();
+    if( sd.y == GetClientSize().y ) sd.y += 30;
+    SetSize( wxSize( sd.x, sd.y ) );
+    SetMinSize( wxSize( sd.x, sd.y ) );
+#endif
 	Refresh();
 }
 
@@ -580,6 +689,7 @@ void GribSettingsDialog::SetDataTypeSettings(int settings)
     odc.m_bBarbArrFixSpac = m_cBarbArrFixSpac->GetValue();
     odc.m_iBarbArrSpacing = m_sBarbArrSpacing->GetValue();
     odc.m_bIsoBars = m_cbIsoBars->GetValue();
+    odc.m_bAbbrIsoBarsNumbers = m_cbAbbrIsoBarsNumbers->GetValue();
     odc.m_iIsoBarVisibility = m_sIsoBarVisibility->GetValue();
     odc.m_iIsoBarSpacing = m_sIsoBarSpacing->GetValue();
     odc.m_bDirectionArrows = m_cbDirectionArrows->GetValue();
@@ -608,6 +718,7 @@ void GribSettingsDialog::ReadDataTypeSettings(int settings)
     m_cBarbArrMinSpac->SetValue(!odc.m_bBarbArrFixSpac);
     m_sBarbArrSpacing->SetValue(odc.m_iBarbArrSpacing);
     m_cbIsoBars->SetValue(odc.m_bIsoBars);
+    m_cbAbbrIsoBarsNumbers->SetValue(odc.m_bAbbrIsoBarsNumbers);
     m_sIsoBarVisibility->SetValue(odc.m_iIsoBarVisibility);
     m_sIsoBarSpacing->SetValue(odc.m_iIsoBarSpacing);
     m_cbDirectionArrows->SetValue(odc.m_bDirectionArrows);
@@ -636,6 +747,7 @@ void GribSettingsDialog::ShowFittingSettings( int settings )
     if(m_fIsoBarSpacing->GetItem(m_sIsoBarSpacing) != NULL)  m_fIsoBarSpacing->Detach(m_sIsoBarSpacing);
     if(m_fIsoBarVisibility->GetItem(m_sIsoBarSpacing) != NULL)  m_fIsoBarVisibility->Detach(m_sIsoBarSpacing);
     if(m_fIsoBarVisibility->GetItem(m_sIsoBarVisibility) != NULL)  m_fIsoBarVisibility->Detach(m_sIsoBarVisibility);
+    ShowSettings( ISO_ABBR, false );
     ShowSettings( D_ARROWS, false  );
     ShowSettings( OVERLAY, false  );
     ShowSettings( NUMBERS, false );
@@ -663,6 +775,7 @@ void GribSettingsDialog::ShowFittingSettings( int settings )
         ShowSettings( ISO_LINE_VISI );
         ShowSettings( ISO_LINE );
         m_cbIsoBars->SetLabel(_("Display Isobars"));
+        ShowSettings( ISO_ABBR );
         ShowSettings( NUMBERS );
         break;
     case GribOverlaySettings::CURRENT:
@@ -691,6 +804,14 @@ void GribSettingsDialog::ShowFittingSettings( int settings )
         m_cbIsoBars->SetLabel(_("Display Iso CAPE"));
         ShowSettings( OVERLAY );
         ShowSettings( NUMBERS );
+        break;
+    case GribOverlaySettings::COMP_REFL:
+        ShowSettings( ISO_LINE_SHORT );
+        ShowSettings( ISO_LINE );
+        m_cbIsoBars->SetLabel(_("Display Comp. Reflectivity"));
+        ShowSettings( OVERLAY );
+        ShowSettings( NUMBERS );
+        break;
     }
 
 	wxString l = (m_lastdatatype == GribOverlaySettings::PRESSURE && m_cDataUnits->GetSelection() == GribOverlaySettings::INHG) ? _T("(0.03 " ) : _T("(");
@@ -709,6 +830,9 @@ void GribSettingsDialog::ShowSettings( int params, bool show)
         m_cbIsoBars->Show(show);
         m_fIsoBarSpacing->ShowItems(show);
         m_fIsoBarVisibility->ShowItems(show);
+        break;
+    case ISO_ABBR:
+        m_cbAbbrIsoBarsNumbers->Show(show);
         break;
     case ISO_LINE_VISI:
         m_fIsoBarSpacing->Add(m_sIsoBarSpacing, 0, 5,wxALL|wxEXPAND);
@@ -804,13 +928,21 @@ void GribSettingsDialog::OnIntepolateChange( wxCommandEvent& event )
     if( m_cInterpolate->IsChecked() ) {
         OCPNMessageBox_PlugIn(this, _("You have chosen to authorize interpolation.\nDon't forget that data displayed will not be real but recomputed\nThis can decrease accuracy!"),
                             _("Warning!") );
-        m_tSlicesPerUpdate->Show();
-        m_sSlicesPerUpdate->Show();
+        m_tSlicesPerUpdate->Enable();
+        m_sSlicesPerUpdate->Enable();
     } else {                                        //hide no suiting parameters
-        m_tSlicesPerUpdate->Hide();
-        m_sSlicesPerUpdate->Hide();
+        m_tSlicesPerUpdate->Disable();
+        m_sSlicesPerUpdate->Disable();
     }
-    SetSettingsDialogSize();
+    if( m_cLoopMode->IsChecked() ) {
+        m_staticText26->Enable();
+        m_cLoopStartPoint->Enable();
+    } else {
+        m_staticText26->Disable();
+        m_cLoopStartPoint->Disable();
+    }
+    Refresh();
+   // SetSettingsDialogSize();
 }
 
 void GribSettingsDialog::OnSpacingModeChange( wxCommandEvent& event )
@@ -844,3 +976,216 @@ void GribSettingsDialog::OnSpacingModeChange( wxCommandEvent& event )
                             _("Warning!") );
     }
 }
+
+
+wxString GribOverlaySettings::SettingsToJSON(wxString json)
+{
+    wxJSONValue v(json);
+    
+    for(int i=0; i<SETTINGS_COUNT; i++) {
+        
+        wxString units; units.Printf(_T("%d"), (int)Settings[i].m_Units);
+        v[name_from_index[i] + _T ( "Units" )] = units;
+        
+        if(i == WIND){
+            UpdateJSONval(v, i, B_ARROWS);
+            UpdateJSONval(v, i, ISO_LINE_SHORT);
+            UpdateJSONval(v, i, OVERLAY);
+            UpdateJSONval(v, i, NUMBERS);
+            UpdateJSONval(v, i, PARTICLES);
+        }
+        else if(i == WIND_GUST || i == AIR_TEMPERATURE || i == SEA_TEMPERATURE || i == CAPE || i == COMP_REFL) {
+            UpdateJSONval(v, i, ISO_LINE_SHORT);
+            UpdateJSONval(v, i, OVERLAY);
+            UpdateJSONval(v, i, NUMBERS);
+        }
+        else if(i == PRESSURE) {
+            UpdateJSONval(v, i, ISO_LINE_SHORT);
+            UpdateJSONval(v, i, ISO_LINE_VISI);
+            UpdateJSONval(v, i, NUMBERS);
+        }
+        else if(i == WAVE || i == CURRENT) {
+            UpdateJSONval(v, i, D_ARROWS);
+            UpdateJSONval(v, i, OVERLAY);
+            UpdateJSONval(v, i, NUMBERS);
+            UpdateJSONval(v, i, PARTICLES);
+        }
+        else if( i == PRECIPITATION || i == CLOUD) {
+            UpdateJSONval(v, i, OVERLAY);
+            UpdateJSONval(v, i, NUMBERS);
+        }
+    }
+    
+    wxJSONWriter w;
+    wxString out;
+    w.Write(v, out);
+    return out;
+}
+
+bool GribOverlaySettings::UpdateJSONval( wxJSONValue &v, int settings, int group)
+{
+    wxString Name=name_from_index[settings];
+    
+    switch(group) {
+    case B_ARROWS:
+        v[ Name + _T ( "BarbedArrows" )] = Settings[settings].m_bBarbedArrows;
+        v[ Name + _T ( "BarbedVisibility" )] = Settings[settings].m_iBarbedVisibility;
+        v[ Name + _T ( "BarbedColors" )] = Settings[settings].m_iBarbedColour;
+        v[ Name + _T ( "BarbedArrowFixedSpacing" )] = Settings[settings].m_bBarbArrFixSpac;
+        v[ Name + _T ( "BarbedArrowSpacing" )] = Settings[settings].m_iBarbArrSpacing;
+        break;
+    case ISO_LINE_SHORT:
+        v[ Name + _T ( "DisplayIsobars" )] = Settings[settings].m_bIsoBars;
+        v[ Name + _T ( "IsoBarSpacing" )] = Settings[settings].m_iIsoBarSpacing;
+        break;
+    case ISO_ABBR:
+        v[ Name + _T ( "AbbrIsobarsNumbers" )] = Settings[settings].m_bAbbrIsoBarsNumbers;
+        break;
+    case ISO_LINE_VISI:
+        v[ Name + _T ( "IsoBarVisibility" )] = Settings[settings].m_iIsoBarVisibility;
+        break;
+    case D_ARROWS:
+        v[ Name + _T ( "DirectionArrows" )] = Settings[settings].m_bDirectionArrows;
+        v[ Name + _T ( "DirectionArrowForm" )] = Settings[settings].m_iDirectionArrowForm;
+        v[ Name + _T ( "DirectionArrowSize" )] = Settings[settings].m_iDirectionArrowSize;
+        v[ Name + _T ( "DirectionArrowFixedSpacing" )] = Settings[settings].m_bDirArrFixSpac;
+        v[ Name + _T ( "DirectionArrowSpacing" )] = Settings[settings].m_iDirArrSpacing;
+        break;
+    case OVERLAY:
+        v[ Name + _T ( "OverlayMap" )] = Settings[settings].m_bOverlayMap;
+        v[ Name + _T ( "OverlayMapColors" )] = Settings[settings].m_iOverlayMapColors;
+        break;
+    case NUMBERS:
+        v[ Name + _T ( "Numbers" )] = Settings[settings].m_bNumbers;
+        v[ Name + _T ( "NumbersFixedSpacing" )] = Settings[settings].m_bNumFixSpac;
+        v[ Name + _T ( "NumbersSpacing" )] = Settings[settings].m_iNumbersSpacing;
+        break;
+    case PARTICLES:
+        v[ Name + _T ( "Particles" )] = Settings[settings].m_bParticles;
+        v[ Name + _T ( "ParticleDensity" )] = Settings[settings].m_dParticleDensity;
+        break;
+    default:
+        break;
+    }
+    
+    return true;
+}
+
+bool GribOverlaySettings::JSONToSettings(wxString json)
+{
+    wxJSONValue  root;
+    wxJSONReader reader;
+    
+    // now read the JSON text and store it in the 'root' structure
+    // check for errors before retreiving values...
+    int numErrors = reader.Parse( json, &root );
+    if ( numErrors > 0 )  {
+        return false;
+    }
+    
+    //  Read all the JSON values, and populate the local settings
+ 
+    if(root[_T ( "overlay_transparency" )].IsString()){
+        wxString s = root[_T ( "overlay_transparency" )].AsString(); long transparency = -1; s.ToLong(&transparency);
+        transparency = wxMax(1, transparency);
+        transparency = wxMin(100, transparency);
+        m_iOverlayTransparency = transparency * (double)(254. / 100.);
+    }
+ 
+    for(int i=0; i<SETTINGS_COUNT; i++) {
+        wxString Name=name_from_index[i];
+        wxString s;
+        
+        if(root[Name + _T ( "Units" )].IsString()){
+            wxString s = root[Name + _T ( "Units" )].AsString(); long units = -1; s.ToLong(&units);
+            for( int j=0; !unit_names[unittype[i]][j].empty(); j++)
+                Settings[i].m_Units = ( units < 0 || units > j - 1 ) ? (SettingsType) 0 : (SettingsType)units;
+        }
+    
+        if(root[Name + _T ( "BarbedArrows" )].IsBool())
+            Settings[i].m_bBarbedArrows = root[Name + _T ( "BarbedArrows" )].AsBool();
+
+        if(root[Name + _T ( "BarbedVisibility" )].IsBool())
+            Settings[i].m_iBarbedVisibility = root[Name + _T ( "BarbedVisibility" )].AsBool();
+        
+        if(root[Name + _T ( "BarbedColors" )].IsString()){
+            wxString s = root[Name + _T ( "BarbedColors" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iBarbedColour = val;
+        }
+        
+        if(root[Name + _T ( "BarbedArrowFixedSpacing" )].IsBool())
+            Settings[i].m_bBarbArrFixSpac = root[Name + _T ( "BarbedArrowFixedSpacing" )].AsBool();
+        
+         if(root[Name + _T ( "BarbedArrowSpacing" )].IsString()){
+            wxString s = root[Name + _T ( "BarbedArrowSpacing" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iBarbArrSpacing = val;
+        }
+        
+        if(root[Name + _T ( "DisplayIsobars" )].IsBool())
+            Settings[i].m_bIsoBars = root[Name + _T ( "DisplayIsobars" )].AsBool();
+        
+        if(root[Name + _T ( "IsoBarSpacing" )].IsString()){
+            wxString s = root[Name + _T ( "IsoBarSpacing" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iIsoBarSpacing = val;
+        }
+        
+        if(root[Name + _T ( "AbbrIsobarsNumbers" )].IsBool())
+            Settings[i].m_bAbbrIsoBarsNumbers = root[Name + _T ( "AbbrIsobarsNumbers" )].AsBool();
+
+        if(root[Name + _T ( "IsoBarVisibility" )].IsBool())
+            Settings[i].m_iIsoBarVisibility = root[Name + _T ( "IsoBarVisibility" )].AsBool();
+        
+        if(root[Name + _T ( "DirectionArrows" )].IsBool())
+            Settings[i].m_bDirectionArrows = root[Name + _T ( "DirectionArrows" )].AsBool();
+        
+        if(root[Name + _T ( "DirectionArrowForm" )].IsString()){
+            wxString s = root[Name + _T ( "DirectionArrowForm" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iDirectionArrowForm = val;
+        }
+        
+        if(root[Name + _T ( "DirectionArrowSize" )].IsString()){
+            wxString s = root[Name + _T ( "DirectionArrowSize" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iDirectionArrowSize = val;
+        }
+        
+        if(root[Name + _T ( "DirectionArrowFixedSpacing" )].IsBool())
+            Settings[i].m_bDirArrFixSpac = root[Name + _T ( "DirectionArrowFixedSpacing" )].AsBool();
+        
+        if(root[Name + _T ( "DirectionArrowSpacing" )].IsString()){
+            wxString s = root[Name + _T ( "DirectionArrowSpacing" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iDirArrSpacing = val;
+        }
+        
+        if(root[Name + _T ( "OverlayMap" )].IsBool())
+            Settings[i].m_bOverlayMap = root[Name + _T ( "OverlayMap" )].AsBool();
+        
+        if(root[Name + _T ( "OverlayMapColors" )].IsString()){
+            wxString s = root[Name + _T ( "OverlayMapColors" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iOverlayMapColors = val;
+        }
+        
+        if(root[Name + _T ( "Numbers" )].IsBool())
+            Settings[i].m_bNumbers = root[Name + _T ( "Numbers" )].AsBool();
+        
+        if(root[Name + _T ( "NumbersFixedSpacing" )].IsBool())
+            Settings[i].m_bNumFixSpac = root[Name + _T ( "NumbersFixedSpacing" )].AsBool();
+        
+        if(root[Name + _T ( "NumbersSpacing" )].IsString()){
+            wxString s = root[Name + _T ( "NumbersSpacing" )].AsString(); long val = -1; s.ToLong(&val);
+            Settings[i].m_iNumbersSpacing = val;
+        }
+        
+        if(root[Name + _T ( "Particles" )].IsBool())
+            Settings[i].m_bParticles = root[Name + _T ( "Particles" )].AsBool();
+        
+        if(root[Name + _T ( "ParticleDensity" )].IsString()){
+            wxString s = root[Name + _T ( "ParticleDensity" )].AsString(); double val = -1; s.ToDouble(&val);
+            Settings[i].m_dParticleDensity = val;
+        }
+        
+    }
+ 
+    return true;    
+}
+
+
