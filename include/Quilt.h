@@ -28,6 +28,7 @@
 #include "chart1.h"
 #include "LLRegion.h"
 #include "OCPNRegion.h"
+//#include "chcanv.h"
 
 extern bool g_bopengl;
 
@@ -64,9 +65,13 @@ public:
 
     const LLRegion &GetCandidateRegion();
     LLRegion &GetReducedCandidateRegion(double factor);
+    void SetScale(int scale);
+    bool Scale_eq( int b ) const { return abs ( ChartScale - b) <= rounding; }
+    bool Scale_ge( int b ) const { return  Scale_eq( b ) || ChartScale > b; }
     
     int dbIndex;
     int ChartScale;
+    int rounding;
     bool b_include;
     bool b_eclipsed;
     bool b_locked;
@@ -84,7 +89,7 @@ class Quilt
 {
 public:
 
-    Quilt();
+    Quilt( ChartCanvas *parent);
     ~Quilt();
 
     void SetQuiltParameters( double CanvasScaleFactor, int CanvasWidth )
@@ -95,7 +100,6 @@ public:
 
     void EnableHighDefinitionZoom( bool value ) { m_b_hidef = value;}
     
-    bool BuildExtendedChartStackAndCandidateArray(bool b_fullscreen, int ref_db_index, ViewPort &vp_in);
     void UnlockQuilt();
     bool Compose( const ViewPort &vp );
     bool IsComposed() {
@@ -104,7 +108,9 @@ public:
     ChartBase *GetFirstChart();
     ChartBase *GetNextChart();
     ChartBase *GetLargestScaleChart();
-    ArrayOfInts GetQuiltIndexArray( void );
+    ChartBase *GetNextSmallerScaleChart();
+    
+    std::vector<int> GetQuiltIndexArray( void );
     bool IsQuiltDelta( ViewPort &vp );
     bool IsChartQuiltableRef( int db_index );
     ViewPort &GetQuiltVP() {
@@ -121,7 +127,7 @@ public:
     }
 
     int GetExtendedStackCount(void) {
-        return m_extended_stack_array.GetCount();
+        return m_extended_stack_array.size();
     }
 
     int GetnCharts() {
@@ -131,7 +137,9 @@ public:
     
 
     void ComputeRenderRegion( ViewPort &vp, OCPNRegion &chart_region );
-    bool RenderQuiltRegionViewOnDC( wxMemoryDC &dc, ViewPort &vp, OCPNRegion &chart_region );
+    bool RenderQuiltRegionViewOnDCNoText( wxMemoryDC &dc, ViewPort &vp, OCPNRegion &chart_region );
+    bool RenderQuiltRegionViewOnDCTextOnly( wxMemoryDC &dc, ViewPort &vp, OCPNRegion &chart_region );
+    
     bool IsVPBlittable( ViewPort &VPoint, int dx, int dy, bool b_allow_vector = false );
     ChartBase *GetChartAtPix( ViewPort &VPoint, wxPoint p );
     ChartBase *GetOverlayChartAtPix( ViewPort &VPoint, wxPoint p );
@@ -160,7 +168,6 @@ public:
 
     int AdjustRefOnZoomOut( double proposed_scale_onscreen );
     int AdjustRefOnZoomIn( double proposed_scale_onscreen );
-    int AdjustRefOnZoom( bool b_zin, ChartFamilyEnum family, ChartTypeEnum type, double proposed_scale_onscreen );
     
     void SetHiliteIndex( int index ) {
         m_nHiLiteIndex = index;
@@ -174,6 +181,9 @@ public:
     int GetRefChartdbIndex( void ) {
         return m_refchart_dbIndex;
     }
+    
+    ChartBase *GetRefChart();
+    
     int GetQuiltProj( void )
     {
         return m_quilt_proj;
@@ -188,12 +198,12 @@ public:
     }
     double GetRefNativeScale();
 
-    ArrayOfInts GetCandidatedbIndexArray( bool from_ref_chart, bool exclude_user_hidden );
-    ArrayOfInts GetExtendedStackIndexArray()
+    std::vector<int> GetCandidatedbIndexArray( bool from_ref_chart, bool exclude_user_hidden );
+    std::vector<int> GetExtendedStackIndexArray()
     {
         return m_extended_stack_array;
     }
-    ArrayOfInts GetEclipsedStackIndexArray()
+    std::vector<int> GetEclipsedStackIndexArray()
     {
         return m_eclipsed_stack_array;
     }
@@ -211,16 +221,25 @@ public:
     bool IsChartInQuilt( wxString &full_path);
     
     bool IsQuiltVector( void );
+    bool DoesQuiltContainPlugins( void );
+    
     LLRegion GetHiliteRegion( );
     static LLRegion GetChartQuiltRegion( const ChartTableEntry &cte, ViewPort &vp );
+
+    int GetNomScaleMin(int scale, ChartTypeEnum type, ChartFamilyEnum family);
+    int GetNomScaleMax(int scale, ChartTypeEnum type, ChartFamilyEnum family);
     
 private:
+    bool BuildExtendedChartStackAndCandidateArray(int ref_db_index, ViewPort &vp_in);
+    int AdjustRefOnZoom( bool b_zin, ChartFamilyEnum family, ChartTypeEnum type, double proposed_scale_onscreen );
+
+    bool DoRenderQuiltRegionViewOnDC( wxMemoryDC &dc, ViewPort &vp, OCPNRegion &chart_region );
+    bool DoRenderQuiltRegionViewOnDCTextOnly( wxMemoryDC& dc, ViewPort &vp, OCPNRegion &chart_region );
+    
     void EmptyCandidateArray( void );
     void SubstituteClearDC( wxMemoryDC &dc, ViewPort &vp );
     int GetNewRefChart( void );
 
-    int GetNomScaleMin(int scale, ChartTypeEnum type, ChartFamilyEnum family);
-    int GetNomScaleMax(int scale, ChartTypeEnum type, ChartFamilyEnum family);
     
     bool IsChartS57Overlay( int db_index );
     
@@ -236,10 +255,10 @@ private:
     int m_quilt_proj;
 
     ArrayOfSortedQuiltCandidates *m_pcandidate_array;
-    ArrayOfInts m_last_index_array;
-    ArrayOfInts m_index_array;
-    ArrayOfInts m_extended_stack_array;
-    ArrayOfInts m_eclipsed_stack_array;
+    std::vector<int> m_last_index_array;
+    std::vector<int> m_index_array;
+    std::vector<int> m_extended_stack_array;
+    std::vector<int> m_eclipsed_stack_array;
 
     ViewPort m_vp_quilt;
     ViewPort m_vp_rendered;          // last VP rendered
@@ -266,6 +285,8 @@ private:
     
     bool m_bquiltskew;
     bool m_bquiltanyproj;
+    ChartCanvas *m_parent;
+    
 };
 
 #endif

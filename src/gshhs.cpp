@@ -39,6 +39,8 @@
 
 #include <wx/file.h>
 
+#include "dychart.h"
+
 #ifdef ocpnUSE_GL
 #include "glChartCanvas.h"
 #endif
@@ -47,7 +49,6 @@
 #include "chartbase.h" // for projections
 #include "wx28compat.h"
 
-#include "dychart.h"
 
 
 #ifdef __WXMSW__
@@ -58,12 +59,15 @@
 
 //typedef void (APIENTRY * PFNGLBINDBUFFERPROC) (GLenum target, GLuint buffer);
 
-extern wxString *pWorldMapLocation;
+extern wxString gWorldMapLocation;
 
 //-------------------------------------------------------------------------
 
 GSHHSChart::GSHHSChart() {
     reader = NULL;
+    land = wxColor( 250, 250, 250 );
+    water = wxColor( 0, 0, 0 );
+    
 }
 
 GSHHSChart::~GSHHSChart() {
@@ -92,18 +96,42 @@ void GSHHSChart::SetColorScheme( ColorScheme scheme ) {
     water.Set( water.Red()*dim, water.Green()*dim, water.Blue()*dim );
 }
 
+void GSHHSChart::SetColorsDirect( wxColour newLand, wxColour newWater ) {
+    land =  newLand;
+    water = newWater;
+}
+    
+
+void GSHHSChart::Reset() {
+    if( reader )
+        delete reader;
+    reader = NULL;
+    gshhsCrossesLandReset();
+}
+
+int GSHHSChart::GetMinAvailableQuality() {
+    if( !reader )
+        reader = new GshhsReader();
+    return reader->GetMinAvailableQuality();
+}
+
+int GSHHSChart::GetMaxAvailableQuality() {
+    if( !reader )
+        reader = new GshhsReader();
+    return reader->GetMaxAvailableQuality();
+}
 
 void GSHHSChart::RenderViewOnDC( ocpnDC& dc, ViewPort& vp )
 {
     if( ! reader ) {
         reader = new GshhsReader( );
-        if( reader->GetPolyVersion() < 210 || reader->GetPolyVersion() > 220 ) {
-            wxLogMessage( _T("GSHHS World chart files have wrong version. Found %ld, expected 210-220."),
+        if( reader->GetPolyVersion() < 210 || reader->GetPolyVersion() > 240 ) {
+            wxLogMessage( _T("GSHHS World chart files have wrong version. Found %d, expected 210-220."),
                     reader->GetPolyVersion() );
         } else {
             wxLogMessage(
                     _T("Background world map loaded from GSHHS datafiles found in: ") +
-                    *pWorldMapLocation );
+                    gWorldMapLocation );
         }
     }
 
@@ -184,6 +212,9 @@ fail:
 
 void GshhsPolyCell::ReadPolygonFile()
 {
+    if(!fpoly)
+        return;
+
     int pos_data;
     int tab_data;
 
@@ -239,7 +270,7 @@ void GshhsPolyCell::DrawPolygonFilled( ocpnDC &pnt, contour_list * p, double dx,
         for( v = 0; v < p->at( c ).size(); v++ ) {
             wxRealPoint &ccp = cp.at( v );
             wxPoint2DDouble q = GetDoublePixFromLL(vp, ccp.y, ccp.x + dx );
-            if(wxIsNaN(q.m_x)) {
+            if(std::isnan(q.m_x)) {
                 pointCount = 0;
                 break;
             }
@@ -552,6 +583,7 @@ GshhsPolyReader::GshhsPolyReader( int quality )
         }
     }
     currentQuality = -1;
+    polyHeader.version = -1;
     InitializeLoadQuality( quality );
 }
 
@@ -565,6 +597,10 @@ GshhsPolyReader::~GshhsPolyReader()
                 allCells[i][j] = NULL;
             }
         }
+    }
+
+    if (fpoly) {
+        fclose(fpoly);
     }
 }
 
@@ -607,7 +643,7 @@ void GshhsPolyReader::InitializeLoadQuality( int quality )  // 5 levels: 0=low .
     }
 }
 
-inline bool my_intersects( const wxLineF &line1, const wxLineF &line2 )
+static inline bool my_intersects( const wxLineF &line1, const wxLineF &line2 )
 {
     double x1 = line1.m_p1.x, y1 = line1.m_p1.y, x2 = line1.m_p2.x, y2 = line1.m_p2.y;
     double x3 = line2.m_p1.x, y3 = line2.m_p1.y, x4 = line2.m_p2.x, y4 = line2.m_p2.y;
@@ -617,15 +653,16 @@ inline bool my_intersects( const wxLineF &line1, const wxLineF &line2 )
     double bx = x3 - x4, by = y3 - y4;
     double cx = x1 - x3, cy = y1 - y3;
 
+#  define INTER_LIMIT 1e-7
     double denominator = ay * bx - ax * by;
     if( denominator < 1e-10 ) {
-        if(fabs((y1*ax - ay*x1)*bx - (y3*bx - by*x3)*ax) > 1e-5)
+        if(fabs((y1*ax - ay*x1)*bx - (y3*bx - by*x3)*ax) > INTER_LIMIT)
+            return false; /* different intercepts, no intersection */
+        if(fabs((x1*ay - ax*y1)*by - (x3*by - bx*y3)*ay) > INTER_LIMIT)
             return false; /* different intercepts, no intersection */
 
         return true;
     }
-
-#  define INTER_LIMIT 1e-7
 
     const double reciprocal = 1 / denominator;
     const double na = ( by * cx - bx * cy ) * reciprocal;
@@ -643,38 +680,38 @@ bool GshhsPolyReader::crossing1( wxLineF trajectWorld )
     double x1 = trajectWorld.p1().x, y1 = trajectWorld.p1().y;
     double x2 = trajectWorld.p2().x, y2 = trajectWorld.p2().y;
 
-    int cxmin, cxmax, cymax, cymin;
-    cxmin = (int) floor( GSSH_SUBM*wxMin( x1, x2 ) );
-    cxmax = (int) ceil( GSSH_SUBM*wxMax( x1, x2 ) );
+    int clonmin, clonmax, clatmax, clatmin;
+    clonmin = (int) floor( GSSH_SUBM*wxMin( x1, x2 ) );
+    clonmax = (int) ceil( GSSH_SUBM*wxMax( x1, x2 ) );
 
-    if(cxmin < 0) {
-        cxmin += GSSH_SUBM*360;
-        cxmax += GSSH_SUBM*360;
+    if(clonmin < 0) {
+        clonmin += GSSH_SUBM*360;
+        clonmax += GSSH_SUBM*360;
     }
 
-    if(cxmax - cxmin > GSSH_SUBM*180) { /* dont go long way around world */
-        cxmin = (int) floor( GSSH_SUBM*wxMax( x1, x2 ) ) - GSSH_SUBM*360;
-        cxmax = (int) ceil( GSSH_SUBM*wxMin( x1, x2 ) );
+    if(clonmax - clonmin > GSSH_SUBM*180) { /* dont go long way around world */
+        clonmin = (int) floor( GSSH_SUBM*wxMax( x1, x2 ) ) - GSSH_SUBM*360;
+        clonmax = (int) ceil( GSSH_SUBM*wxMin( x1, x2 ) );
     }
 
-    cymin = (int) floor( GSSH_SUBM*wxMin( y1, y2 ));
-    cymax = (int) ceil( GSSH_SUBM*wxMax( y1, y2 ));
-    wxASSERT(cymin >= -GSSH_SUBM*90 && cymax <= GSSH_SUBM*89);
+    clatmin = (int) floor( GSSH_SUBM*wxMin( y1, y2 ));
+    clatmax = (int) ceil( GSSH_SUBM*wxMax( y1, y2 ));
+    wxASSERT(clatmin >= -GSSH_SUBM*90 && clatmax <= GSSH_SUBM*89);
 
     // TODO: optimize by traversing only the cells the segment passes through,
     //       rather than all of the cells which fit in the bounding box,
     //       this may make a worthwhile difference for longer segments in some cases.
-    int cx, cxx, cy;
-    for( cx = cxmin; cx < cxmax; cx++ ) {
-        cxx = cx;
-        while( cxx < 0 )
-            cxx += GSSH_SUBM*360;
-        while( cxx >= GSSH_SUBM*360 )
-            cxx -= GSSH_SUBM*360;
+    int clon, clonx, clat;
+    for( clon = clonmin; clon < clonmax; clon++ ) {
+        clonx = clon;
+        while( clonx < 0 )
+            clonx += GSSH_SUBM*360;
+        while( clonx >= GSSH_SUBM*360 )
+            clonx -= GSSH_SUBM*360;
 
-        wxASSERT( cxx >= 0 && cxx < GSSH_SUBM*360 );
+        wxASSERT( clonx >= 0 && clonx < GSSH_SUBM*360 );
 
-        if(cxx < GSSH_SUBM*180) {
+        if(clonx < GSSH_SUBM*180) {
             if(x1 > 180) x1 -= 360;
             if(x2 > 180) x2 -= 360;
         } else {
@@ -684,20 +721,20 @@ bool GshhsPolyReader::crossing1( wxLineF trajectWorld )
 
         wxLineF rtrajectWorld(x1, y1, x2, y2);
 
-        for( cy = cymin; cy < cymax; cy++ ) {
-            int cxi = cxx/GSSH_SUBM, cyi = (GSSH_SUBM*90+cy)/GSSH_SUBM;
-            GshhsPolyCell *&cel = allCells[cxi][cyi];
+        for( clat = clatmin; clat < clatmax; clat++ ) {
+            int cloni = clonx/GSSH_SUBM, clati = (GSSH_SUBM*90+clat)/GSSH_SUBM;
+            GshhsPolyCell *&cel = allCells[cloni][clati];
             if(!cel) {
                 mutex1.Lock();
                 if(!cel) {
                     /* load the needed cell from disk */
-                    cel = new GshhsPolyCell(fpoly, cxi, cyi-90, &polyHeader);
+                    cel = new GshhsPolyCell(fpoly, cloni, clati-90, &polyHeader);
                     wxASSERT( cel );
                 }
                 mutex1.Unlock();
             }
 
-            int hash = GSSH_SUBM*(GSSH_SUBM*(90-cyi) + cy - cxi) + cxx;
+            int hash = GSSH_SUBM*(GSSH_SUBM*(90-clati) + clat - cloni) + clonx;
             std::vector<wxLineF> *&high_res_map = cel->high_res_map[hash];
             wxASSERT(hash >= 0 && hash < GSSH_SUBM*GSSH_SUBM);
             if(!high_res_map) {
@@ -706,8 +743,8 @@ bool GshhsPolyReader::crossing1( wxLineF trajectWorld )
                     /* Build the needed sub cell of line segments from the cell */
                     contour_list &poly1 = cel->getPoly1();
 
-                    double minlat = (double)cy/GSSH_SUBM, maxlat = (double)(cy+1)/GSSH_SUBM;
-                    double minlon = (double)cxx/GSSH_SUBM, maxlon = (double)(cxx+1)/GSSH_SUBM;
+                    double minlat = (double)clat/GSSH_SUBM, maxlat = (double)(clat+1)/GSSH_SUBM;
+                    double minlon = (double)clonx/GSSH_SUBM, maxlon = (double)(clonx+1)/GSSH_SUBM;
                     high_res_map = new std::vector<wxLineF>;
                     for( unsigned int pi = 0; pi < poly1.size(); pi++ ) {
                         contour &c = poly1[pi];
@@ -719,22 +756,22 @@ bool GshhsPolyReader::crossing1( wxLineF trajectWorld )
                         int lstatey = ly < minlat ? -1 : ly > maxlat ? 1 : 0;
                     
                         for( unsigned int pj = 0; pj < c.size(); pj++ ) {
-                            double cx = c[pj].x, cy = c[pj].y;
+                            double clon = c[pj].x, clat = c[pj].y;
                             // gshhs data shouldn't, but sometimes contains zero segments
                             // which enlarges our table, but
                             // more importantly, the fast segment intersection test
                             // and doesn't correctly account for it
-                            if(lx == cx && ly == cy)
+                            if(lx == clon && ly == clat)
                                 continue;
 
-                            int statex = cx < minlon ? -1 : cx > maxlon ? 1 : 0;
-                            int statey = cy < minlat ? -1 : cy > maxlat ? 1 : 0;
+                            int statex = clon < minlon ? -1 : clon > maxlon ? 1 : 0;
+                            int statey = clat < minlat ? -1 : clat > maxlat ? 1 : 0;
 
                             if((!statex || lstatex != statex) &&
                                (!statey || lstatey != statey))
-                                high_res_map->push_back(wxLineF(lx, ly, cx, cy));
+                                high_res_map->push_back(wxLineF(lx, ly, clon, clat));
 
-                            lx = cx, ly = cy;
+                            lx = clon, ly = clat;
                             lstatex = statex, lstatey = statey;
                         }
                     }
@@ -767,14 +804,14 @@ void GshhsPolyReader::drawGshhsPolyMapPlain( ocpnDC &pnt, ViewPort &vp, wxColor 
 
     pnt.SetPen( wxNullPen );
 
-    int cxmin, cxmax, cymax, cymin;  // cellules visibles
-    wxBoundingBox bbox = vp.GetBBox();
-    cxmin = bbox.GetMinX(), cxmax = bbox.GetMaxX(), cymin = bbox.GetMinY(), cymax = bbox.GetMaxY();
-    if(cymin <= 0) cymin--;
-    if(cymax >= 0) cymax++;
-    if(cxmin <= 0) cxmin--;
-    if(cxmax >= 0) cxmax++;
-    int dx, cx, cxx, cy;
+    int clonmin, clonmax, clatmax, clatmin;  // cellules visibles
+    LLBBox bbox = vp.GetBBox();
+    clonmin = bbox.GetMinLon(), clonmax = bbox.GetMaxLon(), clatmin = bbox.GetMinLat(), clatmax = bbox.GetMaxLat();
+    if(clatmin <= 0) clatmin--;
+    if(clatmax >= 0) clatmax++;
+    if(clonmin <= 0) clonmin--;
+    if(clonmax >= 0) clonmax++;
+    int dx, clon, clonx, clat;
     GshhsPolyCell *cel;
 
     ViewPort nvp = vp;
@@ -785,36 +822,37 @@ void GshhsPolyReader::drawGshhsPolyMapPlain( ocpnDC &pnt, ViewPort &vp, wxColor 
            (last_rendered_vp.m_projection_type == PROJECTION_POLAR &&
             last_rendered_vp.clat*vp.clat <= 0)) {
             last_rendered_vp = vp;
-            for(int cx = 0; cx<360; cx++)
-                for(int cy = 0; cy<180; cy++)
-                    if(allCells[cx][cy])
-                        allCells[cx][cy]->ClearPolyV();
+            for(int clon = 0; clon<360; clon++)
+                for(int clat = 0; clat<180; clat++)
+                    if(allCells[clon][clat])
+                        allCells[clon][clat]->ClearPolyV();
         }
         glEnableClientState(GL_VERTEX_ARRAY);
         
         // use a viewport that allows the vertexes to be reused over many frames
-        if(glChartCanvas::HasNormalizedViewPort(vp)) {
-            glPushMatrix();
-            glChartCanvas::MultMatrixViewPort(vp);
-            nvp = glChartCanvas::NormalizedViewPort(vp);
-        }
+        // TODO fix for multicanvas
+         if(glChartCanvas::HasNormalizedViewPort(vp)) {
+             glPushMatrix();
+             glChartCanvas::MultMatrixViewPort(vp);
+             nvp = glChartCanvas::NormalizedViewPort(vp);
+         }
     }
 #endif
-    for( cx = cxmin; cx < cxmax; cx++ ) {
-        cxx = cx;
-        while( cxx < 0 )
-            cxx += 360;
-        while( cxx >= 360 )
-            cxx -= 360;
+    for( clon = clonmin; clon < clonmax; clon++ ) {
+        clonx = clon;
+        while( clonx < 0 )
+            clonx += 360;
+        while( clonx >= 360 )
+            clonx -= 360;
 
-        for( cy = cymin; cy < cymax; cy++ ) {
-            if( cxx >= 0 && cxx <= 359 && cy >= -90 && cy <= 89 ) {
-                if( allCells[cxx][cy + 90] == NULL ) {
-                    cel = new GshhsPolyCell( fpoly, cxx, cy, &polyHeader );
+        for( clat = clatmin; clat < clatmax; clat++ ) {
+            if( clonx >= 0 && clonx <= 359 && clat >= -90 && clat <= 89 ) {
+                if( allCells[clonx][clat + 90] == NULL ) {
+                    cel = new GshhsPolyCell( fpoly, clonx, clat, &polyHeader );
                     wxASSERT( cel );
-                    allCells[cxx][cy + 90] = cel;
+                    allCells[clonx][clat + 90] = cel;
                 } else {
-                    cel = allCells[cxx][cy + 90];
+                    cel = allCells[clonx][clat + 90];
                 }
                 bool idl = false;
 
@@ -823,16 +861,16 @@ void GshhsPolyReader::drawGshhsPolyMapPlain( ocpnDC &pnt, ViewPort &vp, wxColor 
                    vp.m_projection_type != PROJECTION_EQUIRECTANGULAR)
                     dx = 0;
                 else if(pnt.GetDC())// dc
-                    dx = cx - cxx;
+                    dx = clon - clonx;
                 else { // opengl
-                    int cxn = cxx;
-                    if(cxn >= 180) {
-                        cxn -= 360;
+                    int clonn = clonx;
+                    if(clonn >= 180) {
+                        clonn -= 360;
                         idl = true;
                     }
-                    if(vp.clon - cxn > 180)
+                    if(vp.clon - clonn > 180)
                         dx = 1;
-                    else if(vp.clon - cxn < -180)
+                    else if(vp.clon - clonn < -180)
                         dx = -1;
                     else
                         dx = 0;
@@ -856,30 +894,30 @@ void GshhsPolyReader::drawGshhsPolyMapPlain( ocpnDC &pnt, ViewPort &vp, wxColor 
 void GshhsPolyReader::drawGshhsPolyMapSeaBorders( ocpnDC &pnt, ViewPort &vp )
 {
     if( !fpoly ) return;
-    int cxmin, cxmax, cymax, cymin;  // cellules visibles
-    wxBoundingBox bbox = vp.GetBBox();
-    cxmin = bbox.GetMinX(), cxmax = bbox.GetMaxX(), cymin = bbox.GetMinY(), cymax = bbox.GetMaxY();
+    int clonmin, clonmax, clatmax, clatmin;  // cellules visibles
+    LLBBox bbox = vp.GetBBox();
+    clonmin = bbox.GetMinLon(), clonmax = bbox.GetMaxLon(), clatmin = bbox.GetMinLat(), clatmax = bbox.GetMaxLat();
 
-    int dx, cx, cxx, cy;
+    int dx, clon, clonx, clat;
     GshhsPolyCell *cel;
 
-    for( cx = cxmin; cx < cxmax; cx++ ) {
-        cxx = cx;
-        while( cxx < 0 )
-            cxx += 360;
-        while( cxx >= 360 )
-            cxx -= 360;
+    for( clon = clonmin; clon < clonmax; clon++ ) {
+        clonx = clon;
+        while( clonx < 0 )
+            clonx += 360;
+        while( clonx >= 360 )
+            clonx -= 360;
 
-        for( cy = cymin; cy < cymax; cy++ ) {
-            if( cxx >= 0 && cxx <= 359 && cy >= -90 && cy <= 89 ) {
-                if( allCells[cxx][cy + 90] == NULL ) {
-                    cel = new GshhsPolyCell( fpoly, cxx, cy, &polyHeader );
+        for( clat = clatmin; clat < clatmax; clat++ ) {
+            if( clonx >= 0 && clonx <= 359 && clat >= -90 && clat <= 89 ) {
+                if( allCells[clonx][clat + 90] == NULL ) {
+                    cel = new GshhsPolyCell( fpoly, clonx, clat, &polyHeader );
                     wxASSERT( cel );
-                    allCells[cxx][cy + 90] = cel;
+                    allCells[clonx][clat + 90] = cel;
                 } else {
-                    cel = allCells[cxx][cy + 90];
+                    cel = allCells[clonx][clat + 90];
                 }
-                dx = cx - cxx;
+                dx = clon - clonx;
                 cel->drawSeaBorderLines( pnt, dx, vp );
             }
         }
@@ -993,21 +1031,22 @@ GshhsPolygon::~GshhsPolygon()
 
 GshhsReader::GshhsReader( )
 {
-    int maxQualityAvailable = -1;
-    int minQualityAvailable = -1;
+    maxQualityAvailable = -1;
+    minQualityAvailable = -1;
 
     for( int i=0; i<5; i++ ) {
         qualityAvailable[i] = false;
         if( GshhsReader::gshhsFilesExists( i ) ) {
             qualityAvailable[i] = true;
-            if( minQualityAvailable < 0 ) minQualityAvailable = i;
+            if( minQualityAvailable < 0 )
+                minQualityAvailable = i;
             maxQualityAvailable = i;
         }
     }
 
     if( maxQualityAvailable < 0 ) {
         wxString msg( _T("Unable to initialize background world map. No GSHHS datafiles found in ") );
-        msg += *pWorldMapLocation;
+        msg += gWorldMapLocation;
         wxLogMessage( msg );
     }
 
@@ -1094,21 +1133,21 @@ wxString GshhsReader::getNameExtension( int quality )
 wxString GshhsReader::getFileName_Land( int quality )
 {
     wxString ext = GshhsReader::getNameExtension( quality );
-    wxString fname = *pWorldMapLocation + wxString::Format( _T("poly-%c-1.dat"), ext.GetChar(0) );
+    wxString fname = gWorldMapLocation + wxString::Format( _T("poly-%c-1.dat"), ext.GetChar(0) );
     return fname;
 }
 
 wxString GshhsReader::getFileName_boundaries( int quality )
 {
     wxString ext = GshhsReader::getNameExtension( quality );
-    wxString fname = *pWorldMapLocation + wxString::Format( _T("wdb_borders_%c.b"), ext.GetChar(0) );
+    wxString fname = gWorldMapLocation + wxString::Format( _T("wdb_borders_%c.b"), ext.GetChar(0) );
     return fname;
 }
 
 wxString GshhsReader::getFileName_rivers( int quality )
 {
     wxString ext = GshhsReader::getNameExtension( quality );
-    wxString fname = *pWorldMapLocation + wxString::Format( _T("wdb_rivers_%c.b"), ext.GetChar(0) );
+    wxString fname = gWorldMapLocation + wxString::Format( _T("wdb_rivers_%c.b"), ext.GetChar(0) );
     return fname;
 }
 
@@ -1116,8 +1155,8 @@ wxString GshhsReader::getFileName_rivers( int quality )
 bool GshhsReader::gshhsFilesExists( int quality )
 {
     if( ! wxFile::Access( GshhsReader::getFileName_Land( quality ), wxFile::read ) ) return false;
-    if( ! wxFile::Access( GshhsReader::getFileName_boundaries( quality ), wxFile::read ) ) return false;
-    if( ! wxFile::Access( GshhsReader::getFileName_rivers( quality ), wxFile::read ) ) return false;
+    //Borders disabled anyway since the perf optimizations if( ! wxFile::Access( GshhsReader::getFileName_boundaries( quality ), wxFile::read ) ) return false;
+    //Rivers disabled anyway since the perf optimizations if( ! wxFile::Access( GshhsReader::getFileName_rivers( quality ), wxFile::read ) ) return false;
 
     return true;
 }
@@ -1191,16 +1230,17 @@ std::vector<GshhsPolygon*> & GshhsReader::getList_rivers()
 
 //=====================================================================
 
-int GshhsReader::GSHHS_scaledPoints( GshhsPolygon *pol, wxPoint *pts, double decx, ViewPort &vp )
+int GshhsReader::GSHHS_scaledPoints( GshhsPolygon *pol, wxPoint *pts, double declon, ViewPort &vp )
 {
-    wxBoundingBox box(pol->west + decx, pol->south, pol->east + decx, pol->north);
+    LLBBox box;
+    box.Set(pol->south, pol->west + declon, pol->north, pol->east + declon);
     if(vp.GetBBox().IntersectOut(box) )
         return 0;
 
     // Remove small polygons.
 
-    wxPoint2DDouble p1 = GetDoublePixFromLL(vp,  pol->west + decx, pol->north );
-    wxPoint2DDouble p2 = GetDoublePixFromLL(vp,  pol->east + decx, pol->south );
+    wxPoint2DDouble p1 = GetDoublePixFromLL(vp,  pol->west + declon, pol->north );
+    wxPoint2DDouble p2 = GetDoublePixFromLL(vp,  pol->east + declon, pol->south );
 
     if( p1.m_x == p2.m_x && p1.m_y == p2.m_y )
         return 0;
@@ -1211,12 +1251,11 @@ int GshhsReader::GSHHS_scaledPoints( GshhsPolygon *pol, wxPoint *pts, double dec
     int j = 0;
 
     for( itp = ( pol->lsPoints ).begin(); itp != ( pol->lsPoints ).end(); itp++ ) {
-        x = ( *itp )->lon + decx;
+        x = ( *itp )->lon + declon;
         y = ( *itp )->lat;
-                                    {
         wxPoint2DDouble p = GetDoublePixFromLL(vp,  y, x );
         xx = p.m_x, yy = p.m_y;
-        if( j == 0 || ( oxx != xx || oyy != yy ) )  // Remove close points
+        if( j == 0 || ( oxx != xx || oyy != yy ) ) { // Remove close points
             oxx = xx;
             oyy = yy;
             pts[j].x = xx;
@@ -1322,20 +1361,22 @@ int GshhsReader::selectBestQuality( ViewPort &vp )
 {
     int bestQuality = 0;
 
-         if(vp.chart_scale <   500000) bestQuality = 4;
-    else if(vp.chart_scale <  2000000) bestQuality = 3;
-    else if(vp.chart_scale <  8000000) bestQuality = 2;
-    else if(vp.chart_scale < 20000000) bestQuality = 1;
-    else bestQuality = 0;
+         if(vp.chart_scale <   500000 && qualityAvailable[4]) bestQuality = 4;
+    else if(vp.chart_scale <  2000000 && qualityAvailable[3]) bestQuality = 3;
+    else if(vp.chart_scale <  8000000 && qualityAvailable[2]) bestQuality = 2;
+    else if(vp.chart_scale < 20000000 && qualityAvailable[1]) bestQuality = 1;
+    else if(qualityAvailable[0]) bestQuality = 0;
+    else while( !qualityAvailable[bestQuality] && bestQuality <= 4 ) //Find the worst quality actually available and use that (normally we would use crude, but it is missing)
+             bestQuality++;
 
     while( !qualityAvailable[bestQuality] ) {
         bestQuality--;
         if( bestQuality < 0 ) break;
     }
 
-    if( bestQuality < 0 )
-        for( int i=0; i<5; i++ )
-            if( qualityAvailable[i] ) bestQuality = i;
+//    if( bestQuality < 0 )
+//        for( int i=0; i<5; i++ )
+//            if( qualityAvailable[i] ) bestQuality = i;
 
     return bestQuality;
 }
@@ -1345,17 +1386,28 @@ int GshhsReader::selectBestQuality( ViewPort &vp )
 static GshhsReader *reader = NULL;
 void gshhsCrossesLandInit()
 {
-    reader = new GshhsReader();
-
+    if( ! reader ) {
+        reader = new GshhsReader();
+    }
     /* load best possible quality for crossing tests */
     int bestQuality = 4;
     while( !reader->qualityAvailable[bestQuality] && bestQuality > 0)
         bestQuality--;
     reader->LoadQuality(bestQuality);
+    wxLogMessage("GSHHG: Loaded quality %d for land crossing detection.", bestQuality);
+}
+
+void gshhsCrossesLandReset() {
+    if( reader )
+        delete reader;
+    reader = NULL;
 }
 
 bool gshhsCrossesLand(double lat1, double lon1, double lat2, double lon2)
 {
+    if( ! reader ) {
+        gshhsCrossesLandInit();
+    }
     if(lon1 < 0)
         lon1 += 360;
     if(lon2 < 0)

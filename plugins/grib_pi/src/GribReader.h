@@ -37,6 +37,7 @@ Reader for a GRIB file
 #include <set>
 #include <map>
 
+
 #include "GribRecord.h"
 #include "zuFile.h"
 
@@ -79,9 +80,6 @@ class GribReader
 
       int	   getDewpointDataStatus(int levelType,int levelValue);
 
-        // Rectangle de la zone couverte par les données
-      bool getZoneExtension (double *x0,double *y0, double *x1,double *y1);
-
       enum GribFileDataStatus {DATA_IN_FILE, NO_DATA_IN_FILE, COMPUTED_DATA};
 
       void  copyFirstCumulativeRecord   ();
@@ -90,6 +88,8 @@ class GribReader
       void  copyFirstCumulativeRecord   (int dataType,int levelType,int levelValue);
       //void  removeFirstCumulativeRecord (int dataType,int levelType,int levelValue);
       void  copyMissingWaveRecords (int dataType,int levelType,int levelValue);
+
+      void  computeAccumulationRecords (int dataType, int levelType, int levelValue);
 
       std::map < std::string, std::vector<GribRecord *>* > * getGribMap(){ return  &mapGribRecords; }              //dsr
 

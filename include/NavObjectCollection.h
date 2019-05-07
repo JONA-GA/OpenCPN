@@ -26,10 +26,17 @@
 #define __NAVOBJECTCOLLECTION_H__
 
 #include "pugixml.hpp"
-#include "Route.h"
-#include "RoutePoint.h"
+#include <wx/string.h>
+#include <wx/checkbox.h>
+#include "bbox.h"
 
 class Track;
+class TrackList;
+class TrackPoint;
+class RouteList;
+class RoutePointList;
+class Route;
+class RoutePoint;
 
 //      Bitfield definition controlling the GPX nodes output for point objects
 #define         OUT_TYPE        1 << 1          //  Output point type
@@ -51,6 +58,9 @@ class Track;
 #define         OUT_EXTENSION   1 << 17
 #define         OUT_ARRIVAL_RADIUS 1 << 18
 #define         OUT_WAYPOINT_RANGE_RINGS 1 << 19
+#define         OUT_WAYPOINT_SCALE 1 << 20
+#define         OUT_TIDE_STATION 1 << 21
+#define         OUT_RTE_PROPERTIES 1 << 22
 
 #define  OPT_TRACKPT    OUT_TIME
 #define  OPT_WPT        (OUT_TYPE) +\
@@ -65,8 +75,11 @@ class Track;
                         (OUT_AUTO_NAME) +\
                         (OUT_HYPERLINKS) +\
                         (OUT_ARRIVAL_RADIUS) +\
-                        (OUT_WAYPOINT_RANGE_RINGS)
-#define OPT_ROUTEPT     OPT_WPT                        
+                        (OUT_WAYPOINT_RANGE_RINGS) +\
+                        (OUT_WAYPOINT_SCALE) +\
+                        (OUT_TIDE_STATION)
+#define OPT_ROUTEPT     OPT_WPT +\
+                        (OUT_RTE_PROPERTIES)
 
 //      Bitfield definitions controlling the GPX nodes output for Route.Track objects
 #define         RT_OUT_ACTION_ADD         1 << 1          //  opencpn:action node support
@@ -85,21 +98,24 @@ public:
     bool CreateNavObjGPXRoutes(void);
     bool CreateNavObjGPXTracks(void);
  
-    bool AddGPXRoutesList( RouteList *pRoutes );
+    void AddGPXRoutesList( RouteList *pRoutes );
+    void AddGPXTracksList( TrackList *pTracks );
     bool AddGPXPointsList( RoutePointList *pRoutePoints );
     bool AddGPXRoute(Route *pRoute);
     bool AddGPXTrack(Track *pTrk);
     bool AddGPXWaypoint(RoutePoint *pWP );
     
     bool CreateAllGPXObjects();
-    bool LoadAllGPXObjects( bool b_full_viz = false);
-    int LoadAllGPXObjectsAsLayer(int layer_id, bool b_layerviz);
+    bool LoadAllGPXObjects( bool b_full_viz, int &wpt_duplicates, bool b_compute_bbox = false);
+    int LoadAllGPXObjectsAsLayer(int layer_id, bool b_layerviz, wxCheckBoxState b_namesviz);
     
     bool SaveFile( const wxString filename );
 
     void SetRootGPXNode(void);
     bool IsOpenCPN();
+    LLBBox &GetBBox( ) { return BBox;};
     
+    LLBBox     BBox;
     pugi::xml_node      m_gpx_root;
 };
 
@@ -111,10 +127,10 @@ public:
     NavObjectChanges( wxString file_name );
     ~NavObjectChanges();
     
-    bool AddRoute( Route *pr, const char *action );           // support "changes" file set
-    bool AddTrack( Track *pr, const char *action );
-    bool AddWP( RoutePoint *pr, const char *action );
-    bool AddTrackPoint( RoutePoint *pWP, const char *action, const wxString& parent_GUID );
+    void AddRoute( Route *pr, const char *action );           // support "changes" file set
+    void AddTrack( Track *pr, const char *action );
+    void AddWP( RoutePoint *pr, const char *action );
+    void AddTrackPoint( TrackPoint *pWP, const char *action, const wxString& parent_GUID );
     
     bool ApplyChanges(void);
     

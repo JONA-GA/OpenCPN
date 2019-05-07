@@ -34,16 +34,16 @@
   #include <wx/glcanvas.h>
 #endif //precompiled headers
 
-#define     PLUGIN_VERSION_MAJOR    3
-#define     PLUGIN_VERSION_MINOR    0
+#define     PLUGIN_VERSION_MAJOR    4
+#define     PLUGIN_VERSION_MINOR    1
 
 #define     MY_API_VERSION_MAJOR    1
-#define     MY_API_VERSION_MINOR    12
+#define     MY_API_VERSION_MINOR    16
 
 #include "../../../include/ocpn_plugin.h"
 
-#include "../../../include/wx/jsonreader.h"
-#include "../../../include/wx/jsonwriter.h"
+#include "wx/jsonreader.h"
+#include "wx/jsonwriter.h"
 
 #include "GribSettingsDialog.h"
 #include "GribOverlayFactory.h"
@@ -62,7 +62,7 @@
 #define SEPARATED_HORIZONTAL   2          // dialog separated shown honrizontaly
 #define SEPARATED_VERTICAL     3          // dialog separated shown vaerticaly
 
-class grib_pi : public opencpn_plugin_112
+class grib_pi : public opencpn_plugin_116
 {
 public:
       grib_pi(void *ppimgr);
@@ -84,17 +84,19 @@ public:
 //    The override PlugIn Methods
       bool MouseEventHook( wxMouseEvent &event);
       bool RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp);
+      bool RenderOverlayMultiCanvas(wxDC &dc, PlugIn_ViewPort *vp, int canvasIndex);
       void SetCursorLatLon(double lat, double lon);
       void OnContextMenuItemCallback(int id);
       void SetPluginMessage(wxString &message_id, wxString &message_body);
       bool RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp);
+      bool RenderGLOverlayMultiCanvas(wxGLContext *pcontext, PlugIn_ViewPort *vp, int canvasIndex);
       void SendTimelineMessage(wxDateTime time);
       void SetDefaults(void);
       int GetToolBarToolCount(void);
       void ShowPreferencesDialog( wxWindow* parent );
       void OnToolbarToolCallback(int id);
       bool QualifyCtrlBarPosition( wxPoint position, wxSize size );
-      void MoveDialog( wxDialog *dialog, wxPoint position, wxPoint dfault );
+	  void MoveDialog(wxDialog *dialog, wxPoint position);
 
 // Other public methods
       void SetCtrlBarXY   (wxPoint p){ m_CtrlBarxy = p;}
@@ -102,7 +104,9 @@ public:
       void SetCtrlBarSizeXY(wxSize p){ m_CtrlBar_Sizexy = p;}
       void SetColorScheme(PI_ColorScheme cs);
       void SetDialogFont( wxWindow *window, wxFont *font = OCPNGetFont(_("Dialog"), 10) );
-
+      void SetCurrentViewPort(PlugIn_ViewPort &vp) { m_current_vp = vp; }
+      PlugIn_ViewPort &GetCurrentViewPort() { return m_current_vp; }
+      
       void OnGribCtrlBarClose();
 
       wxPoint GetCtrlBarXY() { return m_CtrlBarxy; }
@@ -142,6 +146,8 @@ private:
       // preference data
       bool              m_bGRIBUseHiDef;
       bool              m_bGRIBUseGradualColors;
+      bool              m_bDrawBarbedArrowHead;
+      bool              m_bZoomToCenterAtInit;
       int              m_bTimeZone;
       bool             m_bCopyFirstCumRec;
       bool             m_bCopyMissWaveRec;
@@ -157,6 +163,8 @@ private:
       bool             m_bGRIBShowIcon;
 
       bool        m_bShowGrib;
+      PlugIn_ViewPort  m_current_vp;
+      wxBitmap         m_panelBitmap;
 };
 
 //----------------------------------------------------------------------------------------

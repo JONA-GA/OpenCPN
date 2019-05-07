@@ -27,6 +27,7 @@
 
 #include "s52plib.h"
 #include <tinyxml.h>
+#include "pugixml.hpp"
 
 
 class Lookup {
@@ -38,7 +39,7 @@ public:
 	DisPrio        displayPrio;             // Display Priority
 	RadPrio        radarPrio;             // 'O' or 'S', Radar Priority
 	LUPname        tableName;             // FTYP:  areas, points, lines
-	wxArrayString* attributeCodeArray;        // ArrayString of LUP Attributes
+	std::vector<char *> attributeCodeArray;  // ArrayString of LUP Attributes
 	wxString       instruction;            // Instruction Field (rules)
 	DisCat         displayCat;             // Display Categorie: D/S/O, DisplayBase, Standard, Other
 	int            comment;             // Look-Up Comment (PLib3.x put 'groupes' here,
@@ -127,11 +128,20 @@ private:
       void ProcessLinestyles( TiXmlElement* linestyleNodes );
       void ProcessPatterns( TiXmlElement* patternNodes );
       void ProcessSymbols( TiXmlElement* symbolNodes );
-	void BuildLineStyle( LineStyle &lineStyle );
-	void BuildLookup( Lookup &lookup );
-	void BuildPattern( OCPNPattern &pattern );
-	void BuildSymbol( ChartSymbol &symol );
+      void BuildLineStyle( LineStyle &lineStyle );
+      void BuildLookup( Lookup &lookup );
+      void BuildPattern( OCPNPattern &pattern );
+      void BuildSymbol( ChartSymbol &symol );
+       
+      void ProcessColorTables( pugi::xml_node &node );
+      void ProcessLookups( pugi::xml_node &node );
+      void ProcessLinestyles( pugi::xml_node &node );
+      void ProcessPatterns( pugi::xml_node &node );
+      void ProcessSymbols( pugi::xml_node &node );
+      void ProcessVectorTag( pugi::xml_node &vectorNode, SymbolSizeInfo_t &vectorSize );
+      
+      pugi::xml_document m_symbolsDoc;
 
-	s52plib* plib;
+      s52plib* plib;
 };
 

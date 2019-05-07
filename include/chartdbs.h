@@ -26,12 +26,15 @@
 #ifndef __CHARTDBS_H__
 #define __CHARTDBS_H__
 
-//#include "chart1.h"
+#include <map>
+#include <memory>
+#include <vector>
+
 #include "ocpn_types.h"
 #include "bbox.h"
 #include "LLRegion.h"
 
-class wxProgressDialog;
+class wxGenericProgressDialog;
 class ChartBase;
 
 //    A small class used in an array to describe chart directories
@@ -194,6 +197,8 @@ struct ChartTableEntry
     bool Write(const ChartDatabase *pDb, wxOutputStream &os);
     void Clear();
     void Disable();
+    void ReEnable();
+    
     void SetValid(bool valid) { bValid = valid; }
     time_t GetFileTime() const { return file_date; }
 
@@ -208,7 +213,7 @@ struct ChartTableEntry
     float *GetpNoCovrPlyTableEntry(int index) const { return pNoCovrPlyTable[index];}
     int GetNoCovrCntTableEntry(int index) const { return pNoCovrCntTable[index];}
     
-    const wxBoundingBox &GetBBox() const { return m_bbox; } 
+    const LLBBox &GetBBox() const { return m_bbox; } 
     
     char *GetpFullPath() const { return pFullPath; }
     float GetLonMax() const { return LonMax; }
@@ -216,8 +221,8 @@ struct ChartTableEntry
     float GetLatMax() const { return LatMax; }
     float GetLatMin() const { return LatMin; }
     int GetScale() const { return Scale; }
-    int GetChartType() const;
-    int GetChartFamily() const;
+    int GetChartType() const { return ChartType; }
+    int GetChartFamily() const { return ChartFamily; }
     int GetChartProjectionType() const { return ProjectionType; }
     float GetChartSkew() const { return Skew; }
 
@@ -226,12 +231,21 @@ struct ChartTableEntry
     const wxString *GetpFileName(void) const { return m_pfilename; }
     wxString *GetpsFullPath(void){ return m_psFullPath; }
     
-    const ArrayOfInts &GetGroupArray(void) const { return m_GroupArray; }
-    void ClearGroupArray(void) { m_GroupArray.Clear(); }
-    void AddIntToGroupArray( int val ) { m_GroupArray.Add( val ); }
+    const std::vector<int> &GetGroupArray(void) const { return m_GroupArray; }
+    void ClearGroupArray(void) { m_GroupArray.clear(); }
+    void AddIntToGroupArray( int val ) { m_GroupArray.push_back( val ); }
     void SetAvailable(bool avail ){ m_bavail = avail;}
 
+    std::vector<float> GetReducedPlyPoints();
+    std::vector<float> GetReducedAuxPlyPoints( int iTable);
+
     LLRegion quilt_candidate_region;
+
+    void        SetScale(int scale);
+    bool	Scale_eq( int b ) const { return abs ( Scale - b) <= rounding; }
+    bool        Scale_ge( int b ) const { return  Scale_eq( b ) || Scale > b; }
+    bool        Scale_gt( int b ) const { return  Scale > b && !Scale_eq( b ); }
+
   private:
     int         EntryOffset;
     int         ChartType;
@@ -241,6 +255,7 @@ struct ChartTableEntry
     float       LonMax;
     float       LonMin;
     char        *pFullPath;
+    int		rounding;
     int         Scale;
     time_t      edition_date;
     time_t      file_date;
@@ -256,11 +271,15 @@ struct ChartTableEntry
     int         *pNoCovrCntTable;
     float       **pNoCovrPlyTable;
     
-    ArrayOfInts m_GroupArray;
+    std::vector<int> m_GroupArray;
     wxString    *m_pfilename;             // a helper member, not on disk
     wxString    *m_psFullPath;
-    wxBoundingBox m_bbox;
+    LLBBox m_bbox;
     bool        m_bavail;
+    
+    std::vector<float> m_reducedPlyPoints;
+    
+    std::vector<std::vector<float> > m_reducedAuxPlyPointsVector;
 };
 
 enum
@@ -297,8 +316,8 @@ public:
     ChartDatabase();
     virtual ~ChartDatabase(){};
 
-    bool Create(ArrayOfCDI& dir_array, wxProgressDialog *pprog);
-    bool Update(ArrayOfCDI& dir_array, bool bForce, wxProgressDialog *pprog);
+    bool Create(ArrayOfCDI& dir_array, wxGenericProgressDialog *pprog);
+    bool Update(ArrayOfCDI& dir_array, bool bForce, wxGenericProgressDialog *pprog);
 
     bool Read(const wxString &filePath);
     bool Write(const wxString &filePath);
@@ -329,8 +348,8 @@ public:
     int GetDBChartProj(int dbIndex);
     int GetDBChartScale(int dbIndex);
 
-    bool GetDBBoundingBox(int dbindex, wxBoundingBox *box);
-    const wxBoundingBox &GetDBBoundingBox(int dbIndex);
+    bool GetDBBoundingBox(int dbindex, LLBBox &box);
+    const LLBBox &GetDBBoundingBox(int dbIndex);
     
     int  GetnAuxPlyEntries(int dbIndex);
     int  GetDBPlyPoint(int dbIndex, int plyindex, float *lat, float *lon);
@@ -342,7 +361,11 @@ public:
     void ApplyGroupArray(ChartGroupArray *pGroupArray);
     bool IsChartAvailable( int dbIndex );
     ChartTable    active_chartTable;
+    std::map <wxString, int> active_chartTable_pathindex;
     
+    std::vector<float> GetReducedPlyPoints(int dbIndex);
+    std::vector<float> GetReducedAuxPlyPoints(int dbIndex, int iTable);
+
 protected:
     virtual ChartBase *GetChart(const wxChar *theFilePath, ChartClassDescriptor &chart_desc) const;
     int AddChartDirectory(const wxString &theDir, bool bshow_prog);
@@ -355,12 +378,12 @@ protected:
 private:
     bool IsChartDirUsed(const wxString &theDir);
 
-    int SearchDirAndAddCharts(wxString& dir_name_base, ChartClassDescriptor &chart_desc, wxProgressDialog *pprog);
+    int SearchDirAndAddCharts(wxString& dir_name_base, ChartClassDescriptor &chart_desc, wxGenericProgressDialog *pprog);
 
-    int TraverseDirAndAddCharts(ChartDirInfo& dir_info, wxProgressDialog *pprog, wxString& dir_magic, bool bForce);
-    bool DetectDirChange(const wxString & dir_path, const wxString & magic, wxString &new_magic, wxProgressDialog *pprog);
+    int TraverseDirAndAddCharts(ChartDirInfo& dir_info, wxGenericProgressDialog *pprog, wxString& dir_magic, bool bForce);
+    bool DetectDirChange(const wxString & dir_path, const wxString & magic, wxString &new_magic, wxGenericProgressDialog *pprog);
 
-    bool AddChart( wxString &chartfilename, ChartClassDescriptor &chart_desc, wxProgressDialog *pprog,
+    bool AddChart( wxString &chartfilename, ChartClassDescriptor &chart_desc, wxGenericProgressDialog *pprog,
                    int isearch, bool bthis_dir_in_dB );
 
     bool Check_CM93_Structure(wxString dir_name);
@@ -377,7 +400,7 @@ private:
     
     int         m_nentries;
 
-    wxBoundingBox m_dummy_bbox;
+    LLBBox m_dummy_bbox;
 };
 
 
@@ -387,26 +410,23 @@ private:
 class ChartGroupElement;
 class ChartGroup;
 
-WX_DEFINE_ARRAY_PTR(ChartGroupElement*, ChartGroupElementArray);
 WX_DEFINE_ARRAY_PTR(ChartGroup*, ChartGroupArray);
 
 class ChartGroupElement
 {
+  // ChartGroupElements need nothing special to delete since
+  // m_missing_name_array is a wxArrayString which manages
+  // memory for the strings cleanly without need for a .Clear.
 public:
-      wxString          m_element_name;
-
-//      ChartGroupElementArray m_missing_name_array;
+      wxString      m_element_name;
       wxArrayString m_missing_name_array;
 };
 
 class ChartGroup
 {
 public:
-      ChartGroup(){};
-      ~ChartGroup(){ for (unsigned int i=0 ; i < m_element_array.GetCount() ; i++){ delete m_element_array.Item(i);}}
-      
-      wxString                m_group_name;
-      ChartGroupElementArray  m_element_array;
+      wxString                                         m_group_name;
+      std::vector<std::unique_ptr<ChartGroupElement>>  m_element_array;
 };
 
 

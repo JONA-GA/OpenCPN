@@ -6,6 +6,7 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include "chartdldrgui.h"
+#include <wx/msgdlg.h>
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -148,15 +149,15 @@ AddSourceDlg::AddSourceDlg( wxWindow* parent, wxWindowID id, const wxString& tit
 	wxStaticBoxSizer* sbSizerChartDir;
 	sbSizerChartDir = new wxStaticBoxSizer( new wxStaticBox( this, wxID_ANY, _("Chart Directory") ), wxVERTICAL );
 
-        wxBoxSizer *dirbox = new wxBoxSizer(wxHORIZONTAL);
-        sbSizerChartDir->Add(dirbox);
+    wxBoxSizer *dirbox = new wxBoxSizer(wxHORIZONTAL);
+    sbSizerChartDir->Add(dirbox);
 
-        m_tcChartDirectory = new wxTextCtrl(this, wxID_ANY,_T(""), wxDefaultPosition,
+    m_tcChartDirectory = new wxTextCtrl(this, wxID_ANY,_T(""), wxDefaultPosition,
                                             wxSize(200, -1));
-        dirbox->Add( m_tcChartDirectory, 3, wxALL|wxEXPAND, 5 );
+    dirbox->Add( m_tcChartDirectory, 3, wxALL|wxEXPAND, 5 );
 
-        m_buttonChartDirectory = new wxButton(this, wxID_ANY,_("Select a folder"));
-        dirbox->Add( m_buttonChartDirectory, 1, wxALL|wxEXPAND, 5 );
+    m_buttonChartDirectory = new wxButton(this, wxID_ANY,_("Select a folder"));
+    dirbox->Add( m_buttonChartDirectory, 1, wxALL|wxEXPAND, 5 );
 
 
 	bSizerMain->Add( sbSizerChartDir, 0, wxALL|wxEXPAND, 5 );
@@ -164,7 +165,7 @@ AddSourceDlg::AddSourceDlg( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_sdbSizerBtns = new wxStdDialogButtonSizer();
 	m_sdbSizerBtnsOK = new wxButton( this, wxID_OK );
 	m_sdbSizerBtns->AddButton( m_sdbSizerBtnsOK );
-	m_sdbSizerBtnsCancel = new wxButton( this, wxID_CANCEL );
+	m_sdbSizerBtnsCancel = new wxButton( this, wxID_CANCEL, _("Cancel") );
 	m_sdbSizerBtns->AddButton( m_sdbSizerBtnsCancel );
 	m_sdbSizerBtns->Realize();
 
@@ -173,6 +174,7 @@ AddSourceDlg::AddSourceDlg( wxWindow* parent, wxWindowID id, const wxString& tit
 
 	this->Layout();
 
+    m_sourceswin = NULL;
 
 	// Connect Events
 	m_treeCtrlPredefSrcs->Connect( wxEVT_COMMAND_TREE_SEL_CHANGED, wxTreeEventHandler( AddSourceDlg::OnSourceSelected ), NULL, this );
@@ -363,7 +365,7 @@ ChartDldrPanel::ChartDldrPanel( wxWindow* parent, wxWindowID id, const wxPoint& 
         bSizerCatalogBtns->Add( m_bUpdateChartList, 0, wxALL|wxEXPAND, 5 );
 
         m_bUpdateAllCharts = new wxButton( this, wxID_ANY, _("Update All"), wxDefaultPosition, wxDefaultSize, 0 );
-        bSizerCatalogBtns->Add( m_bUpdateAllCharts, 0, wxALIGN_BOTTOM|wxALL|wxEXPAND, 5 );
+        bSizerCatalogBtns->Add( m_bUpdateAllCharts, 0, wxALL|wxEXPAND, 5 );
 
 
         bSizerCatalogs->Add( bSizerCatalogBtns, 0, wxEXPAND, 5 );
@@ -498,12 +500,16 @@ ChartDldrPrefsDlg::ChartDldrPrefsDlg( wxWindow* parent, wxWindowID id, const wxS
 	sbSizerBehavior->Add( m_cbBulkUpdate, 0, wxALL, 5 );
 
 
+    m_buttonDownloadMasterCatalog = new wxButton(this, wxID_ANY, _("Update chart source catalog"), wxDefaultPosition, wxDefaultSize, 0);
+    
+    sbSizerBehavior->Add( m_buttonDownloadMasterCatalog, 0, wxALL, 5 );
+    
 	bSizerPrefsMain->Add( sbSizerBehavior, 1, wxALL|wxEXPAND, 5 );
 
 	m_sdbSizerBtns = new wxStdDialogButtonSizer();
 	m_sdbSizerBtnsOK = new wxButton( this, wxID_OK );
 	m_sdbSizerBtns->AddButton( m_sdbSizerBtnsOK );
-	m_sdbSizerBtnsCancel = new wxButton( this, wxID_CANCEL );
+	m_sdbSizerBtnsCancel = new wxButton( this, wxID_CANCEL, _("Cancel") );
 	m_sdbSizerBtns->AddButton( m_sdbSizerBtnsCancel );
 	m_sdbSizerBtns->Realize();
 
@@ -520,7 +526,45 @@ ChartDldrPrefsDlg::ChartDldrPrefsDlg( wxWindow* parent, wxWindowID id, const wxS
 	m_sdbSizerBtnsCancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnCancelClick ), NULL, this );
 	m_sdbSizerBtnsOK->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnOkClick ), NULL, this );
         m_buttonChartDirectory->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnDirSelClick ), NULL, this );
+    m_buttonDownloadMasterCatalog->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnDownloadMasterCatalog ), NULL, this );
+}
 
+void ChartDldrPrefsDlg::OnDownloadMasterCatalog( wxCommandEvent& event )
+{
+    wxFileName tfn = wxFileName::CreateTempFileName(_T("chartdldr"));
+    wxString url = "https://raw.githubusercontent.com/OpenCPN/OpenCPN/master/plugins/chartdldr_pi/data/chart_sources.xml";
+    
+    _OCPN_DLStatus ret = OCPN_downloadFile(url, tfn.GetFullPath(), _("Downloading chart sources"), _("Downloading chart sources"), wxNullBitmap, this, OCPN_DLDS_ELAPSED_TIME | OCPN_DLDS_ESTIMATED_TIME | OCPN_DLDS_REMAINING_TIME | OCPN_DLDS_SPEED | OCPN_DLDS_SIZE | OCPN_DLDS_URL | OCPN_DLDS_CAN_PAUSE | OCPN_DLDS_CAN_ABORT | OCPN_DLDS_AUTO_CLOSE, 15);
+    wxFileName fn;
+    fn.SetPath(*GetpPrivateApplicationDataLocation());
+    fn.SetFullName(_T("chartdldr_pi-chart_sources.xml"));
+
+    switch (ret) {
+        case OCPN_DL_NO_ERROR: {
+            if (!wxCopyFile(tfn.GetFullPath(), fn.GetFullPath())) {
+                wxMessageBox(wxString::Format(_("Failed to save: %s "), fn.GetFullPath().c_str()), _("Chart downloader"), wxOK | wxICON_ERROR);
+            }
+            break;
+        }
+        case OCPN_DL_FAILED: {
+            wxMessageBox(
+                         wxString::Format(_("Failed to download: %s \nVerify there is a working Internet connection."), url.c_str()),
+                         _("Chart downloader"), wxOK | wxICON_ERROR);
+            break;
+        }
+        case OCPN_DL_USER_TIMEOUT:
+        case OCPN_DL_ABORTED: {
+            break;
+        }
+        case OCPN_DL_UNKNOWN:
+        case OCPN_DL_STARTED: {
+            break;
+        }
+            
+        default:
+            wxASSERT(false);  // This should never happen because we handle all possible cases of ret
+    }
+    if (wxFileExists(tfn.GetFullPath())) wxRemoveFile(tfn.GetFullPath());
 }
 
 void ChartDldrPrefsDlg::OnDirSelClick( wxCommandEvent& event )
@@ -540,5 +584,5 @@ ChartDldrPrefsDlg::~ChartDldrPrefsDlg()
 	m_sdbSizerBtnsCancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnCancelClick ), NULL, this );
 	m_sdbSizerBtnsOK->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnOkClick ), NULL, this );
         m_buttonChartDirectory->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnDirSelClick ), NULL, this );
-
+    m_buttonDownloadMasterCatalog->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( ChartDldrPrefsDlg::OnDownloadMasterCatalog ), NULL, this );
 }

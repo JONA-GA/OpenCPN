@@ -59,10 +59,13 @@
 #include "scrollingdialog.h"
 #endif
 
-#include "Route.h"
 #include "LinkPropDlg.h"
 
-#define ID_RCLK_MENU_COPY_TEXT 7014
+#define ID_RCLK_MENU_COPY_TEXT 7013
+
+#define ID_TRK_MENU_ADD          7014
+#define ID_TRK_MENU_EDIT         7015
+#define ID_TRK_MENU_DELETE       7016
 
 /*!
  * Forward declarations
@@ -71,13 +74,13 @@
 class   wxListCtrl;
 class   OCPNTrackListCtrl;
 class   Track;
-class   RoutePoint;
+class   TrackPoint;
 class   HyperlinkList;
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class TrackPropDlg
 ///////////////////////////////////////////////////////////////////////////////
-class TrackPropDlg : public wxDialog 
+class TrackPropDlg : public wxFrame
 {
 private:
         static bool instanceFlag;
@@ -86,11 +89,9 @@ private:
                       const wxPoint& pos, const wxSize& size,
                       long style ); 
         
-        Route      *m_pHead; // for route splitting
-        Route      *m_pTail;
-        RoutePoint *m_pExtendPoint;
-        Route      *m_pExtendRoute;
-        RoutePoint *m_pEnroutePoint;
+        TrackPoint *m_pExtendPoint;
+        Track      *m_pExtendTrack;
+        TrackPoint *m_pEntrackPoint;
         bool        m_bStartNow;
 
         double      m_planspeed;
@@ -102,9 +103,9 @@ private:
         bool        SaveChanges(void);
         
         HyperlinkList   *m_pMyLinkList;
-        LinkPropImpl    *m_pLinkProp;
         void OnHyperLinkClick(wxHyperlinkEvent &event);
         wxHyperlinkCtrl *m_pEditedLink;
+        void PopupMenuHandler( wxCommandEvent& event );
 
     protected:
         wxNotebook* m_notebook1;
@@ -154,6 +155,11 @@ private:
         wxButton* m_sdbBtmBtnsSizerToRoute;
         wxButton* m_sdbBtmBtnsSizerExport;
         
+        wxMenuItem* m_menuItemEdit;
+        wxMenuItem* m_menuItemAdd;
+        wxMenuItem* m_menuItemDelete;
+
+        
         wxScrolledWindow *itemDialog1;
         bool m_bcompact;
         
@@ -179,9 +185,9 @@ private:
         void CreateControlsCompact( void );
         
 public:
-        static TrackPropDlg *getInstance( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Track Properties"),
+        static TrackPropDlg *getInstance( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = _("Track properties"),
                                       const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 680,440 ),
-                                      long style = wxCAPTION|wxDEFAULT_DIALOG_STYLE|wxMAXIMIZE_BOX|wxMINIMIZE_BOX|wxRESIZE_BORDER ); 
+                                      long style = wxCAPTION|wxDEFAULT_FRAME_STYLE|wxFRAME_FLOAT_ON_PARENT|wxMAXIMIZE_BOX|wxMINIMIZE_BOX|wxRESIZE_BORDER ); 
         static bool getInstanceFlag(){ return instanceFlag; } 
         ~TrackPropDlg();
 
@@ -190,14 +196,14 @@ public:
             m_hyperlink1->PopupMenu( m_menuLink, event.GetPosition() );
         }
         
-        void SetTrackAndUpdate( Route *pR );
+        void SetTrackAndUpdate( Track *pt );
         bool UpdateProperties();
         void InitializeList();
-        Route *GetTrack(void){return m_pRoute;}
+        Track *GetTrack() { return m_pTrack; }
         
         void RecalculateSize( void );
         
-        Route      *m_pRoute;
+        Track      *m_pTrack;
         
         void m_hyperlinkContextMenu( wxMouseEvent &event );
 };
@@ -211,7 +217,7 @@ class OCPNTrackListCtrl: public wxListCtrl
         wxString OnGetItemText(long item, long column) const;
         int OnGetItemColumnImage(long item, long column) const;
 
-        Route                   *m_pRoute;
+        Track                   *m_pTrack;
         int                     m_tz_selection;
         int                     m_LMT_Offset;
 };

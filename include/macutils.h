@@ -22,11 +22,16 @@
 #ifndef MACUTILS_H_INCLUDED_H__
 #define MACUTILS_H_INCLUDED_H__
 
+#include "config.h"
+
 #ifdef __WXOSX__
+
+#ifndef OCPN_USE_NEWSERIAL
 #define MAX_SERIAL_PORTS 10
 
 extern "C" int FindSerialPortNames(char** pNames, int iMaxNames) ;
 extern "C" bool ValidateSerialPortName(const char* pPortName, int iMaxNamesToSearch) ;
+#endif
 
 extern "C" int GetMacMonitorSize();
 
