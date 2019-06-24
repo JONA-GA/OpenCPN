@@ -152,7 +152,7 @@ void CursorData::PopulateTrackingControls( bool vertical )
     wxFont *font = OCPNGetFont(_("Dialog"), 10);
     int wn, wd, ws,wl;
     GetTextExtent( _T("abcdefghihjk"), &wn, NULL, 0, 0, font); // normal width text control size
-    GetTextExtent( _T("abcdef"), &ws, NULL, 0, 0, font); // short width text control size for direction only
+    GetTextExtent( _T("abcdefgh"), &ws, NULL, 0, 0, font); // short width text control size for direction only
     GetTextExtent( _T("abcdefghijklmopq"), &wd, NULL, 0, 0, font); // long width text control size for double unit wind display
     GetTextExtent( _T("abcdefghijklm"), &wl, NULL, 0, 0, font); // long width text control size for double unit wave display
     //
