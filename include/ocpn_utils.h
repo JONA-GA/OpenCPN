@@ -1,11 +1,9 @@
-/***************************************************************************
+/******************************************************************************
  *
  * Project:  OpenCPN
- * Purpose:  OpenGL text rendering
- * Author:   Sean D'Epagnier
  *
  ***************************************************************************
- *   Copyright (C) 2014 Sean D'Epagnier                                    *
+ *   Copyright (C) 2019 Alec Leamas                                        *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -21,49 +19,33 @@
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
  *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  USA.         *
- **************************************************************************/
+ ***************************************************************************
+ */
+#include <string>
+#include <vector>
 
-#ifndef __TEXFONT_H__
-#define __TEXFONT_H__
+/** Standard, mostly strings utilities. */
 
-/* support ascii plus degree symbol for now pack font in a single texture 16x8 */
-#define DEGREE_GLYPH 127
-#define MIN_GLYPH 32
-#define MAX_GLYPH 128
+namespace ocpn {
 
-#define NUM_GLYPHS (MAX_GLYPH - MIN_GLYPH)
+bool endswith(const std::string& s, const std::string& suffix);
 
-#define COLS_GLYPHS 16
-#define ROWS_GLYPHS ((NUM_GLYPHS / COLS_GLYPHS)+1)
+bool startswith(const std::string& s, const std::string& prefix);
 
-struct TexGlyphInfo {
-    int x, y, width, height;
-    float advance;
+std::string ltrim(std::string s);
 
-TexGlyphInfo() : x(0), y(0), width(0), height(0), advance(0.){}
+std::string rtrim(std::string s);
 
-};
+std::string trim(std::string s); 
 
-class TexFont {
-public:
-    TexFont();
-    ~TexFont();
+std::string join(std::vector<std::string> v, char c);
 
-    void Build( wxFont &font, bool blur = false, bool luminance = false );
-    void Delete();
+bool exists(const std::string& path);
 
-    void GetTextExtent( const wxString &string, int *width, int *height);
-    void RenderString( const wxString &string, int x=0, int y=0 );
+void mkdir(const std::string path);
 
-private:
-    void RenderGlyph( wchar_t c );
+bool replace(std::string& str, const std::string& from, const std::string& to);
 
-    wxFont m_font;
-    bool m_blur;
+void copy_file(const std::string& src_path, const std::string& dest_path);
 
-    TexGlyphInfo tgi[MAX_GLYPH];
-
-    unsigned int texobj;
-    int tex_w, tex_h;
-};
-#endif
+}   // namespace ocpn

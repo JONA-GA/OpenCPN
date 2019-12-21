@@ -44,6 +44,7 @@
 #include "chartimg.h"
 
 #include "s57chart.h"               // for Object list
+#include "semantic_vers.h"
 
 //For widgets...
 #include "wx/hyperlink.h"
@@ -168,6 +169,13 @@ class PlugInContainer
             int               m_version_major;
             int               m_version_minor;
             wxBitmap         *m_bitmap;
+            /** 
+             * Return version from plugin API. Older pre-117 plugins just
+             * support major and minor version, newer plugins have
+             * complete semantic version data.
+             */
+            SemanticVersion   GetVersion();
+            wxString          m_version_str;          // Complete version as of OcpnVersion
 
 };
 
@@ -237,7 +245,11 @@ public:
       PlugInManager(MyFrame *parent);
       virtual ~PlugInManager();
 
-      bool LoadAllPlugIns(const wxString &plugin_dir, bool enabled_plugins, bool b_enable_blackdialog = true);
+      bool LoadAllPlugIns(bool enabled_plugins, bool b_enable_blackdialog = true);
+
+      /** Unload, delete and remove item ix in GetPlugInArray(). */
+      bool UnLoadPlugIn(size_t ix);
+
       bool UnLoadAllPlugIns();
       bool DeactivateAllPlugIns();
       bool UpdatePlugIns();
@@ -254,6 +266,7 @@ public:
       void PrepareAllPluginContextMenus();
 
       void NotifySetupOptions();
+      void ClosePlugInPanel(PlugInContainer* pic, int ix);
       void CloseAllPlugInPanels( int );
 
       ArrayOfPlugInToolbarTools &GetPluginToolbarToolArray(){ return m_PlugInToolbarTools; }
@@ -288,6 +301,7 @@ public:
 
       void SendNMEASentenceToAllPlugIns(const wxString &sentence);
       void SendPositionFixToAllPlugIns(GenericPosDatEx *ppos);
+      void SendActiveLegInfoToAllPlugIns(ActiveLegDat *infos);
       void SendAISSentenceToAllPlugIns(const wxString &sentence);
       void SendJSONMessageToAllPlugins(const wxString &message_id, wxJSONValue v);
       void SendMessageToAllPlugins(const wxString &message_id, const wxString &message_body);
@@ -376,6 +390,24 @@ DECLARE_EVENT_TABLE()
 
 WX_DEFINE_ARRAY_PTR(PluginPanel *, ArrayOfPluginPanel);
 
+class PluginDownloadDialog;
+
+/*
+ * Panel with a single + sign which opens the "Add/download plugins" dialog.
+ */
+class AddPluginPanel: public wxPanel
+{
+    public:
+        AddPluginPanel(wxWindow* parent);
+        void OnClick(wxMouseEvent& event);
+        ~AddPluginPanel();
+
+    protected:
+        wxBitmap m_bitmap;
+        wxStaticBitmap* m_staticBitmap;
+        wxWindow* m_parent;
+};
+
 class PluginListPanel: public wxScrolledWindow
 {
 public:
@@ -388,7 +420,13 @@ public:
       void UpdateSelections();
       void UpdatePluginsOrder();
 
+      /** Complete reload from plugins. */
+      void ReloadPlugins(ArrayOfPlugIns* plugins);
+
 private:
+      void AddPlugin(PlugInContainer* pic);
+      int ComputePluginSpace(ArrayOfPluginPanel plugins, wxBoxSizer* sizer);
+      void Clear();
       ArrayOfPlugIns     *m_pPluginArray;
       ArrayOfPluginPanel  m_PluginItems;
       PluginPanel        *m_PluginSelected;
@@ -406,6 +444,7 @@ public:
       void SetSelected( bool selected );
       void OnPluginPreferences( wxCommandEvent& event );
       void OnPluginEnable( wxCommandEvent& event );
+      void OnPluginUninstall( wxCommandEvent& event );
       void OnPluginUp( wxCommandEvent& event );
       void OnPluginDown( wxCommandEvent& event );
       void SetEnabled( bool enabled );
@@ -420,8 +459,10 @@ private:
       wxStaticText    *m_pVersion;
       wxStaticText    *m_pDescription;
       wxFlexGridSizer      *m_pButtons;
+      wxStaticBitmap  *m_itemStaticBitmap;
       wxButton        *m_pButtonEnable;
       wxButton        *m_pButtonPreferences;
+      wxButton        *m_pButtonUninstall;
       
       wxBoxSizer      *m_pButtonsUpDown;
       wxButton        *m_pButtonUp;

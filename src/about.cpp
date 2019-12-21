@@ -38,34 +38,31 @@
 #include <wx/clipbrd.h>
 #include <wx/html/htmlwin.h>
 #include <wx/tokenzr.h>
-#include <version.h>
+#include <config.h>
 
 #include "about.h"
 #include "chart1.h"
 #include "chcanv.h"
 #include "styles.h"
-#include "version.h"
 #include "OCPNPlatform.h"
 #include "FontMgr.h"
-
+#include "navutil.h"
+#ifdef __OCPN__ANDROID__
+  #include "androidUTIL.h"
+#endif  
 
 extern OCPNPlatform *g_Platform;
 extern MyFrame *gFrame;
 extern ocpnStyle::StyleManager* g_StyleManager;
-extern about *g_pAboutDlg;
+extern about *g_pAboutDlgLegacy;
 extern bool g_bresponsive;
 
-wxString OpenCPNVersion =
-    wxString::Format( wxT("\n      Version %i.%i.%i Build "),
-                      VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH )
-    + wxString::FromAscii(VERSION_DATE);
-
-    wxString OpenCPNVersionAndroid = wxString::Format(_T("Android Version 1.0.0<br>Base %i.%i.%i<br>Build Date %s"),
-                                     VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_DATE);
+wxString OpenCPNVersion =  wxString::Format( wxT("\n      Version %s"), VERSION_FULL);
+    
     
 const wxString AboutText =
     wxT("<br>OpenCPN<br>")
-    wxT("(c) 2000-2018 The OpenCPN Authors<br><br>");
+    wxT("(c) 2000-2019 The OpenCPN Authors<br><br>");
 
 const wxString OpenCPNInfo =
     wxT("<br><br>")
@@ -174,7 +171,6 @@ IMPLEMENT_DYNAMIC_CLASS( about, wxDialog )
 
 BEGIN_EVENT_TABLE( about, wxDialog )
     EVT_BUTTON( xID_OK, about::OnXidOkClick )
-    EVT_NOTEBOOK_PAGE_CHANGED(ID_NOTEBOOK_HELP, about::OnPageChange)
     EVT_BUTTON( ID_DONATE, about::OnDonateClick)
     EVT_BUTTON( ID_COPYINI, about::OnCopyClick)
     EVT_BUTTON( ID_COPYLOG, about::OnCopyClick)
@@ -184,7 +180,14 @@ END_EVENT_TABLE()
 about::about( void ) :
     m_DataLocn( wxEmptyString ),
     m_parent( NULL ),
-    m_btips_loaded ( FALSE ) { }
+    m_btips_loaded ( FALSE )
+{
+    pAboutHTMLCtl = NULL;
+    pLicenseHTMLCtl = NULL;
+    pAuthorHTMLCtl = NULL;
+    m_blicensePageSet = false;
+    
+}
 
 about::about( wxWindow* parent,wxString Data_Locn, wxWindowID id, const wxString& caption,
                   const wxPoint& pos, const wxSize& size, long style) :
@@ -192,6 +195,12 @@ about::about( wxWindow* parent,wxString Data_Locn, wxWindowID id, const wxString
     m_parent( parent ),
     m_btips_loaded ( FALSE )
 {
+
+    pAboutHTMLCtl = NULL;
+    pLicenseHTMLCtl = NULL;
+    pAuthorHTMLCtl = NULL;
+    m_blicensePageSet = false;
+    
   Create(parent, id, caption, pos, size, style);
 }
 
@@ -222,9 +231,10 @@ void about::SetColorScheme( void )
 {
     DimeControl( this );
     wxColor bg = GetBackgroundColour();
-    pAboutHTMLCtl->SetBackgroundColour( bg );
-    pLicenseHTMLCtl->SetBackgroundColour( bg );
-    pAuthorHTMLCtl->SetBackgroundColour( bg );
+
+    if(pAboutHTMLCtl) pAboutHTMLCtl->SetBackgroundColour( bg );
+    if(pLicenseHTMLCtl)pLicenseHTMLCtl->SetBackgroundColour( bg );
+    if(pAuthorHTMLCtl)pAuthorHTMLCtl->SetBackgroundColour( bg );
     
 
     // This looks like non-sense, but is needed for __WXGTK__
@@ -237,9 +247,9 @@ void about::SetColorScheme( void )
     wxMemoryDC tdc( tbm );
     tdc.SetBackground( bg );
     tdc.Clear();
-    pAboutHTMLCtl->SetBackgroundImage(tbm);
-    pLicenseHTMLCtl->SetBackgroundImage(tbm);
-    pAuthorHTMLCtl->SetBackgroundImage(tbm);
+    if(pAboutHTMLCtl)pAboutHTMLCtl->SetBackgroundImage(tbm);
+    if(pLicenseHTMLCtl)pLicenseHTMLCtl->SetBackgroundImage(tbm);
+    if(pAuthorHTMLCtl)pAuthorHTMLCtl->SetBackgroundImage(tbm);
 #endif
 
 }
@@ -274,6 +284,10 @@ void about::Populate( void )
         aboutText.Append( _T("<i>") );
 
 #ifdef __OCPN__ANDROID__    
+    wxString msg;
+    msg.Printf( _T(" [%d]"), androidGetVersionCode() );
+    wxString OpenCPNVersionAndroid = _T("OpenCPN for Android Version ") + androidGetVersionName() + msg;
+
     aboutText.Append( AboutText + OpenCPNVersionAndroid  + OpenCPNInfoAlt );
 #else
     aboutText.Append( AboutText + OpenCPNVersion + OpenCPNInfo );
@@ -281,14 +295,12 @@ void about::Populate( void )
 
     // Show where the log file is going to be placed
     wxString log_string = _T("Logfile location: ") + g_Platform->GetLogFileName();
-
     log_string.Replace(_T("/"), _T("/ "));      // allow line breaks, in a cheap way...
-
+    
     aboutText.Append( log_string );
 
     // Show where the config file is going to be placed
     wxString config_string = _T("<br><br>Config file location: ") + g_Platform->GetConfigFileName();
-
     config_string.Replace(_T("/"), _T("/ "));      // allow line breaks, in a cheap way...
     aboutText.Append( config_string );
     
@@ -299,7 +311,6 @@ void about::Populate( void )
     aboutText.Append( _T("</font></body></html>") );
 
     pAboutHTMLCtl->SetPage( aboutText );
-    
     
     ///Authors page
     // The HTML Header
@@ -320,8 +331,9 @@ void about::Populate( void )
 
     pAuthorHTMLCtl->SetPage( authorFixText );
     
-
     ///License page
+    // Deferred....
+#if 0    
     // The HTML Header
     wxString licenseText =
     wxString::Format(
@@ -352,8 +364,8 @@ void about::Populate( void )
     licenseText.Append( _T("</font></body></html>") );
         
     pLicenseHTMLCtl->SetPage( licenseText );
+#endif    
         
-
     SetColorScheme();
 }
 
@@ -365,14 +377,14 @@ void about::RecalculateSize( void )
     esize.x = GetCharWidth() * 110;
     esize.y = GetCharHeight() * 44;
     
-    wxSize dsize = GetParent()->GetClientSize();
-    esize.y = wxMin(esize.y, dsize.y - (2 * GetCharHeight()));
-    esize.x = wxMin(esize.x, dsize.x - (1 * GetCharHeight()));
+    wxSize dsize = GetParent()->GetSize();
+    esize.y = wxMin(esize.y, dsize.y - (0 * GetCharHeight()));
+    esize.x = wxMin(esize.x, dsize.x - (0 * GetCharHeight()));
     SetClientSize(esize);
     
     wxSize fsize = GetSize();
-    fsize.y = wxMin(fsize.y, dsize.y - (2 * GetCharHeight()));
-    fsize.x = wxMin(fsize.x, dsize.x - (1 * GetCharHeight()));
+    fsize.y = wxMin(fsize.y, dsize.y - (0 * GetCharHeight()));
+    fsize.x = wxMin(fsize.x, dsize.x - (0 * GetCharHeight()));
     
     SetSize(fsize);
     
@@ -399,8 +411,9 @@ void about::CreateControls( void )
     pST1->SetFont( *headerFont );
     mainSizer->Add( pST1, 0, wxALL | wxEXPAND, 8 );
 
+    bool orient =  m_displaySize.x < m_displaySize.y;
 #ifndef __OCPN__ANDROID__    
-    wxBoxSizer *buttonSizer = new wxBoxSizer( m_displaySize.x < m_displaySize.y ? wxVERTICAL : wxHORIZONTAL );
+    wxBoxSizer *buttonSizer = new wxBoxSizer( orient ? wxVERTICAL : wxHORIZONTAL );
     mainSizer->Add( buttonSizer, 0, wxALL, 0 );
     
     wxButton* donateButton = new wxBitmapButton( this, ID_DONATE,
@@ -413,10 +426,12 @@ void about::CreateControls( void )
 #endif
     
     //  Main Notebook
-    pNotebook = new wxNotebook( this, ID_NOTEBOOK_HELP, wxDefaultPosition,
-            wxSize( -1, -1 ), wxNB_TOP );
+    pNotebook = new wxNotebook( this, ID_NOTEBOOK_HELP, wxDefaultPosition, wxSize( -1, -1 ), wxNB_TOP );
+    
+    pNotebook->Connect(wxEVT_COMMAND_NOTEBOOK_PAGE_CHANGED, wxNotebookEventHandler(about::OnNBPageChange), NULL,   this);
+    
     pNotebook->InheritAttributes();
-    mainSizer->Add( pNotebook, 1, (buttonSizer->GetOrientation() == wxVERTICAL ? wxALIGN_CENTER_VERTICAL : 0) | wxEXPAND | wxALL, 5 );
+    mainSizer->Add( pNotebook, 1, (orient ? wxALIGN_CENTER_VERTICAL : 0) | wxEXPAND | wxALL, 5 );
 
     //  About Panel
     itemPanelAbout = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
@@ -445,7 +460,6 @@ void about::CreateControls( void )
     authorSizer->Add( pAuthorHTMLCtl, 1, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
     itemPanelAuthors->SetSizer( authorSizer );
     
-
     //  License Panel
     itemPanelLicense = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
             wxSUNKEN_BORDER | wxTAB_TRAVERSAL );
@@ -458,7 +472,6 @@ void about::CreateControls( void )
     wxBoxSizer* licenseSizer = new wxBoxSizer( wxVERTICAL );
     licenseSizer->Add( pLicenseHTMLCtl, 1, wxALIGN_CENTER_HORIZONTAL | wxEXPAND | wxALL, 5 );
     itemPanelLicense->SetSizer( licenseSizer );
-    
 
     //  Help Panel
     itemPanelTips = new wxPanel( pNotebook, -1, wxDefaultPosition, wxDefaultSize,
@@ -478,6 +491,73 @@ void about::CreateControls( void )
 }
 
 
+void about::OnNBPageChange(wxNotebookEvent& event)
+{
+    unsigned int i  = event.GetSelection();
+
+    if( i == 3 ){
+        g_Platform->LaunchLocalHelp();
+        pNotebook->ChangeSelection(0);
+    }
+    
+    else if((i == 2) && !m_blicensePageSet){          // license
+    
+        wxColor bg = GetBackgroundColour();
+        wxColor fg = wxColour( 0, 0, 0 );
+        wxFont *dFont = FontMgr::Get().GetFont( _("Dialog") );
+        
+        // Do weird font size calculation
+        int points = dFont->GetPointSize();
+        #ifndef __WXOSX__
+        ++points;
+        #endif
+        int sizes[7];
+        for ( int i = -2; i < 5; i++ ) {
+            sizes[i+2] = points + i + ( i > 0 ? i : 0 );
+        }
+        wxString face = dFont->GetFaceName();
+        
+    ///License page
+        g_Platform->ShowBusySpinner();
+        
+    // The HTML Header
+        wxString licenseText =
+        wxString::Format(
+            _T( "<html><body bgcolor=#%02x%02x%02x><font color=#%02x%02x%02x>" ),
+                     bg.Red(), bg.Blue(), bg.Green(), fg.Red(), fg.Blue(), fg.Green() );
+    
+        pLicenseHTMLCtl->SetFonts( face, face, sizes );
+    
+        wxTextFile license_filea( m_DataLocn + _T("license.txt") );
+        if ( license_filea.Open() ) {
+            for ( wxString str = license_filea.GetFirstLine(); !license_filea.Eof() ; str = license_filea.GetNextLine() )
+                licenseText.Append( str + _T("<br>") );
+            license_filea.Close();
+        } else {
+            wxLogMessage( _T("Could not open License file: ") + m_DataLocn );
+        }
+    
+        wxString suppLicense = g_Platform->GetSupplementalLicenseString();
+    
+        wxStringTokenizer st(suppLicense, _T("\n"), wxTOKEN_DEFAULT);
+        while( st.HasMoreTokens() )
+        {
+            wxString s1 = st.GetNextToken();
+            licenseText.Append( s1 + _T("<br>") );
+        }
+    
+        // The HTML Footer
+        licenseText.Append( _T("</font></body></html>") );
+    
+        pLicenseHTMLCtl->SetPage( licenseText );
+        
+        g_Platform->HideBusySpinner();
+        
+        SetColorScheme();
+        m_blicensePageSet = true;
+    }
+}
+
 void about::OnXidOkClick( wxCommandEvent& event )
 {
   Close();
@@ -489,12 +569,12 @@ void about::OnClose( wxCloseEvent& event )
     gFrame->Raise();
     #endif
     Destroy();
-    g_pAboutDlg = NULL;
+    g_pAboutDlgLegacy = NULL;
 }
 
 void about::OnDonateClick( wxCommandEvent& event )
 {
-      wxLaunchDefaultBrowser(_T("https://sourceforge.net/p/opencpn/donate/"));
+      wxLaunchDefaultBrowser(_T("https://sourceforge.net/donate/index.php?group_id=180842"));
 }
 
 void about::OnCopyClick( wxCommandEvent& event )
@@ -540,9 +620,4 @@ void about::OnCopyClick( wxCommandEvent& event )
     ::wxEndBusyCursor();
 }
 
-void about::OnPageChange( wxNotebookEvent& event )
-{
-    if( event.GetSelection() != 3 ) return; // 3 is the index of "Help" page
-    g_Platform->LaunchLocalHelp();
-    pNotebook->ChangeSelection(0);
-}
+

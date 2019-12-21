@@ -90,7 +90,6 @@ millions of points.
 extern ocpnGLOptions g_GLOptions;
 #endif
 
-extern MyFrame *gFrame;
 extern WayPointman *pWayPointMan;
 extern Routeman *g_pRouteMan;
 extern Select *pSelect;
@@ -657,7 +656,12 @@ void Track::Draw( ChartCanvas *cc, ocpnDC& dc, ViewPort &VP, const LLBBox &box )
             radius = 0;
     }
 
-    if( dc.GetDC() || radius ) {
+#ifndef USE_ANDROID_GLES2
+    if(dc.GetDC() || radius)
+#else
+    if(1)
+#endif    
+    {
         dc.SetPen( *wxThePenList->FindOrCreatePen( col, width, style ) );
         dc.SetBrush( *wxTheBrushList->FindOrCreateBrush( col, wxBRUSHSTYLE_SOLID ) );
         for(std::list< std::list<wxPoint> >::iterator lines = pointlists.begin();
@@ -672,7 +676,7 @@ void Track::Draw( ChartCanvas *cc, ocpnDC& dc, ViewPort &VP, const LLBBox &box )
             }
 
             int hilite_width = radius;
-            if( hilite_width ) {
+            if( hilite_width >= 1.0 ) {
                 wxPen psave = dc.GetPen();
 
                 dc.StrokeLines( i, points );
@@ -693,6 +697,7 @@ void Track::Draw( ChartCanvas *cc, ocpnDC& dc, ViewPort &VP, const LLBBox &box )
         }
     }
 #ifdef ocpnUSE_GL    
+#ifndef USE_ANDROID_GLES2
     else { // opengl version
         glColor3ub(col.Red(), col.Green(), col.Blue());
         glLineWidth( wxMax( g_GLMinSymbolLineWidth, width ) );
@@ -731,7 +736,7 @@ void Track::Draw( ChartCanvas *cc, ocpnDC& dc, ViewPort &VP, const LLBBox &box )
         
     }
 #endif
-
+#endif
     if(m_HighlightedTrackPoint >= 0)
         TrackPoints[m_HighlightedTrackPoint]->Draw(cc, dc);
 }
@@ -1090,7 +1095,7 @@ Route *Track::RouteFromTrack( wxGenericProgressDialog *pprog )
     pSelect->AddSelectableRoutePoint( pWP_dst->m_lat, pWP_dst->m_lon, pWP_dst );
     pWP_prev = pWP_dst;
 // add intermediate points as needed
-
+    int dProg = 0;
     for(size_t i = 1; i < TrackPoints.size();) {
         TrackPoint *prp = TrackPoints[i];
         prpnodeX = i;
@@ -1176,7 +1181,12 @@ Route *Track::RouteFromTrack( wxGenericProgressDialog *pprog )
             i++;
             next_ic++;
         }
-        if( pprog ) pprog->Update( ( i * 100 ) / nPoints );
+        int iProg = (i * 100) / nPoints;
+        if (pprog && (iProg > dProg))
+        {
+            dProg = iProg;
+            pprog->Update(dProg);
+        }
     }
 
 // add last point, if needed

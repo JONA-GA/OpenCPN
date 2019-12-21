@@ -86,8 +86,6 @@
 #include "RMA.hpp"
 */
 #include "dpt.hpp"
-#include "mwd.hpp"
-#include "mwv.hpp"
 #include "hdm.hpp"
 #include "hdg.hpp"
 #include "hdt.hpp"
@@ -104,6 +102,9 @@
 #include "apb.hpp"
 #include "xte.hpp"
 #include "vhw.hpp"
+#include "mwd.hpp"
+#include "mwv.hpp"
+
 /*
 #include "ROT.hpp"
 #include "RPM.hpp"
@@ -182,8 +183,6 @@ class NMEA0183
       RMA Rma;
 */
        DPT Dpt;
-       MWD Mwd;
-       MWV Mwv;
        MTW Mtw;
        HDM Hdm;
        HDG Hdg;
@@ -200,6 +199,8 @@ class NMEA0183
        APB Apb;
        XTE Xte;
        VHW Vhw;
+       MWD Mwd;
+       MWV Mwv;
  /*
       ROT Rot;
       RPM Rpm;
