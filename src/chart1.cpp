@@ -2830,44 +2830,6 @@ MyFrame::MyFrame( wxFrame *frame, const wxString& title, const wxPoint& pos, con
 
     g_pAIS = new AIS_Decoder( this );
 
-    for ( size_t i = 0; i < g_pConnectionParams->Count(); i++ )
-    {
-        ConnectionParams *cp = g_pConnectionParams->Item(i);
-        if( cp->bEnabled ) {
-
-#ifdef __WXGTK__
-            if( cp->GetDSPort().Contains(_T("Serial"))) {
-                if( ! g_bserial_access_checked ){
-                    if( !CheckSerialAccess() ){
-                    }
-                    g_bserial_access_checked = true;
-                }
-            }
-#endif
-
-            dsPortType port_type = cp->IOSelect;
-            DataStream *dstr = new DataStream( g_pMUX,
-												cp->Type,
-                                           cp->GetDSPort(),
-                                           wxString::Format(wxT("%i"),cp->Baudrate),
-                                           port_type,
-                                           cp->Priority,
-												cp->Garmin,
-                                           cp->Protocol,
-											0,0,NULL
-                                         );
-            dstr->SetInputFilter(cp->InputSentenceList);
-            dstr->SetInputFilterType(cp->InputSentenceListType);
-            dstr->SetOutputFilter(cp->OutputSentenceList);
-            dstr->SetOutputFilterType(cp->OutputSentenceListType);
-            dstr->SetChecksumCheck(cp->ChecksumCheck);
-
-            cp->b_IsSetup = true;
-
-            g_pMUX->AddStream(dstr);
-        }
-    }
-
     g_pMUX->SetAISHandler(g_pAIS);
     g_pMUX->SetGPSHandler(this);
     //  Create/connect a dynamic event handler slot

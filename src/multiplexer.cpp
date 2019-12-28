@@ -541,9 +541,8 @@ ret_point:
                                                     com_name,
                                                     baud,
                                                     DS_TYPE_INPUT_OUTPUT,
-                                                    0, false);
-
-            //  Wait up to 5 seconds for Datastream secondary thread to come up
+                                                    0, false,PROTO_NMEA0183);
+          //  Wait up to 5 seconds for Datastream secondary thread to come up
             int timeout = 0;
             while( !dstr-> IsSecThreadActive()  && (timeout < 50)) {
                 wxMilliSleep(100);
@@ -1095,7 +1094,7 @@ int Multiplexer::SendWaypointToGPS(RoutePoint *prp, const wxString &com_name, wx
                                             com_name,
                                             baud,
                                             DS_TYPE_INPUT_OUTPUT,
-                                            0, false);
+                                            0, false,PROTO_NMEA0183);
 
 
     //  Wait up to 1 seconds for Datastream secondary thread to come up

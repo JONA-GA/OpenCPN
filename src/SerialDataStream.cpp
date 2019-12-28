@@ -93,7 +93,8 @@ DataStream *makeSerialDataStream(wxEvtHandler *input_consumer,
                                  const wxString &BaudRate,
                                  dsPortType io_select,
                                  int priority,
-                                 bool bGarmin)
+                                 bool bGarmin,
+                                 DataProtocol iProtocol)
 {
     return new SerialDataStream(input_consumer,
                                 conn_type,
@@ -102,6 +103,7 @@ DataStream *makeSerialDataStream(wxEvtHandler *input_consumer,
                                 io_select,
                                 priority,
                                 bGarmin,
+                                iProtocol,
                                 DS_EOS_CRLF,
                                 DS_HANDSHAKE_NONE);
 }

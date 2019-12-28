@@ -80,6 +80,7 @@ public:
                      dsPortType io_select,
                      int priority = 0,
                      bool bGarmin = false,
+                    DataProtocol  iProtocol = PROTO_NMEA0183 ,
                      int EOS_type = DS_EOS_CRLF,
                      int handshake_type = DS_HANDSHAKE_NONE) : DataStream(input_consumer,
                                                                           conn_type,
@@ -88,6 +89,7 @@ public:
                                                                           io_select,
                                                                           priority,
                                                                           bGarmin,
+                                                                          iProtocol,
                                                                           EOS_type,
                                                                           handshake_type) {
         Open();
@@ -115,6 +117,7 @@ DataStream *makeSerialDataStream(wxEvtHandler *input_consumer,
                                  const wxString &BaudRate,
                                  dsPortType io_select,
                                  int priority,
-                                 bool bGarmin);
+                                 bool bGarmin,
+                                 DataProtocol iProtocol);
 
 #endif // __SERIALDATASTREAM_H__

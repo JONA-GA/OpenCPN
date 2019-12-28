@@ -152,6 +152,7 @@ protected:
                dsPortType io_select,
                int priority,
                bool bGarmin,
+               DataProtocol iProtocol,
                int EOS_type,
                int handshake_type);
     DataStream(wxEvtHandler *input_consumer, const ConnectionParams* params);
